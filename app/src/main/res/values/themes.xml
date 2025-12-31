@@ -1,0 +1,17 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Base.Theme.ON_YUZ" parent="Theme.Material3.DayNight.NoActionBar">
+
+
+        <!-- Customize your light theme here. -->
+        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+    </style>
+
+    <style name="Theme.ON_YUZ" parent="Base.Theme.ON_YUZ" />
+    <style name="WhiteNumberPicker">
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <item name="android:textColorSecondary">#AAAAAA</item>
+        <item name="colorControlNormal">#FFFFFF</item>
+        <item name="colorPrimary">#FFFFFF</item>
+    </style>
+</resources>

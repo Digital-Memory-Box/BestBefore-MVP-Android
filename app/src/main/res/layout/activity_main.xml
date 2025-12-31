@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- KÜRE -->
+    <FrameLayout
+        android:id="@+id/orb"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@drawable/bg_orb"
+        app:layout_constraintWidth_percent="0.78"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/bottomGroup"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintVertical_bias="0.42">
+
+        <TextView
+            android:id="@+id/title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="BestBefore"
+            android:textColor="#FFFFFF"
+            android:textSize="44sp"
+            android:includeFontPadding="false"/>
+    </FrameLayout>
+
+    <!-- ALT YAZILAR -->
+    <LinearLayout
+        android:id="@+id/bottomGroup"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_marginBottom="56dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <TextView
+            android:id="@+id/sub1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="touch to explore your memory"
+            android:textColor="#E6FFFFFF"
+            android:textSize="22sp"
+            android:includeFontPadding="false"/>
+
+        <TextView
+            android:id="@+id/sub2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="swipe for Artists"
+            android:textColor="#E6FFFFFF"
+            android:textSize="22sp"
+            android:includeFontPadding="false"/>
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

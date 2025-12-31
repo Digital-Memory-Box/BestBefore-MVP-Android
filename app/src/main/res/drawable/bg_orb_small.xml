@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item>
+        <shape android:shape="oval">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="180dp"
+                android:centerX="0.55"
+                android:centerY="0.45"
+                android:startColor="#1A3DDC84"
+                android:endColor="#00000000"/>
+        </shape>
+    </item>
+
+    <!-- ana küre -->
+    <item android:left="8dp" android:top="8dp" android:right="8dp" android:bottom="8dp">
+        <shape android:shape="oval">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="220dp"
+                android:centerX="0.62"
+                android:centerY="0.36"
+                android:startColor="#FF6BFFB1"
+                android:centerColor="#FF2AA8FF"
+                android:endColor="#FF1B5BFF"/>
+        </shape>
+    </item>
+
+    <item android:left="20dp" android:top="20dp" android:right="20dp" android:bottom="20dp">
+        <shape android:shape="oval">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="170dp"
+                android:centerX="0.30"
+                android:centerY="0.30"
+                android:startColor="#44FFFFFF"
+                android:endColor="#00FFFFFF"/>
+        </shape>
+    </item>
+
+</layer-list>

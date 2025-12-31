@@ -1,0 +1,120 @@
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+
+    android:id="@+id/orbContainer"
+
+    android:layout_width="200dp"
+
+    android:layout_height="200dp"
+
+    android:layout_marginEnd="-70dp"
+
+    android:layout_marginBottom="100dp"
+
+    android:background="@drawable/bg_orb"
+
+    android:elevation="25dp"
+
+    android:clipChildren="false"
+
+    app:layout_constraintBottom_toBottomOf="parent"
+
+    app:layout_constraintEnd_toEndOf="parent">
+
+
+    <ImageView
+
+        android:id="@+id/btnProfile"
+
+        android:layout_width="55dp"
+
+        android:layout_height="55dp"
+
+        android:src="@android:drawable/ic_menu_myplaces"
+
+        app:layout_constraintBottom_toBottomOf="parent"
+
+        app:layout_constraintEnd_toEndOf="parent"
+
+        app:layout_constraintHorizontal_bias="0.296"
+
+        app:layout_constraintStart_toStartOf="parent"
+
+        app:layout_constraintTop_toTopOf="parent"
+
+        app:layout_constraintVertical_bias="0.503"
+
+        app:tint="@android:color/white" />
+
+
+    <ImageView
+
+        android:id="@+id/btnSearch"
+
+        android:layout_width="28dp"
+
+        android:layout_height="28dp"
+
+        android:layout_marginEnd="8dp"
+
+        android:src="@android:drawable/ic_menu_search"
+
+        app:layout_constraintBottom_toBottomOf="@id/btnProfile"
+
+        app:layout_constraintEnd_toStartOf="@id/btnProfile"
+
+        app:layout_constraintTop_toTopOf="@id/btnProfile"
+
+        app:layout_constraintVertical_bias="0.481"
+        app:tint="@android:color/white" />
+
+
+    <ImageView
+
+        android:id="@+id/btnChat"
+
+        android:layout_width="28dp"
+
+        android:layout_height="28dp"
+
+        android:layout_marginBottom="16dp"
+
+        android:src="@android:drawable/stat_notify_chat"
+
+        app:layout_constraintBottom_toTopOf="@id/btnProfile"
+
+        app:layout_constraintEnd_toEndOf="@id/btnProfile"
+
+        app:layout_constraintHorizontal_bias="0.0"
+
+        app:layout_constraintStart_toStartOf="@id/btnProfile"
+
+        app:tint="@android:color/white" />
+
+    <TextView
+
+        android:id="@+id/btnAdd"
+
+        android:layout_width="wrap_content"
+
+        android:layout_height="wrap_content"
+
+        android:layout_marginTop="5dp"
+
+        android:text="+"
+
+        android:textColor="#FFFFFF"
+
+        android:textSize="40sp"
+
+        app:layout_constraintEnd_toEndOf="@id/btnProfile"
+
+        app:layout_constraintHorizontal_bias="0.0"
+
+        app:layout_constraintStart_toStartOf="@id/btnProfile"
+
+        app:layout_constraintTop_toBottomOf="@id/btnProfile" />
+
+
+</androidx.constraintlayout.widget.ConstraintLayout>

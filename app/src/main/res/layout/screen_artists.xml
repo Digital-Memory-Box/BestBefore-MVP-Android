@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootArtists"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <View
+        android:id="@+id/orbSmallTopLeft"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:alpha="0.75"
+        android:background="@drawable/bg_orb_small"
+        app:layout_constraintWidth_percent="0.32"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintVertical_bias="0.06"
+        app:layout_constraintHorizontal_bias="0.06"/>
+
+    <View
+        android:id="@+id/orbSmallTopRight"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:alpha="0.70"
+        android:background="@drawable/bg_orb_small"
+        app:layout_constraintWidth_percent="0.28"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintVertical_bias="0.10"
+        app:layout_constraintHorizontal_bias="0.92"/>
+
+    <View
+        android:id="@+id/orbSmallBottomLeft"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:alpha="0.65"
+        android:background="@drawable/bg_orb_small"
+        app:layout_constraintWidth_percent="0.26"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintVertical_bias="0.90"
+        app:layout_constraintHorizontal_bias="0.08"/>
+
+    <FrameLayout
+        android:id="@+id/orbArtists"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@drawable/bg_orb"
+        app:layout_constraintWidth_percent="0.78"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/bottomGroupArtists"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintVertical_bias="0.42">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <TextView
+                android:id="@+id/titleArtists"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="BestBefore"
+                android:textColor="#FFFFFF"
+                android:textSize="44sp"
+                android:includeFontPadding="false"/>
+
+            <TextView
+                android:id="@+id/subTitleArtists"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="for Artists"
+                android:textColor="#CCFFFFFF"
+                android:textSize="22sp"
+                android:includeFontPadding="false"/>
+        </LinearLayout>
+    </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/bottomGroupArtists"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_marginBottom="56dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <TextView
+            android:id="@+id/sub1Artists"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="touch to explore your memory"
+            android:textColor="#E6FFFFFF"
+            android:textSize="22sp"
+            android:includeFontPadding="false"/>
+
+        <TextView
+            android:id="@+id/sub2Artists"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="swipe for everyone"
+            android:textColor="#E6FFFFFF"
+            android:textSize="22sp"
+            android:includeFontPadding="false"/>
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

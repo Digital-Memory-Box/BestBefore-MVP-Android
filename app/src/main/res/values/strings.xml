@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">ON_YUZ</string>
+    <style name="CircleImage">
+        <item name="cornerSize">50%</item>
+    </style>
+    <style name="ProfileMenuButtonStyle">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginBottom">10dp</item>
+        <item name="android:background">@drawable/bg_profile_item</item>
+        <item name="android:padding">14dp</item>
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:drawablePadding">12dp</item>
+        <item name="android:gravity">center_vertical</item>
+
+    </style>
+</resources>
