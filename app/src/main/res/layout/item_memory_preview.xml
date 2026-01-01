@@ -1,0 +1,43 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="8dp"
+    android:orientation="horizontal">
+
+    <ImageView
+        android:id="@+id/ivMemoryPreview"
+        android:layout_width="160dp"
+        android:layout_height="90dp"
+        android:scaleType="centerCrop"
+        android:background="@drawable/bg_profile_item"
+        android:src="@drawable/placeholder_memory" />
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tvMemoryDate"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="9 November 2025"
+            android:textColor="#FFFFFF" />
+
+        <TextView
+            android:id="@+id/tvMemoryTime"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="00:44"
+            android:textColor="#FFFFFF" />
+
+        <TextView
+            android:id="@+id/btnEditCaption"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Edit Caption"
+            android:textColor="#FFFFFF"
+            android:alpha="0.7" />
+    </LinearLayout>
+</LinearLayout>

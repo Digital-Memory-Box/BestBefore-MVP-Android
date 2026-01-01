@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/tvRoomHeader"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Time Capsule"
+        android:textColor="#FFFFFF"
+        android:textSize="32sp"
+        android:textStyle="bold"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/tvSortDetail"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Sort ↓"
+        android:textColor="#FFFFFF"
+        android:textSize="24sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <LinearLayout
+        android:id="@+id/memoryContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="vertical"
+        app:layout_constraintTop_toBottomOf="@id/tvRoomHeader">
+
+        <include
+            android:id="@+id/memoryItem1"
+            layout="@layout/item_memory_preview" />
+
+        <include
+            android:id="@+id/memoryItem2"
+            layout="@layout/item_memory_preview"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/btnPreviousMemories"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="> See Previous Memories"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/memoryContainer" />
+
+    <TextView
+        android:id="@+id/tvAddTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Add New Memory"
+        android:textColor="#FFFFFF"
+        android:textSize="26sp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btnPreviousMemories" />
+
+    <GridLayout
+        android:id="@+id/addOptionsGrid"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:columnCount="2"
+        android:rowCount="2"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tvAddTitle">
+
+        <include layout="@layout/button_add_option" android:id="@+id/btnPhotoArchive" />
+        <include layout="@layout/button_add_option" android:id="@+id/btnChooseFile" />
+        <include layout="@layout/button_add_option" android:id="@+id/btnUseCamera" />
+        <include layout="@layout/button_add_option" android:id="@+id/btnUploadAudio" />
+    </GridLayout>
+
+    <TextView
+        android:id="@+id/tvDetailRoomName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:text="Example Room Name"
+        android:textColor="#FFFFFF"
+        android:textSize="32sp"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/addOptionsGrid" />
+
+    <include
+        android:id="@+id/roomStatusCard"
+        layout="@layout/item_time_capsule"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tvDetailRoomName" />
+
+    <include
+        android:id="@+id/orbLayout"
+        layout="@layout/layout_orb_menu"
+        android:layout_width="200dp"
+        android:layout_height="200dp"
+        android:layout_marginEnd="-100dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintVertical_bias="0.5" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingBottom="16dp"
+        app:layout_constraintBottom_toBottomOf="parent">
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Rooming" android:textColor="#66FFFFFF" android:gravity="center" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Profile" android:textColor="#66FFFFFF" android:gravity="center" />
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="▽" android:textColor="#FFFFFF" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Time Capsule" android:textColor="#FFFFFF" android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
