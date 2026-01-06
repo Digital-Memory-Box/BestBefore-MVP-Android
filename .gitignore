@@ -1,0 +1,15 @@
+# IDE
+.idea/
+.vscode/
+
+# Kotlin / Gradle
+.kotlin/
+.gradle/
+build/
+
+# Logs
+*.log
+*.txt
+
+# Local configs
+local.properties
