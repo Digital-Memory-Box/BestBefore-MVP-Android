@@ -1,5 +1,4 @@
 package com.ozang.bestbefore_mvp;
-import org.junit.Test;
 
 public class BBUnitTestLogic {
 
