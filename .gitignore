@@ -13,3 +13,4 @@ build/
 
 # Local configs
 local.properties
+.env
