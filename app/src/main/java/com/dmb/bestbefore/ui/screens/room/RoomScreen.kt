@@ -2,7 +2,7 @@ package com.dmb.bestbefore.ui.screens.room
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.net.Uri
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.dmb.bestbefore.calendar.CalendarEvent
+import com.dmb.bestbefore.data.models.CalendarEvent
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -44,9 +44,7 @@ fun RoomScreen(
     val countdownText by viewModel.countdownText.collectAsState()
     val calendarEvents by viewModel.calendarEvents.collectAsState()
 
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { }
+
 
     val calendarPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -56,11 +54,7 @@ fun RoomScreen(
         }
     }
 
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { viewModel.updateSelectedFrame(it) }
-    }
+
 
     LaunchedEffect(roomId) {
         viewModel.initialize(roomId, roomName)
@@ -226,9 +220,9 @@ fun RoomInfoDialog(roomName: String, roomId: String, onDismiss: () -> Unit) {
 
 @Composable
 fun TimeCapsuleDialog(onDismiss: () -> Unit, onStart: (Int, Int, Int) -> Unit) {
-    var hours by remember { mutableStateOf(0) }
-    var minutes by remember { mutableStateOf(15) }
-    var seconds by remember { mutableStateOf(0) }
+    var hours by remember { mutableIntStateOf(0) }
+    var minutes by remember { mutableIntStateOf(15) }
+    var seconds by remember { mutableIntStateOf(0) }
 
     AlertDialog(
         onDismissRequest = onDismiss,

@@ -9,8 +9,8 @@ import java.util.concurrent.TimeUnit
 object RetrofitClient {
     // --- SERVER URL CONFIGURATION ---
     
-    // 1. Production (Render) - Active
-    private const val BASE_URL = "https://backend-test-1p44.onrender.com/" 
+    // 1. Production (Railway) - Active
+    private const val BASE_URL = "https://backend-production-efbe.up.railway.app/" 
 
     // 2. Local Emulator (Uncomment to use for local testing)
     // private const val BASE_URL = "http://10.0.2.2:3000/"
@@ -24,6 +24,7 @@ object RetrofitClient {
 
     private val client = OkHttpClient.Builder()
         .addInterceptor(loggingInterceptor)
+        .addInterceptor(AppCheckInterceptor())
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()

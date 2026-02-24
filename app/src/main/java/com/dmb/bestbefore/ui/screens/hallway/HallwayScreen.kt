@@ -1,6 +1,5 @@
 package com.dmb.bestbefore.ui.screens.hallway
 
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -90,9 +89,9 @@ fun HallwayScreen(
                 // Selected card info
                 if (cards.isNotEmpty() && selectedIndex in cards.indices) {
                     val selectedCard = cards[selectedIndex]
-                    
+
                     Spacer(modifier = Modifier.height(80.dp))
-                    
+
                     Text(
                         text = selectedCard.title,
                         fontSize = 26.sp,
@@ -142,7 +141,7 @@ fun HallwayScreen(
                 ExploreItem(text = "> New York City")
                 Spacer(modifier = Modifier.height(8.dp))
                 ExploreItem(text = "> Daily Trip")
-                
+
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
@@ -171,7 +170,7 @@ private fun CardStack(
     selectedIndex: Int,
     onCardSelected: (Int) -> Unit
 ) {
-    var dragOffset by remember { mutableStateOf(0f) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
     
     Box(
         modifier = Modifier
@@ -185,10 +184,10 @@ private fun CardStack(
                         } else if (dragOffset < -50 && selectedIndex < cards.size - 1) {
                             onCardSelected(selectedIndex + 1)
                         }
-                        dragOffset = 0f
+
                     },
-                    onVerticalDrag = { _, dragAmount ->
-                        dragOffset += dragAmount
+                    onVerticalDrag = { _, _ ->
+
                     }
                 )
             },
@@ -288,8 +287,9 @@ private fun BottomNavigation(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars) // Add padding for system nav
-            .height(74.dp)
-            .padding(horizontal = 24.dp),
+            .height(120.dp) // Increased height to accommodate padding
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 56.dp), // Increased bottom padding to move buttons up
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {

@@ -10,7 +10,6 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -121,41 +120,7 @@ fun OrbMenu(
     }
 }
 
-/**
- * Simple orb menu with just a center button (used for navigation/next actions)
- */
-@Composable
-fun OrbMenuSimple(
-    modifier: Modifier = Modifier,
-    size: Dp = 200.dp,
-    label: String = "",
-    onClick: () -> Unit = {}
-) {
-    Box(
-        modifier = modifier
-            .size(size)
-            .offset(x = size / 2)
-            .clip(RoundedCornerShape(topStart = size / 2, bottomStart = size / 2))
-            .background(
-                brush = Brush.horizontalGradient(
-                    colors = listOf(
-                        Color(0xFF0D59F2),
-                        Color(0xFF00D972)
-                    )
-                )
-            )
-            .clickable { onClick() },
-        contentAlignment = Alignment.CenterStart
-    ) {
-        if (label.isNotEmpty()) {
-            Text(
-                text = label,
-                color = Color.White,
-                modifier = Modifier.padding(start = 24.dp)
-            )
-        }
-    }
-}
+
 
 @Composable
 private fun OrbButton(

@@ -37,84 +37,71 @@ fun OpeningScreen(
             .background(Color.Black)
             .clickable { onNavigateToMain() } // Keep for instant skip
     ) {
-        // Animated background
-        AnimatedOrbBackground()
+        // Shared Background
+        IOSAnimatedBubbleBackgroundO()
 
-        // Center content
-        Column(
-            modifier = Modifier.align(Alignment.Center),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Main orb circle
-            Box(
-                modifier = Modifier
-                    .size(200.dp)
-                    .clip(CircleShape)
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                Color(0xFF0D59F2),
-                                Color(0xFF00D972)
-                            )
+        // Center Content (Matches LoginScreen Initial State)
+        
+        // 1. Sphere (Center)
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(280.dp)
+                .clip(CircleShape)
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFF0080FF), // Blue
+                            Color(0xFF00CC66)  // Green
                         )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                // Inner content can be added here
-            }
+                    )
+                )
+        )
 
-            Spacer(modifier = Modifier.height(32.dp))
+        // 2. Title (Center - same as LoginScreen Initial)
+        Text(
+            text = "BestBefore",
+            fontSize = 34.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            modifier = Modifier.align(Alignment.Center)
+        )
 
-            Text(
-                text = "BestBefore",
-                fontSize = 36.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "touch to explore your memory\nswipe for Artists",
-                fontSize = 14.sp,
-                color = Color.Gray,
-                textAlign = TextAlign.Center,
-                lineHeight = 20.sp
-            )
-        }
+        // 3. Instruction Text (Below Center - same as LoginScreen Initial)
+        Text(
+            text = "touch to explore your memory\nswipe for Artists",
+            fontSize = 16.sp,
+            color = Color.LightGray, // Matched LoginScreen
+            textAlign = TextAlign.Center,
+            lineHeight = 22.sp,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(y = 180.dp)
+        )
     }
 }
 
+// Duplicated from LoginScreen.kt to ensure seamless transition
 @Composable
-private fun AnimatedOrbBackground() {
-    val infiniteTransition = rememberInfiniteTransition(label = "orb_animation")
+fun IOSAnimatedBubbleBackgroundO() {
+    val infiniteTransition = rememberInfiniteTransition(label = "bubble_bg_o")
 
     val orb1Angle by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 12000, easing = LinearEasing),
+            animation = tween(durationMillis = 20000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "orb1"
     )
 
-    val orb2Angle by infiniteTransition.animateFloat(
-        initialValue = 180f,
-        targetValue = 540f,
+    val pulse by infiniteTransition.animateFloat(
+        initialValue = 0.9f,
+        targetValue = 1.1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 15000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "orb2"
-    )
-
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
+             animation = tween(durationMillis = 5000, easing = FastOutSlowInEasing),
+             repeatMode = RepeatMode.Reverse
         ),
         label = "pulse"
     )
@@ -122,50 +109,77 @@ private fun AnimatedOrbBackground() {
     Canvas(modifier = Modifier.fillMaxSize()) {
         val centerX = size.width / 2
         val centerY = size.height / 2
+        val dimension = size.minDimension
 
-        // Main glow
+        // Background dark gradient
+        drawRect(
+            brush = Brush.verticalGradient(
+               colors = listOf(Color(0xFF051120), Color.Black)
+            )
+        )
+
+        val color1 = Color(0xFF0D59F2) // Blue
+        val color2 = Color(0xFF00D972) // Green
+        
+        val shiftX = 100f * cos(orb1Angle * Math.PI / 180).toFloat()
+        val shiftY = 100f * sin(orb1Angle * Math.PI / 180).toFloat()
+        
         drawCircle(
             brush = Brush.radialGradient(
+                colors = listOf(color1.copy(alpha=0.6f), Color.Transparent),
+                center = Offset(centerX + shiftX, centerY + shiftY),
+                radius = dimension * 0.8f * pulse
+            ),
+            center = Offset(centerX + shiftX, centerY + shiftY),
+            radius = dimension * 0.8f * pulse
+        )
+        
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(color2.copy(alpha=0.5f), Color.Transparent),
+                center = Offset(centerX - shiftX, centerY - shiftY),
+                radius = dimension * 0.7f * pulse
+            ),
+             center = Offset(centerX - shiftX, centerY - shiftY),
+             radius = dimension * 0.7f * pulse
+        )
+
+        // Vignette
+        drawRect(
+            brush = Brush.radialGradient(
                 colors = listOf(
-                    Color(0xFF0D59F2).copy(alpha = 0.3f),
-                    Color(0xFF00D972).copy(alpha = 0.1f),
-                    Color.Transparent
+                    Color.Transparent,
+                    Color.Black.copy(alpha = 0.4f),
+                    Color.Black.copy(alpha = 0.8f)
                 ),
                 center = Offset(centerX, centerY),
-                radius = size.minDimension * 0.5f * pulseScale
-            ),
-            radius = size.minDimension * 0.5f * pulseScale,
-            center = Offset(centerX, centerY)
+                radius = size.maxDimension * 0.8f
+            )
         )
-
-        // Floating orb 1
-        val orb1X = centerX + 180f * cos(orb1Angle * Math.PI / 180).toFloat()
-        val orb1Y = centerY + 180f * sin(orb1Angle * Math.PI / 180).toFloat()
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    Color(0xFFF223E8).copy(alpha = 0.6f),
-                    Color(0xFFFF9933).copy(alpha = 0.2f),
-                    Color.Transparent
-                )
-            ),
-            radius = 60f,
-            center = Offset(orb1X, orb1Y)
+        
+        val bubbleColors = listOf(
+             Color(0xFFF223E8), // Pink
+             Color(0xFFFF9933), // Orange
+             Color(0xFF4DF2F2), // Cyan
+             Color(0xFFE64DF2)  // Purple
         )
-
-        // Floating orb 2
-        val orb2X = centerX - 220f * cos(orb2Angle * Math.PI / 180).toFloat()
-        val orb2Y = centerY + 140f * sin(orb2Angle * Math.PI / 180).toFloat()
+        
+        val timeRatio = (orb1Angle % 360) / 360f
+        
         drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    Color(0xFF4DF2F2).copy(alpha = 0.5f),
-                    Color(0xFFE64DF2).copy(alpha = 0.2f),
-                    Color.Transparent
-                )
-            ),
-            radius = 80f,
-            center = Offset(orb2X, orb2Y)
+            brush = Brush.radialGradient(colors = listOf(bubbleColors[0].copy(alpha=0.4f), Color.Transparent)),
+            center = Offset(size.width * 0.2f, size.height * 0.2f + (50 * sin(timeRatio * 6.28)).toFloat()),
+            radius = 60f
+        )
+         drawCircle(
+             brush = Brush.radialGradient(colors = listOf(bubbleColors[1].copy(alpha=0.4f), Color.Transparent)),
+             center = Offset(size.width * 0.8f, size.height * 0.8f - (40 * cos(timeRatio * 6.28)).toFloat()),
+             radius = 50f
+        )
+        drawCircle(
+             brush = Brush.radialGradient(colors = listOf(bubbleColors[2].copy(alpha=0.4f), Color.Transparent)),
+             center = Offset(size.width * 0.1f, size.height * 0.8f + (30 * sin(timeRatio * 6.28)).toFloat()),
+             radius = 40f
         )
     }
 }

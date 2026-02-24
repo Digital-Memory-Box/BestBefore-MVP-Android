@@ -27,7 +27,12 @@ data class UserDto(
 
 // Room Models
 data class CreateRoomRequest(
-    val name: String
+    val name: String,
+    val capsuleDays: Int,
+    val capsuleHours: Int,
+    val capsuleMinutes: Int,
+    val isPublic: Boolean,
+    val isCollaboration: Boolean
 )
 
 data class CreateRoomResponse(
@@ -39,5 +44,29 @@ data class RoomDto(
     val name: String,
     val ownerId: String,
     val ownerEmail: String?,
-    val createdAt: String?
+    val createdAt: String?,
+    val photos: List<String>? = null,
+    val capsuleDays: Int = 0,
+    val capsuleHours: Int = 0,
+    val capsuleMinutes: Int = 0,
+    val isPublic: Boolean = true,
+    val isCollaboration: Boolean = false
+)
+
+data class UploadResponse(
+    val imageUrl: String
+)
+
+// Calendar Models
+data class CalendarAuthResponse(
+    val url: String
+)
+
+data class CalendarEventDto(
+    val id: String,
+    val title: String,
+    val start: String,
+    val end: String,
+    val description: String?,
+    val location: String?
 )

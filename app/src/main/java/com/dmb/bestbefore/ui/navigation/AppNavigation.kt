@@ -5,7 +5,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.dmb.bestbefore.ui.screens.hallway.HallwayScreen
 import com.dmb.bestbefore.ui.screens.login.LoginScreen
 import com.dmb.bestbefore.ui.screens.opening.OpeningScreen
 import com.dmb.bestbefore.ui.screens.profile.ProfileScreen
@@ -57,7 +56,7 @@ fun AppNavigation() {
                 onNavigateToSignup = {
                     navController.navigate(Routes.SIGNUP)
                 },
-                onNavigateToRoom = { _, _ ->
+                onLoginSuccess = {
                     // Navigate to PROFILE as the main screen (which contains Hallway)
                     navController.navigate(Routes.PROFILE) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
@@ -68,10 +67,10 @@ fun AppNavigation() {
 
         composable(Routes.SIGNUP) {
             SignupScreen(
-                onNavigateBack = { _ ->
+                onNavigateBack = {
                     navController.popBackStack()
                 },
-                onSignupSuccess = { _ ->
+                onSignupSuccess = {
                     navController.navigate(Routes.PROFILE) {
                         popUpTo(Routes.SIGNUP) { inclusive = true }
                     }
