@@ -11,6 +11,8 @@ data class TimeCapsuleRoom(
     val notificationMinutes: Int = 0,
     val isPublic: Boolean,
     val isCollaboration: Boolean = false,
+    val photos: List<String> = emptyList(),
     val dateCreated: Long = System.currentTimeMillis(),
+    val unlockTime: Long = 0L, // Added for unlock logic
     val isSaved: Boolean = false // New field for Saved Rooms feature
 )

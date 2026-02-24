@@ -6,6 +6,12 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
+enum class LoginState {
+    INITIAL,
+    EMAIL_INPUT,
+    PASSWORD_INPUT
+}
+
 class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
 
@@ -42,6 +48,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun transitionToPasswordInput() {
+         // Simplified logic: Just check if empty
         if (_email.value.isEmpty()) {
             _errorMessage.value = "Please enter your email or nickname"
             return
@@ -50,21 +57,23 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private val repository = com.dmb.bestbefore.data.repository.AuthRepository(application)
-
-    fun attemptLogin() {
-        val emailValue = _email.value
-        val passwordValue = _password.value
-
-        if (emailValue.isEmpty() || passwordValue.isEmpty()) {
+    
+    // Login function called from UI
+    fun login(emailParam: String, passwordParam: String, onSuccess: () -> Unit) {
+         if (emailParam.isEmpty() || passwordParam.isEmpty()) {
             _errorMessage.value = "Please enter both email/nickname and password"
             return
         }
-
+        
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
+            
+            // Update internal state just in case
+            _email.value = emailParam
+            _password.value = passwordParam
 
-            val result = repository.login(emailValue, passwordValue)
+            val result = repository.login(emailParam, passwordParam)
             _isLoading.value = false
             
             result.onSuccess { auth ->
@@ -74,19 +83,17 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                  sessionManager.saveUser(auth.user.id, auth.user.name ?: "User", auth.user.email)
                  
                  _loginSuccess.emit(Pair(auth.user.id, auth.user.name ?: "User"))
+                 onSuccess()
             }.onFailure { e ->
                 _errorMessage.value = e.message ?: "Login failed"
             }
         }
     }
 
-    private fun isValidEmail(email: String): Boolean {
-        val emailRegex = "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,64}".toRegex()
-        return emailRegex.matches(email)
-    }
-
-    private fun isValidNickname(nickname: String): Boolean {
-        val nicknameRegex = "^[A-Za-z0-9_]{3,20}$".toRegex()
-        return nicknameRegex.matches(nickname)
+    fun attemptLogin() {
+        val emailValue = _email.value
+        val passwordValue = _password.value
+        // call the main login function with empty callback or handle generic
+        login(emailValue, passwordValue) {}
     }
 }

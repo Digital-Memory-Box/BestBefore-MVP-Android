@@ -7,7 +7,6 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.dmb.bestbefore.R
 
@@ -36,24 +35,16 @@ object NotificationScheduler {
         )
         
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (alarmManager.canScheduleExactAlarms()) {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    unlockTimeMillis,
-                    pendingIntent
-                )
-            } else {
-                // Fallback for when exact alarms are not permitted
-                alarmManager.setAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    unlockTimeMillis,
-                    pendingIntent
-                )
-            }
-        } else {
+
+        if (alarmManager.canScheduleExactAlarms()) {
             alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                unlockTimeMillis,
+                pendingIntent
+            )
+        } else {
+            // Fallback for when exact alarms are not permitted
+            alarmManager.setAndAllowWhileIdle(
                 AlarmManager.RTC_WAKEUP,
                 unlockTimeMillis,
                 pendingIntent
@@ -61,29 +52,16 @@ object NotificationScheduler {
         }
     }
     
-    fun cancelRoomUnlockNotification(context: Context, roomId: String) {
-        val intent = Intent(context, RoomUnlockReceiver::class.java)
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            roomId.hashCode(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        alarmManager.cancel(pendingIntent)
-    }
+
     
     private fun createNotificationChannel(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val importance = NotificationManager.IMPORTANCE_HIGH
-            val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, importance).apply {
-                description = "Notifications for when time capsule rooms unlock"
-            }
-            
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
+        val importance = NotificationManager.IMPORTANCE_HIGH
+        val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, importance).apply {
+            description = "Notifications for when time capsule rooms unlock"
         }
+
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.createNotificationChannel(channel)
     }
 }
 

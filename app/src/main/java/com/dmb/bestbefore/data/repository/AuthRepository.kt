@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.dmb.bestbefore.data.api.RetrofitClient
 import com.dmb.bestbefore.data.api.models.*
+import androidx.core.content.edit
 
 class AuthRepository(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("BestBeforePrefs", Context.MODE_PRIVATE)
@@ -42,26 +43,17 @@ class AuthRepository(context: Context) {
     }
 
     private fun saveToken(token: String) {
-        prefs.edit().putString("auth_token", token).apply()
+        prefs.edit { putString("auth_token", token) }
     }
 
     private fun saveUser(user: UserDto) {
-        prefs.edit()
-            .putString("user_id", user.id)
-            .putString("user_name", user.name)
-            .putString("user_email", user.email)
-            .apply()
+        prefs.edit {
+            putString("user_id", user.id)
+                .putString("user_name", user.name)
+                .putString("user_email", user.email)
+        }
     }
 
-    fun getToken(): String? {
-        return prefs.getString("auth_token", null)
-    }
-    
-    fun isLoggedIn(): Boolean {
-        return getToken() != null
-    }
 
-    fun logout() {
-        prefs.edit().clear().apply()
-    }
+
 }

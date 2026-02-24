@@ -17,6 +17,7 @@ class MainActivity : ComponentActivity() {
         // Handle deep link from notification
         handleNotificationIntent(intent)
         
+
         setContent {
             BestBeforeTheme {
                 Surface(

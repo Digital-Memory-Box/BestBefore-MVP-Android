@@ -1,11 +1,10 @@
 package com.dmb.bestbefore.ui.screens.room
 
 import android.app.Application
-import android.net.Uri
+
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.dmb.bestbefore.calendar.CalendarHelper
-import com.dmb.bestbefore.calendar.CalendarEvent
+import com.dmb.bestbefore.data.models.CalendarEvent
 import com.dmb.bestbefore.notifications.NotificationHelper
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -17,7 +16,7 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
     
     // Stub: No repositories
     private val notificationHelper = NotificationHelper(application)
-    private val calendarHelper = CalendarHelper(application)
+    // CalendarHelper removed (logic moved to backend/ProfileViewModel)
 
     private val _roomId = MutableStateFlow("")
     val roomId: StateFlow<String> = _roomId.asStateFlow()
@@ -43,13 +42,7 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
     private val _countdownText = MutableStateFlow("00:00:00")
     val countdownText: StateFlow<String> = _countdownText.asStateFlow()
 
-    private val _frame1Image = MutableStateFlow<Uri?>(null)
-    val frame1Image: StateFlow<Uri?> = _frame1Image.asStateFlow()
 
-    private val _frame2Image = MutableStateFlow<Uri?>(null)
-    val frame2Image: StateFlow<Uri?> = _frame2Image.asStateFlow()
-
-    private val _selectedFrameNumber = MutableStateFlow<Int?>(null)
 
     private val _calendarEvents = MutableStateFlow<List<CalendarEvent>>(emptyList())
     val calendarEvents: StateFlow<List<CalendarEvent>> = _calendarEvents.asStateFlow()
@@ -83,21 +76,7 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun selectFrame(frameNumber: Int) {
-        _selectedFrameNumber.value = frameNumber
-    }
 
-    fun updateSelectedFrame(imageUri: Uri) {
-        val frameNumber = _selectedFrameNumber.value ?: return
-
-        when (frameNumber) {
-            1 -> _frame1Image.value = imageUri
-            2 -> _frame2Image.value = imageUri
-        }
-        
-        // Stub: Not saving to repo
-        _selectedFrameNumber.value = null
-    }
 
     fun startTimeCapsule(hours: Int, minutes: Int, seconds: Int) {
         val totalSeconds = hours * 3600L + minutes * 60L + seconds
@@ -108,9 +87,6 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
 
         // Stub: Not saving to DB
         notificationHelper.scheduleTimeCapsuleNotification(
-            _roomId.value,
-            _roomName.value,
-            endTime
         )
 
         startCountdown(endTime)
@@ -151,22 +127,27 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun loadCalendarEvents() {
-        if (!calendarHelper.checkPermission()) {
-            return
-        }
-
-        viewModelScope.launch {
-            try {
-                val events = calendarHelper.getUpcomingEvents(30)
-                _calendarEvents.value = events
-            } catch (e: Exception) {
-                // Handle error
-            }
-        }
+        // Feature moved to ProfileViewModel with Backend integration.
+        // Stubbing out for RoomScreen if still used.
+        _calendarEvents.value = emptyList()
     }
 
     fun createRoomFromCalendarEvent(event: CalendarEvent) {
         // Stub
+    }
+
+    fun keepRoom() {
+        viewModelScope.launch {
+            try {
+                // TODO: Use Repository when available
+                // val response = apiService.keepRoom("Bearer $token", _roomId.value)
+                // if (response.isSuccessful) { ... }
+                // For now, we need to know where the API service is accessed.
+                // Since this file has stubs, I will look for the Repository to add the method there first.
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     override fun onCleared() {

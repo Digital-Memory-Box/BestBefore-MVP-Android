@@ -7,11 +7,44 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import java.io.File
+import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
+import android.content.Intent
+import android.net.Uri
+import android.content.Context
+import android.widget.Toast
+import android.util.Log
+
+import com.dmb.bestbefore.data.models.CalendarEvent
+import com.dmb.bestbefore.ui.theme.AppTheme
+import com.dmb.bestbefore.ui.theme.AppThemes
+import com.dmb.bestbefore.data.local.PreferencesManager
+import androidx.compose.ui.graphics.Color
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.EmailAuthProvider
 
 class ProfileViewModel : ViewModel() {
 
     private val _currentStep = MutableStateFlow(ProfileStep.NONE)
     val currentStep: StateFlow<ProfileStep> = _currentStep.asStateFlow()
+
+    private fun parseCreatedAt(dateString: String?): Long {
+        if (dateString == null) return System.currentTimeMillis()
+        return try {
+             // Assuming ISO 8601 like "2023-10-27T10:00:00.000Z"
+             val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+             sdf.timeZone = TimeZone.getTimeZone("UTC")
+             sdf.parse(dateString)?.time ?: System.currentTimeMillis()
+        } catch (_: Exception) {
+             System.currentTimeMillis()
+        }
+    }
 
     // Database Integration - REMOVED (API Only)
     private var roomRepository: com.dmb.bestbefore.data.repository.RoomRepository? = null
@@ -20,19 +53,62 @@ class ProfileViewModel : ViewModel() {
     private val _createdRooms = MutableStateFlow<List<TimeCapsuleRoom>>(emptyList())
     val createdRooms: StateFlow<List<TimeCapsuleRoom>> = _createdRooms.asStateFlow()
     
+    // Stats State
+    private val _totalRooms = MutableStateFlow(0)
+    val totalRooms: StateFlow<Int> = _totalRooms.asStateFlow()
+    
+    private val _totalMemories = MutableStateFlow(0)
+    val totalMemories: StateFlow<Int> = _totalMemories.asStateFlow()
+    
     private var creationSource: RoomCreationSource = RoomCreationSource.HALLWAY
 
 
 
     // Profile State
-    private val _profileImageUri = MutableStateFlow<android.net.Uri?>(null)
-    val profileImageUri: StateFlow<android.net.Uri?> = _profileImageUri.asStateFlow()
+    data class RecentActivity(
+        val type: ActivityType,
+        val title: String, 
+        val date: Long,
+        val subtitle: String? = null
+    )
+    
+    enum class ActivityType {
+         CREATED_ROOM, ADDED_PHOTOS
+    }
+
+    private val _recentActivities = MutableStateFlow<List<RecentActivity>>(emptyList())
+    val recentActivities: StateFlow<List<RecentActivity>> = _recentActivities.asStateFlow()
+
+    private val _profileImageUri = MutableStateFlow<Uri?>(null)
+
     
     private val _userName = MutableStateFlow("User") 
     val userName: StateFlow<String> = _userName.asStateFlow()
 
+    private val _showOnlySaved = MutableStateFlow(false)
+    val showOnlySaved: StateFlow<Boolean> = _showOnlySaved.asStateFlow()
+
     private val _selectedRoom = MutableStateFlow<TimeCapsuleRoom?>(null)
     val selectedRoom: StateFlow<TimeCapsuleRoom?> = _selectedRoom.asStateFlow()
+
+    // Theme & Customization State
+    private var preferencesManager: PreferencesManager? = null
+    
+    private val _selectedTheme = MutableStateFlow(AppThemes.Default)
+    val selectedTheme: StateFlow<AppTheme> = _selectedTheme.asStateFlow()
+    
+    private val _accentColor = MutableStateFlow(Color(0xFF007AFF))
+    val accentColor: StateFlow<Color> = _accentColor.asStateFlow()
+    
+    // Credential Update State
+    private val _isUpdatingCredential = MutableStateFlow(false)
+    val isUpdatingCredential: StateFlow<Boolean> = _isUpdatingCredential.asStateFlow()
+    
+    private val _credentialUpdateError = MutableStateFlow<String?>(null)
+    val credentialUpdateError: StateFlow<String?> = _credentialUpdateError.asStateFlow()
+    
+    private val _credentialUpdateSuccess = MutableStateFlow<String?>(null)
+    val credentialUpdateSuccess: StateFlow<String?> = _credentialUpdateSuccess.asStateFlow()
 
     // Room creation state
     private val _roomName = MutableStateFlow("")
@@ -48,8 +124,7 @@ class ProfileViewModel : ViewModel() {
     private val _targetMinute = MutableStateFlow(0)
     val targetMinute: StateFlow<Int> = _targetMinute.asStateFlow()
 
-    private val _addToCalendar = MutableStateFlow(false)
-    val addToCalendar: StateFlow<Boolean> = _addToCalendar.asStateFlow()
+
 
     private val _isPublic = MutableStateFlow(true)
     val isPublic: StateFlow<Boolean> = _isPublic.asStateFlow()
@@ -60,19 +135,19 @@ class ProfileViewModel : ViewModel() {
     private val _isAllMediaVisible = MutableStateFlow(false)
     val isAllMediaVisible: StateFlow<Boolean> = _isAllMediaVisible.asStateFlow()
 
-    private val _selectedMediaUris = MutableStateFlow<List<android.net.Uri>>(emptyList())
-    val selectedMediaUris: StateFlow<List<android.net.Uri>> = _selectedMediaUris.asStateFlow()
+    private val _selectedMediaUris = MutableStateFlow<List<Uri>>(emptyList())
+    val selectedMediaUris: StateFlow<List<Uri>> = _selectedMediaUris.asStateFlow()
     
     // Room Media Map
-    private val _roomMedia = MutableStateFlow<Map<String, List<android.net.Uri>>>(emptyMap())
-    val roomMedia: StateFlow<Map<String, List<android.net.Uri>>> = _roomMedia.asStateFlow()
+    private val _roomMedia = MutableStateFlow<Map<String, List<Uri>>>(emptyMap())
+    val roomMedia: StateFlow<Map<String, List<Uri>>> = _roomMedia.asStateFlow()
     
     // Gallery viewer state
     private val _isGalleryViewerOpen = MutableStateFlow(false)
     val isGalleryViewerOpen: StateFlow<Boolean> = _isGalleryViewerOpen.asStateFlow()
     
-    private val _galleryViewerMedia = MutableStateFlow<List<android.net.Uri>>(emptyList())
-    val galleryViewerMedia: StateFlow<List<android.net.Uri>> = _galleryViewerMedia.asStateFlow()
+    private val _galleryViewerMedia = MutableStateFlow<List<Uri>>(emptyList())
+    val galleryViewerMedia: StateFlow<List<Uri>> = _galleryViewerMedia.asStateFlow()
     
     private val _galleryViewerIndex = MutableStateFlow(0)
     val galleryViewerIndex: StateFlow<Int> = _galleryViewerIndex.asStateFlow()
@@ -84,6 +159,10 @@ class ProfileViewModel : ViewModel() {
     private val _unlockDialogRoom = MutableStateFlow<TimeCapsuleRoom?>(null)
     val unlockDialogRoom: StateFlow<TimeCapsuleRoom?> = _unlockDialogRoom.asStateFlow()
 
+    // Unlocked Photos Viewer State
+    private val _unlockedPhotosRoom = MutableStateFlow<TimeCapsuleRoom?>(null)
+    val unlockedPhotosRoom: StateFlow<TimeCapsuleRoom?> = _unlockedPhotosRoom.asStateFlow()
+
     // Callbacks for permissions
     var onRequestNotificationPermission: (() -> Unit)? = null
     var onRequestCalendarPermission: (() -> Unit)? = null
@@ -92,12 +171,12 @@ class ProfileViewModel : ViewModel() {
     var onRequestFilePermission: (() -> Unit)? = null
 
     // Helper context for DB init (Simple MVP approach)
-    fun initDatabase(context: android.content.Context) {
+    fun initDatabase(context: Context) {
         val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
         val token = sessionManager.getToken()
         
         if (token != null) {
-            val prefs = context.getSharedPreferences("BestBeforePrefs", android.content.Context.MODE_PRIVATE)
+            context.getSharedPreferences("BestBeforePrefs", Context.MODE_PRIVATE)
             // Ideally RoomRepository should also take context or session manager, but for now we keep using token
             roomRepository = com.dmb.bestbefore.data.repository.RoomRepository(token)
             
@@ -108,27 +187,52 @@ class ProfileViewModel : ViewModel() {
         if (roomRepository != null) {
             viewModelScope.launch {
                 val result = roomRepository!!.getRooms()
+                val savedResult = roomRepository!!.getSavedRooms() // Fetch saved rooms too
+
+                val allRooms = mutableListOf<TimeCapsuleRoom>()
+
+                // Process Created Rooms
                 result.onSuccess { apiRooms ->
-                    val uiRooms = apiRooms.map { dto ->
-                        TimeCapsuleRoom(
-                            id = dto.id,
-                            roomName = dto.name,
-                            capsuleDays = 0,
-                            capsuleHours = 0,
-                            notificationDays = 0,
-                            notificationHours = 0,
-                            isPublic = true,
-                            isCollaboration = false,
-                            // In a real app, 'isSaved' and 'dateCreated' should come from API.
-                            // For MVP, if we load it now, assume it's valid unless local persistence says otherwise.
-                            // Since we don't have isSaved in API, we default to false (Active/Pending).
-                        )
-                    }
-                    refreshRoomLists(uiRooms)
+                     allRooms.addAll(mapDtosToRooms(apiRooms, isSaved = false))
                 }
+
+                // Process Saved Rooms
+                savedResult.onSuccess { savedDtos ->
+                     val savedRooms = mapDtosToRooms(savedDtos, isSaved = true)
+                     allRooms.addAll(savedRooms)
+                }
+                
+                // Re-map media for all rooms
+                val mediaMap = allRooms.associate { room -> 
+                    room.id to (room.photos.map { Uri.parse(it) } )
+                }
+                _roomMedia.value = mediaMap
+                
+                refreshRoomLists(allRooms)
             }
         }
-        // ... profile image ...
+    }
+
+    private fun mapDtosToRooms(dtos: List<com.dmb.bestbefore.data.api.models.RoomDto>, isSaved: Boolean): List<TimeCapsuleRoom> {
+        return dtos.map { dto ->
+            TimeCapsuleRoom(
+                id = dto.id,
+                roomName = dto.name,
+                capsuleDays = 0,
+                capsuleHours = 0,
+                notificationDays = 0,
+                notificationHours = 0,
+                isPublic = true,
+                isCollaboration = dto.isCollaboration,
+                photos = dto.photos ?: emptyList(),
+                unlockTime = (parseCreatedAt(dto.createdAt)) + 
+                             ((dto.capsuleDays * 24 * 3600 * 1000L) + 
+                              (dto.capsuleHours * 3600 * 1000L) + 
+                              (dto.capsuleMinutes * 60 * 1000L)),
+                dateCreated = parseCreatedAt(dto.createdAt),
+                isSaved = isSaved
+            )
+        }
     }
 
     // Sort rooms (Active only for MVP cleanup)
@@ -143,25 +247,105 @@ class ProfileViewModel : ViewModel() {
         }
         
         _createdRooms.value = active
+        
+        // Generate Recent Activity from Rooms
+        val activities = mutableListOf<RecentActivity>()
+        
+        // 1. "Joined BestBefore" (Static for MVP, or based on user creation date if available)
+        // For now, we don't have user creation date in this VM, so we skip or mock it if needed.
+        // Let's add a static one for "App Installed" or similar if requested, but user asked for "Not dummy".
+        // The user said: "if user created a room write in under there"
+        
+        active.forEach { room ->
+            activities.add(
+                RecentActivity(
+                    type = ActivityType.CREATED_ROOM,
+                    title = "Created room \"${room.roomName}\"",
+                    date = room.dateCreated,
+                    subtitle = null
+                )
+            )
+            
+            // If we had photo upload timestamps, we would add them here. 
+            // For MVP, we only track room creation date. 
+            // We can check if room has photos and add a generic "Added photos" activity if needed, 
+            // but without specific timestamps it might look odd if it's old.
+            // We will handle "Added photos" dynamically in uploadMedia for the current session.
+        }
+        
+        _recentActivities.value = activities.sortedByDescending { it.date }
+        
+        // Update Stats
+        _totalRooms.value = active.size
+        _totalMemories.value = active.sumOf { it.photos.size }
     }
     
     
     // Calendar Events Integration
-    private val _calendarEvents = MutableStateFlow<List<com.dmb.bestbefore.calendar.CalendarEvent>>(emptyList())
-    val calendarEvents: StateFlow<List<com.dmb.bestbefore.calendar.CalendarEvent>> = _calendarEvents.asStateFlow()
+    private val _calendarEvents = MutableStateFlow<List<CalendarEvent>>(emptyList())
+    val calendarEvents: StateFlow<List<CalendarEvent>> = _calendarEvents.asStateFlow()
 
-    fun loadUpcomingEvents(context: android.content.Context) {
-        // Request permission handled by caller via launcher
-        if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_CALENDAR) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-             viewModelScope.launch {
-                 val helper = com.dmb.bestbefore.calendar.CalendarHelper(context)
-                 val events = helper.getUpcomingEvents()
-                 _calendarEvents.value = events
-             }
-        } else {
-            // Trigger permission request
-            onRequestReadCalendarPermission?.invoke()
+    fun loadUpcomingEvents(context: Context) {
+        if (roomRepository == null) return
+        
+        viewModelScope.launch {
+            val result = roomRepository!!.getUpcomingEvents()
+            
+            if (result.isSuccess) {
+                val dtos = result.getOrNull() ?: emptyList()
+                val events = dtos.mapNotNull { dto ->
+                     try {
+                         // Parse ISO 8601 strings from backend
+                         // Backend likely sends specific format (e.g. 2023-10-25T10:00:00.000Z)
+                         // SimpleDateFormat with 'X' or 'Z' might work, or Instants if API level allows.
+                         // For MVP, handling simplified ISO.
+                         val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+                         sdf.timeZone = TimeZone.getTimeZone("UTC")
+                         // Fallback attempt if pattern mismatches could be added
+                         
+                         val start = sdf.parse(dto.start)
+                         val end = sdf.parse(dto.end)
+                         
+                         if (start != null && end != null) {
+                             CalendarEvent(
+                                 id = dto.id,
+                                 title = dto.title,
+                                 startTime = start,
+                                 endTime = end,
+                                 location = dto.location,
+                                 description = dto.description
+                             )
+                         } else null
+                     } catch (e: Exception) {
+                         null
+                     }
+                }
+                _calendarEvents.value = events
+            } else {
+                // If failed (likely 401), we might want to prompt connection
+                // For MVP, just clear list
+                _calendarEvents.value = emptyList()
+                Log.e("ProfileVM", "Failed to calendar events", result.exceptionOrNull())
+            }
         }
+    }
+    
+    fun connectGoogleCalendar(context: Context) {
+         if (roomRepository == null) {
+             Toast.makeText(context, "Sychronizing... Please wait.", Toast.LENGTH_SHORT).show()
+             return
+         }
+         viewModelScope.launch {
+             val result = roomRepository!!.getCalendarAuthUrl()
+             if (result.isSuccess) {
+                 val url = result.getOrNull()
+                 if (!url.isNullOrEmpty()) {
+                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                     context.startActivity(intent)
+                 }
+             }
+         }
     } 
 
     
@@ -169,18 +353,18 @@ class ProfileViewModel : ViewModel() {
     var onRequestReadCalendarPermission: (() -> Unit)? = null
 
     // Image upload state
-    private val _selectedImageUri = MutableStateFlow<android.net.Uri?>(null)
-    val selectedImageUri: StateFlow<android.net.Uri?> = _selectedImageUri.asStateFlow()
+    private val _selectedImageUri = MutableStateFlow<Uri?>(null)
+    val selectedImageUri: StateFlow<Uri?> = _selectedImageUri.asStateFlow()
 
-    fun updateSelectedImage(uri: android.net.Uri) {
+    fun updateSelectedImage(uri: Uri) {
         _selectedImageUri.value = uri
     }
     
     // Camera capture state
-    private val _capturedImageUri = MutableStateFlow<android.net.Uri?>(null)
-    val capturedImageUri: StateFlow<android.net.Uri?> = _capturedImageUri.asStateFlow()
+    private val _capturedImageUri = MutableStateFlow<Uri?>(null)
+    val capturedImageUri: StateFlow<Uri?> = _capturedImageUri.asStateFlow()
     
-    fun setCapturedImage(uri: android.net.Uri) {
+    fun setCapturedImage(uri: Uri) {
         _capturedImageUri.value = uri
     }
     
@@ -195,7 +379,7 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
-    fun applyCalendarEvent(event: com.dmb.bestbefore.calendar.CalendarEvent) {
+    fun applyCalendarEvent(event: CalendarEvent) {
         _roomName.value = event.title
         _targetTime.value = event.startTime.time
         
@@ -205,7 +389,7 @@ class ProfileViewModel : ViewModel() {
         _targetMinute.value = calendar.get(java.util.Calendar.MINUTE)
     }
 
-    fun finalizeRoom(context: android.content.Context? = null) {
+    fun finalizeRoom(context: Context? = null) {
         // Request notification permission before creating room
         onRequestNotificationPermission?.invoke()
         
@@ -227,22 +411,41 @@ class ProfileViewModel : ViewModel() {
             notificationHours = hours,
             notificationMinutes = minutes,
             isPublic = _isPublic.value,
-            isCollaboration = _isCollaboration.value
+            isCollaboration = _isCollaboration.value,
+            unlockTime = _targetTime.value // Explicitly set unlock time
         )
         // Create Room via API
         viewModelScope.launch {
-             // 2. API Save (Fire and forget for MVP UI speed, but practically should wait or queue)
-             roomRepository?.createRoom(newRoom.roomName)
+             // 2. API Save - Wait for response to get real ID
+             val result = roomRepository?.createRoom(
+                 newRoom.roomName,
+                 newRoom.capsuleDays,
+                 newRoom.capsuleHours,
+                 newRoom.capsuleMinutes,
+                 newRoom.isPublic,
+                 newRoom.isCollaboration
+             )
              
-             // Add to local list for immediate UI feedback (Optimistic Update)
-             val updatedList = _createdRooms.value + newRoom
+             val finalRoom = if (result != null && result.isSuccess) {
+                 val realId = result.getOrNull()
+                 if (realId != null) {
+                     newRoom.copy(id = realId)
+                 } else {
+                     newRoom
+                 }
+             } else {
+                 // API failed or offline - keep local UUID (but upload will fail until synced)
+                 // For MVP, we proceed with local UUID but warn
+                 newRoom
+             }
+             
+             // Add to local list
+             val updatedList = _createdRooms.value + finalRoom
              refreshRoomLists(updatedList)
+             
+             // Keep user in flow by navigating to the new room detail
+             selectRoom(finalRoom)
         }
-        
-
-        
-        // Keep user in flow by navigating to the new room detail
-        selectRoom(newRoom)
 
         // Schedule notification (Fixed: Added back)
         context?.let { ctx ->
@@ -255,18 +458,11 @@ class ProfileViewModel : ViewModel() {
             )
             
             // Calendar event
-            if (_addToCalendar.value) {
-                try {
-                     val calendarHelper = com.dmb.bestbefore.calendar.CalendarHelper(ctx)
-                     calendarHelper.createCalendarEvent(
-                         roomName = newRoom.roomName,
-                         notificationTime = unlockTimeMillis,
-                         description = "Time capsule unlock notification for ${newRoom.roomName}"
-                     )
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
+            // Calendar event creation in User's calendar is now handled via Backend-App integration if desired,
+            // or we simply trust the user to have it.
+            // Since we deleted local CalendarHelper and user said "move to backend",
+            // we skip local creation here. Backend could potentially create it if we added that endpoint.
+            // For now, removing local calendar write logic.
         }
     }
     
@@ -281,33 +477,96 @@ class ProfileViewModel : ViewModel() {
         _isAllMediaVisible.value = visible
     }
 
-    fun updateSelectedMedia(uris: List<android.net.Uri>) {
+    fun updateSelectedMedia(uris: List<Uri>) {
         _selectedMediaUris.value = uris
     }
     
-    fun getMediaForRoom(roomId: String): List<android.net.Uri> {
-        return _roomMedia.value[roomId] ?: emptyList()
-    }
 
-    fun uploadMedia(context: android.content.Context) {
-        // Mock upload for MVP - In real app, this would send files to API
+
+    fun uploadMedia(context: Context) {
         viewModelScope.launch {
             val currentSelection = _selectedMediaUris.value
             val currentRoomId = _selectedRoom.value?.id
             
             if (currentSelection.isNotEmpty() && currentRoomId != null) {
-                // Simulate network delay
-                kotlinx.coroutines.delay(1000)
+                val uploadedUrls = mutableListOf<String>()
                 
-                // Persist to local map
-                val currentMap = _roomMedia.value.toMutableMap()
-                val existingList = currentMap[currentRoomId] ?: emptyList()
-                currentMap[currentRoomId] = existingList + currentSelection
-                _roomMedia.value = currentMap
+                currentSelection.forEach { uri ->
+                    try {
+                        val file = getFileFromUri(context, uri)
+                        if (file != null) {
+                            val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
+                            val body = MultipartBody.Part.createFormData("image", file.name, requestFile)
+                            
+                            val result = roomRepository?.uploadPhoto(currentRoomId, body)
+                            result?.onSuccess { url -> 
+                                uploadedUrls.add(url) 
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
                 
-                android.widget.Toast.makeText(context, "Photos uploaded to Time Capsule!", android.widget.Toast.LENGTH_SHORT).show()
-                _selectedMediaUris.value = emptyList()
+                if (uploadedUrls.isNotEmpty()) {
+                    // Update local state
+                    _createdRooms.value = _createdRooms.value.map { room ->
+                        if (room.id == currentRoomId) {
+                            room.copy(photos = room.photos + uploadedUrls)
+                        } else room
+                    }
+                    
+                    // Also update _roomMedia for the detail screen
+                    val currentMedia = _roomMedia.value[currentRoomId] ?: emptyList()
+                    val newUris = uploadedUrls.map { Uri.parse(it) }
+                    _roomMedia.value = _roomMedia.value + (currentRoomId to (currentMedia + newUris))
+                    
+                    Toast.makeText(context, "Uploaded ${uploadedUrls.size} photos!", Toast.LENGTH_SHORT).show()
+                    _selectedMediaUris.value = emptyList()
+                    
+                    // Add "Added Photos" activity
+                    val newActivity = RecentActivity(
+                        type = ActivityType.ADDED_PHOTOS,
+                        title = "Added ${uploadedUrls.size} photos to \"${_selectedRoom.value?.roomName}\"",
+                        date = System.currentTimeMillis()
+                    )
+                    _recentActivities.value = listOf(newActivity) + _recentActivities.value
+                    
+                    // Update Memory Count immediately
+                    // Update roomMedia first to reflect locally
+                     val updatedMap = _roomMedia.value.toMutableMap()
+                     val roomID = _selectedRoom.value?.id ?: ""
+                     if (roomID.isNotEmpty()) {
+                         val currentList = updatedMap[roomID] ?: emptyList()
+                         updatedMap[roomID] = currentList + uploadedUrls.map { Uri.parse(it) }
+                         _roomMedia.value = updatedMap
+                         
+                         // Recalculate total memories
+                         // Note: We might be desynced with _createdRooms if we don't update that too, 
+                         // but for the stats counter, using roomMedia is one way, or just incrementing.
+                         // Let's just increment for now to be safe and simple.
+                         _totalMemories.value += uploadedUrls.size
+                     }
+                } else {
+                     Toast.makeText(context, "Upload failed", Toast.LENGTH_SHORT).show()
+                }
             }
+        }
+    }
+
+    private fun getFileFromUri(context: Context, uri: Uri): File? {
+        return try {
+            val contentResolver = context.contentResolver
+            val inputStream = contentResolver.openInputStream(uri) ?: return null
+            val tempFile = File.createTempFile("upload", ".jpg", context.cacheDir)
+            val outputStream = FileOutputStream(tempFile)
+            inputStream.copyTo(outputStream)
+            inputStream.close()
+            outputStream.close()
+            tempFile
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 
@@ -339,12 +598,9 @@ class ProfileViewModel : ViewModel() {
                 goToStep(ProfileStep.ROOM_TIME)
                 true
             }
-            ProfileStep.FINALIZE_PUBLIC, ProfileStep.FINALIZE_PRIVATE -> {
-                goToStep(ProfileStep.ROOM_MODE)
-                true
-            }
-            ProfileStep.COLLABORATION -> {
-                goToStep(ProfileStep.FINALIZE_PUBLIC)
+            ProfileStep.ROOM_MODE -> {
+                // Go back to time step
+                _currentStep.value = ProfileStep.ROOM_TIME
                 true
             }
             ProfileStep.TIME_CAPSULE_LIST -> {
@@ -382,26 +638,50 @@ class ProfileViewModel : ViewModel() {
     }
 
     fun showTimeCapsuleList() {
+        _showOnlySaved.value = false
+        _currentStep.value = ProfileStep.TIME_CAPSULE_LIST
+    }
+
+    fun showSavedRooms() {
+        _showOnlySaved.value = true
         _currentStep.value = ProfileStep.TIME_CAPSULE_LIST
     }
 
     fun selectRoom(room: TimeCapsuleRoom) {
         _selectedRoom.value = room
         _currentStep.value = ProfileStep.ROOM_DETAIL
+        
+        // check for unlock
+        checkRoomUnlockStatus(room)
+    }
+
+    private fun checkRoomUnlockStatus(room: TimeCapsuleRoom) {
+         if (!room.isSaved && System.currentTimeMillis() >= room.unlockTime && room.unlockTime > 0) {
+             // Room is expired/unlocked but not saved/kept yet -> Show Dialog
+             showUnlockDialog(room)
+         }
     }
     
+    // Deep Link Handler
     // Deep Link Handler
     fun handleDeepLink(roomId: String) {
         val room = _createdRooms.value.find { it.id == roomId }
         if (room != null) {
-            // Show the unlock dialog for this room
-            showUnlockDialog(room)
+            // Show photos first (Unlocked Room Flow Step 1)
+            _unlockedPhotosRoom.value = room
         } else {
              // If room not found in current loaded list (e.g. fresh start), 
              // we might need to fetch it or wait for init. 
              // For MVP, we assume initDatabase loads it.
              // We can also trigger a specific "Load Room" here if needed.
         }
+    }
+    
+    fun dismissUnlockedPhotos(room: TimeCapsuleRoom? = null) {
+        val targetRoom = room ?: _unlockedPhotosRoom.value
+        _unlockedPhotosRoom.value = null
+        // Show Save/Delete Dialog (Unlocked Room Flow Step 2)
+        targetRoom?.let { showUnlockDialog(it) }
     }
 
     // State Updates
@@ -426,19 +706,24 @@ class ProfileViewModel : ViewModel() {
         // Preserve time logic if needed, but for MVP dateMillis is sufficient base
     }
 
-    fun updateAddToCalendar(enable: Boolean) {
-        _addToCalendar.value = enable
-    }
+
 
     fun updateRoomMode(public: Boolean) {
         _isPublic.value = public
+    }
+    
+    fun selectRoomForEditing(room: TimeCapsuleRoom) {
+        _selectedRoom.value = room
+        _roomName.value = room.roomName
+        _isPublic.value = room.isPublic
+        _currentStep.value = ProfileStep.EDIT_ROOM
     }
 
     fun updateCollaboration(enable: Boolean) {
         _isCollaboration.value = enable
     }
     
-    fun updateProfileImage(uri: android.net.Uri, context: android.content.Context) {
+    fun updateProfileImage(uri: Uri, context: Context) {
         _profileImageUri.value = uri
         // Persist permissions?
         context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -457,8 +742,13 @@ class ProfileViewModel : ViewModel() {
         onRequestFilePermission?.invoke()
     }
     
+    // Helper to get media for a room
+    fun getRoomMediaUris(roomId: String): List<Uri> {
+        return _roomMedia.value[roomId] ?: emptyList()
+    }
+    
     // Gallery viewer functions
-    fun openGalleryViewer(mediaList: List<android.net.Uri>, startIndex: Int = 0) {
+    fun openGalleryViewer(mediaList: List<Uri>, startIndex: Int = 0) {
         _galleryViewerMedia.value = mediaList
         _galleryViewerIndex.value = startIndex
         _isGalleryViewerOpen.value = true
@@ -487,24 +777,35 @@ class ProfileViewModel : ViewModel() {
 
     
     // Keep room - mark as saved/permanent
-    fun keepRoom(context: android.content.Context, room: TimeCapsuleRoom) {
+    fun keepRoom(context: Context, room: TimeCapsuleRoom) {
         viewModelScope.launch {
             try {
-                // Room is already in created rooms, just dismiss dialog
-                dismissUnlockDialog()
-                android.widget.Toast.makeText(
-                    context,
-                    "Room \"${room.roomName}\" kept in your collection",
-                    android.widget.Toast.LENGTH_SHORT
-                ).show()
+                // Call backend to save
+                val result = roomRepository?.keepRoom(room.id)
+                
+                if (result != null && result.isSuccess) {
+                    dismissUnlockDialog()
+                    Toast.makeText(
+                        context,
+                        "Room \"${room.roomName}\" saved to your collection",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    
+                    // Refresh saved status locally if we want to reflect it immediately?
+                    // Or just reload rooms.
+                    // For MVP simplicity, we might just re-fetch or assume success.
+                } else {
+                     Toast.makeText(context, "Failed to save room", Toast.LENGTH_SHORT).show()
+                }
             } catch (e: Exception) {
-                android.util.Log.e("ProfileViewModel", "Error keeping room", e)
+                Log.e("ProfileViewModel", "Error keeping room", e)
+                Toast.makeText(context, "Error saving room", Toast.LENGTH_SHORT).show()
             }
         }
     }
     
     // Delete room from backend and local storage
-    fun deleteRoom(context: android.content.Context, room: TimeCapsuleRoom) {
+    fun deleteRoom(context: Context, room: TimeCapsuleRoom) {
         viewModelScope.launch {
             try {
                 // TODO: Call backend API to delete room
@@ -515,30 +816,189 @@ class ProfileViewModel : ViewModel() {
                 dismissUnlockDialog()
                 closeOverlay()
                 
-                android.widget.Toast.makeText(
+                Toast.makeText(
                     context,
                     "Room \"${room.roomName}\" deleted",
-                    android.widget.Toast.LENGTH_SHORT
+                    Toast.LENGTH_SHORT
                 ).show()
             } catch (e: Exception) {
-                android.util.Log.e("ProfileViewModel", "Error deleting room", e)
-                android.widget.Toast.makeText(
+                Log.e("ProfileViewModel", "Error deleting room", e)
+                Toast.makeText(
                     context,
                     "Failed to delete room",
-                    android.widget.Toast.LENGTH_SHORT
+                    Toast.LENGTH_SHORT
                 ).show()
             }
         }
     }
 
-    fun logout(context: android.content.Context) {
+    // ========== THEME & CUSTOMIZATION FUNCTIONS ==========
+    
+    fun loadThemePreferences(context: Context) {
+        if (preferencesManager == null) {
+            preferencesManager = PreferencesManager(context)
+        }
+        _selectedTheme.value = AppThemes.getThemeByName(preferencesManager!!.getTheme())
+        _accentColor.value = preferencesManager!!.getAccentColor()
+    }
+    
+    fun selectTheme(context: Context, theme: AppTheme) {
+        if (preferencesManager == null) {
+            preferencesManager = PreferencesManager(context)
+        }
+        _selectedTheme.value = theme
+        preferencesManager!!.saveTheme(theme.name)
+    }
+    
+    fun selectAccentColor(context: Context, color: Color) {
+        if (preferencesManager == null) {
+            preferencesManager = PreferencesManager(context)
+        }
+        _accentColor.value = color
+        preferencesManager!!.saveAccentColor(color)
+    }
+    
+    // ========== CREDENTIAL UPDATE FUNCTIONS ==========
+    
+    fun updateEmail(context: Context, newEmail: String, currentPassword: String) {
+        viewModelScope.launch {
+            _isUpdatingCredential.value = true
+            _credentialUpdateError.value = null
+            _credentialUpdateSuccess.value = null
+            
+            try {
+                val auth = FirebaseAuth.getInstance()
+                val user = auth.currentUser
+                
+                if (user == null) {
+                    _credentialUpdateError.value = "Not authenticated"
+                    _isUpdatingCredential.value = false
+                    return@launch
+                }
+                
+                // Re-authenticate first (Firebase requirement)
+                val credential = EmailAuthProvider.getCredential(user.email!!, currentPassword)
+                user.reauthenticate(credential).addOnCompleteListener { reAuthTask ->
+                    if (reAuthTask.isSuccessful) {
+                        // Update email in Firebase
+                        user.updateEmail(newEmail).addOnCompleteListener { updateTask ->
+                            if (updateTask.isSuccessful) {
+                                // Update email in backend MongoDB
+                                viewModelScope.launch {
+                                    try {
+                                        val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
+                                        val token = sessionManager.getToken()
+                                        
+                                        if (token != null) {
+                                            val apiService = com.dmb.bestbefore.data.api.RetrofitClient.apiService
+                                            val response = apiService.updateUserEmail(mapOf("email" to newEmail))
+                                            
+                                            if (response.isSuccessful) {
+                                                _credentialUpdateSuccess.value = "Email updated successfully!"
+                                                // Update session with new email
+                                                sessionManager.saveUserEmail(newEmail)
+                                            } else {
+                                                _credentialUpdateError.value = "Backend update failed"
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        _credentialUpdateError.value = "Backend error: ${e.message}"
+                                    } finally {
+                                        _isUpdatingCredential.value = false
+                                    }
+                                }
+                            } else {
+                                _credentialUpdateError.value = updateTask.exception?.message ?: "Firebase update failed"
+                                _isUpdatingCredential.value = false
+                            }
+                        }
+                    } else {
+                        _credentialUpdateError.value = "Re-authentication failed. Check password."
+                        _isUpdatingCredential.value = false
+                    }
+                }
+            } catch (e: Exception) {
+                _credentialUpdateError.value = e.message ?: "Update failed"
+                _isUpdatingCredential.value = false
+            }
+        }
+    }
+    
+    fun updatePassword(context: Context, newPassword: String, currentPassword: String) {
+        viewModelScope.launch {
+            _isUpdatingCredential.value = true
+            _credentialUpdateError.value = null
+            _credentialUpdateSuccess.value = null
+            
+            try {
+                val auth = FirebaseAuth.getInstance()
+                val user = auth.currentUser
+                
+                if (user == null) {
+                    _credentialUpdateError.value = "Not authenticated"
+                    _isUpdatingCredential.value = false
+                    return@launch
+                }
+                
+                // Re-authenticate first
+                val credential = EmailAuthProvider.getCredential(user.email!!, currentPassword)
+                user.reauthenticate(credential).addOnCompleteListener { reAuthTask ->
+                    if (reAuthTask.isSuccessful) {
+                        // Update password in Firebase
+                        user.updatePassword(newPassword).addOnCompleteListener { updateTask ->
+                            if (updateTask.isSuccessful) {
+                                // Update password in backend MongoDB
+                                viewModelScope.launch {
+                                    try {
+                                        val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
+                                        val token = sessionManager.getToken()
+                                        
+                                        if (token != null) {
+                                            val apiService = com.dmb.bestbefore.data.api.RetrofitClient.apiService
+                                            val response = apiService.updateUserPassword(mapOf("password" to newPassword))
+                                            
+                                            if (response.isSuccessful) {
+                                                _credentialUpdateSuccess.value = "Password updated successfully!"
+                                            } else {
+                                                _credentialUpdateError.value = "Backend update failed"
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        _credentialUpdateError.value = "Backend error: ${e.message}"
+                                    } finally {
+                                        _isUpdatingCredential.value = false
+                                    }
+                                }
+                            } else {
+                                _credentialUpdateError.value = updateTask.exception?.message ?: "Firebase update failed"
+                                _isUpdatingCredential.value = false
+                            }
+                        }
+                    } else {
+                        _credentialUpdateError.value = "Re-authentication failed. Check current password."
+                        _isUpdatingCredential.value = false
+                    }
+                }
+            } catch (e: Exception) {
+                _credentialUpdateError.value = e.message ?: "Update failed"
+                _isUpdatingCredential.value = false
+            }
+        }
+    }
+    
+    fun clearCredentialMessages() {
+        _credentialUpdateError.value = null
+        _credentialUpdateSuccess.value = null
+    }
+
+    fun logout(context: Context) {
         // Clear session data
         val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
         sessionManager.clearSession()
         
         // Clear auth repository prefs as well if they are separate (they seem to be inconsistent in the codebase)
         // Ideally we should unify, but for safety lets clear the one used in initDatabase too
-        val prefs = context.getSharedPreferences("BestBeforePrefs", android.content.Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences("BestBeforePrefs", Context.MODE_PRIVATE)
         prefs.edit().clear().apply()
 
         // Reset local state
@@ -552,16 +1012,18 @@ class ProfileViewModel : ViewModel() {
 
 
 enum class ProfileStep {
-    NONE,
+    NONE,                   // No overlay/screen shown
+    PROFILE_MENU,           // Main profile screen with 3 tabs
     ROOM_NAME,
-    ROOM_TIME, // Replaces TIME_CAPSULE and NOTIFICATION
+    ROOM_TIME,
     ROOM_MODE,
-    FINALIZE_PUBLIC,
-    FINALIZE_PRIVATE,
-    COLLABORATION,
-    TIME_CAPSULE_LIST,
     ROOM_DETAIL,
-    PROFILE_MENU
+    EDIT_ROOM,              // Added: Edit room screen
+    CREATE_HALLWAY,
+    CAMERA,
+    TIME_CAPSULE_LIST,      // Browse existing time capsule rooms
+    NO_OP,                  // Placeholder for UI (no navigation)
+    SAVED_ROOMS_LIST
 }
 
 enum class RoomCreationSource {
