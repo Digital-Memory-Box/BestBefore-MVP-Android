@@ -1,0 +1,14 @@
+* [33mb8bfbb0[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mpre-release-android[m[33m)[m UI Fix
+* [33mf8df59e[m[33m ([m[1;31morigin/pre-release-android[m[33m)[m chore: Add .env to gitignore to prevent security leaks
+* [33m5bc332f[m feat: Fix notification deep linking and back navigation logic
+* [33mdca06ea[m Test Backend
+[31m|[m * [33m9caa753[m[33m ([m[1;31morigin/android-testing[m[33m)[m implement ui test based on SDD
+[31m|[m * [33m0e95011[m implement unit test based on SDD
+[31m|[m * [33m860342d[m implement unit test based on SDD
+[31m|[m * [33mb47aabf[m add unit and acceptance test cases from SDD
+[31m|[m * [33m4027804[m[33m ([m[1;31morigin/ui-design-android[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/android-testing-v3[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m Add time capsule feature and memory preview UI
+[31m|[m * [33mdfb0361[m UI v1
+[31m|[m * [33m78dccbc[m[33m ([m[1;31morigin/android-testing-v2[m[33m)[m test files
+[31m|[m * [33m0d3fa03[m Add comprehensive test suite with 100% SDD coverage
+[31m|[m[31m/[m  
+* [33m2a61c91[m Replace branch content with Android project only
