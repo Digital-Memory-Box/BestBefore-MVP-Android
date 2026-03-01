@@ -45,6 +45,10 @@ import android.net.Uri
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.statusBars
+
 
 @Composable
 fun ProfileScreen(
@@ -412,9 +416,11 @@ fun ProfileScreen(
             ) {
                 when (currentStep) {
                     ProfileStep.PROFILE_MENU -> ProfileMenuScreen(viewModel, createdRooms, onLogout)
-                    ProfileStep.ROOM_NAME -> RoomNameStep(viewModel)
-                    ProfileStep.ROOM_TIME -> RoomTimeStep(viewModel)
-                    ProfileStep.ROOM_MODE -> RoomModeStep(viewModel)
+                    ProfileStep.ROOM_NAME         -> CreateRoomStep1(viewModel)
+                    ProfileStep.ROOM_TIME_CAPSULE -> CreateRoomStep2(viewModel)
+                    ProfileStep.ROOM_ATMOSPHERE   -> CreateRoomStep3Atmosphere(viewModel)
+                    ProfileStep.ROOM_MEMORY_RULES -> CreateRoomStep4(viewModel)
+                    ProfileStep.ROOM_INVITE       -> CreateRoomStep5(viewModel)
 
                     ProfileStep.TIME_CAPSULE_LIST -> TimeCapsuleListScreen(viewModel, createdRooms)
                     ProfileStep.ROOM_DETAIL -> RoomDetailScreen(
@@ -1259,134 +1265,975 @@ fun ExploreItem(text: String) {
     )
 }
 
-// Room Name Step
+// ─────────────────────────────────────────────────────────────
+//  SHARED CHROME: title bar + 5-dot progress + bottom buttons
+// ─────────────────────────────────────────────────────────────
+
+private val CardDarkBg = Color(0xFF1C1C1E)
+private val AccentBlue  = Color(0xFF1A7AF8)
+
 @Composable
-private fun RoomNameStep(viewModel: ProfileViewModel) {
-    val roomName by viewModel.roomName.collectAsState()
-    val context = androidx.compose.ui.platform.LocalContext.current
-
-    LaunchedEffect(Unit) {
-        viewModel.loadUpcomingEvents(context)
-    }
-
-    OverlayStepContainer(
-        title = "Create Room",
-        subtitle = "Choose a Room name",
-        onBack = { viewModel.closeOverlay() },
-        onNext = {
-            if (roomName.isNotEmpty()) {
-                viewModel.goToStep(ProfileStep.ROOM_TIME)
-            }
-        }
-    ) {
-        BasicTextField(
-            value = roomName,
-            onValueChange = { viewModel.updateRoomName(it) },
-            textStyle = TextStyle(
-                color = Color.White,
-                fontSize = 18.sp
-            ),
-            cursorBrush = SolidColor(Color.White),
-            singleLine = true, // Fix expansion on Enter
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, Color.White, RoundedCornerShape(12.dp))
-                .padding(16.dp),
-            decorationBox = { innerTextField ->
-                if (roomName.isEmpty()) {
-                    Text(
-                        text = "Enter room name...",
-                        color = Color.Gray,
-                        fontSize = 18.sp
-                    )
-                }
-                innerTextField()
-            }
-        )
-
-        }
-    }
-
-
-// Room Time Step (Unified)
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun RoomTimeStep(viewModel: ProfileViewModel) {
-    val targetTime by viewModel.targetTime.collectAsState()
-    val targetHour by viewModel.targetHour.collectAsState()
-    val targetMinute by viewModel.targetMinute.collectAsState()
-
-    var showDatePicker by remember { mutableStateOf(false) }
-    var showTimePicker by remember { mutableStateOf(false) }
-
-    val dateState = rememberDatePickerState(
-        initialSelectedDateMillis = targetTime
-    )
-    
-    val timeState = rememberTimePickerState(
-        initialHour = targetHour,
-        initialMinute = targetMinute
-    )
-
-    if (showDatePicker) {
-        DatePickerDialog(
-            onDismissRequest = { },
-            confirmButton = {
-                TextButton(onClick = {
-                    dateState.selectedDateMillis?.let { viewModel.updateTargetDate(it) }
-                }) {
-                    Text("OK")
-                }
-            }
-        ) {
-            DatePicker(state = dateState)
-        }
-    }
-
-    if (showTimePicker) {
-        TimePickerDialog(
-            onDismissRequest = { },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.updateTargetTime(timeState.hour, timeState.minute)
-                }) {
-                    Text("OK")
-                }
-            }
-        ) {
-            TimePicker(state = timeState)
-        }
-    }
-
-    OverlayStepContainer(
-        title = "Set Time",
-        subtitle = "When should this capsule open?",
-        onBack = { viewModel.goToStep(ProfileStep.ROOM_NAME) },
-        onNext = { viewModel.goToStep(ProfileStep.ROOM_MODE) }
+private fun CreateRoomChrome(
+    step: Int,           // 1-based, 1..4
+    onDismiss: () -> Unit,
+    onBack: (() -> Unit)?,  // null = hide Back button
+    onNext: () -> Unit,
+    nextLabel: String = "Next",
+    nextEnabled: Boolean = true,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(horizontal = 20.dp)
         ) {
-            // Date Selection
-             Button(
-                onClick = { },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                modifier = Modifier.fillMaxWidth().height(50.dp)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ── Header row ──
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Select Date: ${java.text.SimpleDateFormat("MMM dd, yyyy").format(java.util.Date(targetTime))}")
+                Text(
+                    text = "Create Room",
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(Color(0xFF2C2C2E), androidx.compose.foundation.shape.CircleShape)
+                        .clickable { onDismiss() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Dismiss",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
-            // Time Selection
-             Button(
-                onClick = { },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                modifier = Modifier.fillMaxWidth().height(50.dp)
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // ── 5-dot step indicator ──
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Select Time: ${String.format("%02d:%02d", targetHour, targetMinute)}")
+                for (i in 1..5) {
+                    val filled = i <= step
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .background(
+                                if (filled) AccentBlue else Color(0xFF3A3A3C),
+                                androidx.compose.foundation.shape.CircleShape
+                            )
+                    )
+                    if (i < 5) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(2.dp)
+                                .background(
+                                    if (i < step) AccentBlue else Color(0xFF3A3A3C)
+                                )
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // ── Body content ──
+            Column(modifier = Modifier.weight(1f)) {
+                content()
+            }
+
+            // ── Bottom buttons ──
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp),
+                horizontalArrangement = if (onBack != null) Arrangement.spacedBy(12.dp)
+                                        else Arrangement.Center
+            ) {
+                if (onBack != null) {
+                    Button(
+                        onClick = onBack,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(54.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C2E))
+                    ) {
+                        Text("Back", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+                Button(
+                    onClick = onNext,
+                    enabled = nextEnabled,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(54.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (onBack != null) AccentBlue else Color(0xFF3A3A3C),
+                        disabledContainerColor = Color(0xFF3A3A3C)
+                    )
+                ) {
+                    Text(nextLabel, color = Color.White, fontWeight = FontWeight.SemiBold)
+                }
             }
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────
+//  STEP 1 — What's the name? + Public/Private
+// ─────────────────────────────────────────────────────────────
+@Composable
+private fun CreateRoomStep1(viewModel: ProfileViewModel) {
+    val roomName by viewModel.roomName.collectAsState()
+    val isPublic by viewModel.isPublic.collectAsState()
+
+    CreateRoomChrome(
+        step = 1,
+        onDismiss = { viewModel.closeOverlay() },
+        onBack = null,
+        onNext = {
+            if (roomName.isNotBlank()) viewModel.goToStep(ProfileStep.ROOM_TIME_CAPSULE)
+        },
+        nextEnabled = roomName.isNotBlank()
+    ) {
+        Text(
+            text = "What's the name?",
+            color = Color.White,
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "Give your room a unique title.",
+            color = Color(0xFF8E8E93),
+            fontSize = 14.sp
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Room Name field
+        BasicTextField(
+            value = roomName,
+            onValueChange = { viewModel.updateRoomName(it) },
+            textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+            cursorBrush = SolidColor(Color.White),
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(CardDarkBg, RoundedCornerShape(14.dp))
+                .padding(horizontal = 16.dp, vertical = 18.dp),
+            decorationBox = { inner ->
+                if (roomName.isEmpty()) Text("Room Name", color = Color(0xFF636366), fontSize = 16.sp)
+                inner()
+            }
+        )
+
+        Spacer(modifier = Modifier.height(28.dp))
+        Text("Privacy Status", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Public / Private cards
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            PrivacyCard(
+                title = "Public",
+                subtitle = "Anyone can see and join.",
+                iconVector = Icons.Default.Language,
+                selected = isPublic,
+                modifier = Modifier.weight(1f),
+                onClick = { viewModel.updateRoomMode(true) }
+            )
+            PrivacyCard(
+                title = "Private",
+                subtitle = "Only visible to invited.",
+                iconVector = Icons.Default.Lock,
+                selected = !isPublic,
+                modifier = Modifier.weight(1f),
+                onClick = { viewModel.updateRoomMode(false) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun PrivacyCard(
+    title: String,
+    subtitle: String,
+    iconVector: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .height(100.dp)
+            .background(CardDarkBg, RoundedCornerShape(14.dp))
+            .then(
+                if (selected) Modifier.border(2.dp, AccentBlue, RoundedCornerShape(14.dp))
+                else Modifier
+            )
+            .clickable(onClick = onClick)
+            .padding(14.dp)
+    ) {
+        Column {
+            Icon(iconVector, null, tint = if (selected) Color.White else Color(0xFF8E8E93), modifier = Modifier.size(22.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(title, color = if (selected) Color.White else Color(0xFF8E8E93), fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Text(subtitle, color = Color(0xFF8E8E93), fontSize = 11.sp, lineHeight = 14.sp)
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  STEP 2 — Time Capsule? (Duration + Specific Date tabs)
+// ─────────────────────────────────────────────────────────────
+@Composable
+private fun CreateRoomStep2(viewModel: ProfileViewModel) {
+    val enabled    by viewModel.isTimeCapsuleEnabled.collectAsState()
+    val method     by viewModel.unlockMethod.collectAsState()
+    val days       by viewModel.capsuleDays.collectAsState()
+    val hours      by viewModel.capsuleHours.collectAsState()
+    val mins       by viewModel.capsuleMins.collectAsState()
+    val preset     by viewModel.selectedPreset.collectAsState()
+    val targetTime by viewModel.targetTime.collectAsState()
+    val targetHour by viewModel.targetHour.collectAsState()
+    val targetMin  by viewModel.targetMinute.collectAsState()
+
+    CreateRoomChrome(
+        step = 2,
+        onDismiss = { viewModel.closeOverlay() },
+        onBack = { viewModel.goToStep(ProfileStep.ROOM_NAME) },
+        onNext = { viewModel.goToStep(ProfileStep.ROOM_ATMOSPHERE) }
+    ) {
+        androidx.compose.foundation.rememberScrollState().let { scroll ->
+            Column(modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(scroll)) {
+
+                Text("Time Capsule?", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("Lock memories for a future date.", color = Color(0xFF8E8E93), fontSize = 14.sp)
+                Spacer(modifier= Modifier.height(16.dp))
+
+                // Enable toggle row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(CardDarkBg, RoundedCornerShape(14.dp))
+                        .padding(horizontal = 16.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Enable Time Capsule", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text("Content will be hidden until the timer ends.", color = Color(0xFF8E8E93), fontSize = 12.sp)
+                    }
+                    Switch(
+                        checked = enabled,
+                        onCheckedChange = { viewModel.updateTimeCapsuleEnabled(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = AccentBlue
+                        )
+                    )
+                }
+
+                if (enabled) {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Text("Unlock Method", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Duration / Specific Date segmented control
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF1C1C1E), RoundedCornerShape(10.dp))
+                            .padding(4.dp)
+                    ) {
+                        listOf(UnlockMethod.DURATION to "Duration", UnlockMethod.SPECIFIC_DATE to "Specific Date").forEach { (m, label) ->
+                            val sel = method == m
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .background(
+                                        if (sel) Color(0xFF3A3A3C) else Color.Transparent,
+                                        RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable { viewModel.updateUnlockMethod(m) }
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(label, color = Color.White, fontSize = 14.sp, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    if (method == UnlockMethod.DURATION) {
+                        // ── Duration picker ──
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(CardDarkBg, RoundedCornerShape(14.dp))
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            DurationStepper("Days",  days,  { viewModel.updateCapsuleDays(days - 1)  }, { viewModel.updateCapsuleDays(days + 1)  })
+                            DurationStepper("Hours", hours, { viewModel.updateCapsuleHours(hours - 1) }, { viewModel.updateCapsuleHours(hours + 1) })
+                            DurationStepper("Mins",  mins,  { viewModel.updateCapsuleMins(mins - 1)  }, { viewModel.updateCapsuleMins(mins + 1)  })
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            "${days}d ${hours}h ${mins}m",
+                            color = AccentBlue,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Preset chips
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            listOf("1 Week", "21 Days", "1 Month").forEach { p ->
+                                val sel = preset == p
+                                Box(
+                                    modifier = Modifier
+                                        .background(
+                                            if (sel) AccentBlue else Color(0xFF2C2C2E),
+                                            RoundedCornerShape(20.dp)
+                                        )
+                                        .clickable { viewModel.selectPreset(p) }
+                                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                                ) {
+                                    Text(p, color = Color.White, fontSize = 14.sp, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
+                                }
+                            }
+                        }
+                    } else {
+                        // ── Specific Date inline calendar ──
+                        InlineCalendar(
+                            selectedMillis = targetTime,
+                            hour = targetHour,
+                            minute = targetMin,
+                            onDateSelected = { viewModel.updateTargetDate(it) },
+                            onTimeChanged = { h, m -> viewModel.updateTargetTime(h, m) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun DurationStepper(
+    label: String,
+    value: Int,
+    onDecrement: () -> Unit,
+    onIncrement: () -> Unit
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(label, color = Color(0xFF8E8E93), fontSize = 12.sp)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .background(Color(0xFF3A3A3C), androidx.compose.foundation.shape.CircleShape)
+                    .clickable { onDecrement() },
+                contentAlignment = Alignment.Center
+            ) { Text("−", color = Color.White, fontSize = 18.sp, textAlign = TextAlign.Center) }
+            Text(value.toString(), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .background(Color(0xFF3A3A3C), androidx.compose.foundation.shape.CircleShape)
+                    .clickable { onIncrement() },
+                contentAlignment = Alignment.Center
+            ) { Text("+", color = Color.White, fontSize = 18.sp, textAlign = TextAlign.Center) }
+        }
+    }
+}
+
+@Composable
+private fun InlineCalendar(
+    selectedMillis: Long,
+    hour: Int,
+    minute: Int,
+    onDateSelected: (Long) -> Unit,
+    onTimeChanged: (Int, Int) -> Unit
+) {
+    val todayMillis = remember {
+        val c = java.util.Calendar.getInstance()
+        c.set(java.util.Calendar.HOUR_OF_DAY, 0)
+        c.set(java.util.Calendar.MINUTE, 0)
+        c.set(java.util.Calendar.SECOND, 0)
+        c.set(java.util.Calendar.MILLISECOND, 0)
+        c.timeInMillis
+    }
+
+    var displayMonthMillis by remember { mutableStateOf(
+        run {
+            val c = java.util.Calendar.getInstance()
+            c.set(java.util.Calendar.DAY_OF_MONTH, 1)
+            c.set(java.util.Calendar.HOUR_OF_DAY, 0); c.set(java.util.Calendar.MINUTE, 0)
+            c.set(java.util.Calendar.SECOND, 0); c.set(java.util.Calendar.MILLISECOND, 0)
+            c.timeInMillis
+        }
+    ) }
+
+    val monthCal = remember(displayMonthMillis) {
+        java.util.Calendar.getInstance().apply { timeInMillis = displayMonthMillis }
+    }
+
+    val monthName = remember(displayMonthMillis) {
+        java.text.SimpleDateFormat("MMMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(displayMonthMillis))
+    }
+
+    val selectedDayMillis = remember(selectedMillis) {
+        val c = java.util.Calendar.getInstance(); c.timeInMillis = selectedMillis
+        c.set(java.util.Calendar.HOUR_OF_DAY, 0); c.set(java.util.Calendar.MINUTE, 0)
+        c.set(java.util.Calendar.SECOND, 0); c.set(java.util.Calendar.MILLISECOND, 0)
+        c.timeInMillis
+    }
+
+    // Build day grid
+    val daysInMonth = monthCal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+    val firstDayOfWeek = monthCal.get(java.util.Calendar.DAY_OF_WEEK) // 1=Sun..7=Sat
+    // Convert to Mon-based offset: Mon=0..Sun=6
+    val startOffset = (firstDayOfWeek - 2 + 7) % 7
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(CardDarkBg, RoundedCornerShape(16.dp))
+            .padding(16.dp)
+    ) {
+        Column {
+            // Month navigation
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(monthName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(Icons.Default.ChevronRight, null, tint = AccentBlue, modifier = Modifier.size(18.dp))
+                }
+                Row {
+                    IconButton(onClick = {
+                        val c = java.util.Calendar.getInstance(); c.timeInMillis = displayMonthMillis
+                        c.add(java.util.Calendar.MONTH, -1); displayMonthMillis = c.timeInMillis
+                    }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.ChevronLeft, null, tint = AccentBlue, modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(onClick = {
+                        val c = java.util.Calendar.getInstance(); c.timeInMillis = displayMonthMillis
+                        c.add(java.util.Calendar.MONTH, 1); displayMonthMillis = c.timeInMillis
+                    }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.ChevronRight, null, tint = AccentBlue, modifier = Modifier.size(20.dp))
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Day-of-week headers (Mon..Sun)
+            val dayHeaders = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
+            Row(modifier = Modifier.fillMaxWidth()) {
+                dayHeaders.forEach { header ->
+                    Text(header, color = Color(0xFF8E8E93), fontSize = 11.sp, textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f))
+                }
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Day cells
+            val totalCells = startOffset + daysInMonth
+            val rows = (totalCells + 6) / 7
+            for (row in 0 until rows) {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    for (col in 0..6) {
+                        val cellIndex = row * 7 + col
+                        val dayNum = cellIndex - startOffset + 1
+                        val valid = dayNum in 1..daysInMonth
+                        if (valid) {
+                            val dayCal = java.util.Calendar.getInstance().apply {
+                                timeInMillis = displayMonthMillis
+                                set(java.util.Calendar.DAY_OF_MONTH, dayNum)
+                            }
+                            val dayMillis = run {
+                                val c2 = dayCal.clone() as java.util.Calendar
+                                c2.set(java.util.Calendar.HOUR_OF_DAY, 0); c2.set(java.util.Calendar.MINUTE, 0)
+                                c2.set(java.util.Calendar.SECOND, 0); c2.set(java.util.Calendar.MILLISECOND, 0)
+                                c2.timeInMillis
+                            }
+                            val isSelected = dayMillis == selectedDayMillis
+                            val isToday = dayMillis == todayMillis
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .aspectRatio(1f)
+                                    .padding(2.dp)
+                                    .then(
+                                        if (isSelected) Modifier.background(AccentBlue, androidx.compose.foundation.shape.CircleShape)
+                                        else Modifier
+                                    )
+                                    .clickable { onDateSelected(dayCal.timeInMillis) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = dayNum.toString(),
+                                    color = when {
+                                        isSelected -> Color.White
+                                        isToday -> AccentBlue
+                                        else -> Color.White
+                                    },
+                                    fontSize = 14.sp,
+                                    fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        } else {
+                            Box(modifier = Modifier.weight(1f).aspectRatio(1f))
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // ── Time picker row ──
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Time", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // — Hour spinner —
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .background(Color(0xFF3A3A3C), androidx.compose.foundation.shape.CircleShape)
+                                .clickable { onTimeChanged((hour + 1) % 24, minute) },
+                            contentAlignment = Alignment.Center
+                        ) { Text("+", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .background(Color(0xFF2C2C2E), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(String.format("%02d", hour), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .background(Color(0xFF3A3A3C), androidx.compose.foundation.shape.CircleShape)
+                                .clickable { onTimeChanged((hour - 1 + 24) % 24, minute) },
+                            contentAlignment = Alignment.Center
+                        ) { Text("-", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                    }
+
+                    Text(":", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+
+                    // — Minute spinner —
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .background(Color(0xFF3A3A3C), androidx.compose.foundation.shape.CircleShape)
+                                .clickable { onTimeChanged(hour, (minute + 5) % 60) },
+                            contentAlignment = Alignment.Center
+                        ) { Text("+", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .background(Color(0xFF2C2C2E), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(String.format("%02d", minute), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .background(Color(0xFF3A3A3C), androidx.compose.foundation.shape.CircleShape)
+                                .clickable { onTimeChanged(hour, (minute - 5 + 60) % 60) },
+                            contentAlignment = Alignment.Center
+                        ) { Text("-", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  STEP 3 — Atmosphere (Room Theme + Background Music)
+// ─────────────────────────────────────────────────────────────
+@Composable
+private fun CreateRoomStep3Atmosphere(viewModel: ProfileViewModel) {
+    val selectedTheme by viewModel.roomAtmosphereTheme.collectAsState()
+    val selectedMusic by viewModel.selectedMusic.collectAsState()
+
+    // Theme data: name → background color
+    val themes = listOf(
+        "Default"   to Color(0xFF1A7AF8),
+        "Ocean"     to Color(0xFF00C6A2),
+        "Sunset"    to Color(0xFFE8820C),
+        "Forest"    to Color(0xFF22A84A),
+        "Cyberpunk" to Color(0xFFAA3FD6)
+    )
+
+    // Music options: icon emoji + label
+    data class MusicOption(val icon: androidx.compose.ui.graphics.vector.ImageVector, val label: String)
+    val musicOptions = listOf(
+        MusicOption(Icons.Default.VolumeOff,   "None"),
+        MusicOption(Icons.Default.MusicNote,   "Lofi Beats"),
+        MusicOption(Icons.Default.Star,        "Nature Ambience"),
+        MusicOption(Icons.Default.Favorite,    "Minimal Piano")
+    )
+
+    CreateRoomChrome(
+        step = 3,
+        onDismiss = { viewModel.closeOverlay() },
+        onBack = { viewModel.goToStep(ProfileStep.ROOM_TIME_CAPSULE) },
+        onNext = { viewModel.goToStep(ProfileStep.ROOM_MEMORY_RULES) }
+    ) {
+        Text("Atmosphere", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text("Set the mood with background music.", color = Color(0xFF8E8E93), fontSize = 14.sp)
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // ── Room Theme ──
+        Text("Room Theme", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            themes.forEach { (name, color) ->
+                val isSelected = selectedTheme == name
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { viewModel.updateSelectedTheme(name) }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .then(
+                                if (isSelected)
+                                    Modifier.border(2.5.dp, Color.White, androidx.compose.foundation.shape.CircleShape)
+                                else Modifier
+                            )
+                            .padding(if (isSelected) 3.dp else 0.dp)
+                            .background(color, androidx.compose.foundation.shape.CircleShape)
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = name,
+                        color = if (isSelected) Color.White else Color(0xFF8E8E93),
+                        fontSize = 11.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        // ── Background Music ──
+        Text("Background Music", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            musicOptions.forEach { option ->
+                val isSelected = selectedMusic == option.label
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            if (isSelected) Color(0xFF0D2B5E) else CardDarkBg,
+                            RoundedCornerShape(14.dp)
+                        )
+                        .then(
+                            if (isSelected)
+                                Modifier.border(1.5.dp, AccentBlue, RoundedCornerShape(14.dp))
+                            else Modifier
+                        )
+                        .clickable { viewModel.updateSelectedMusic(option.label) }
+                        .padding(horizontal = 16.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = option.icon,
+                            contentDescription = option.label,
+                            tint = if (isSelected) AccentBlue else Color(0xFF8E8E93),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Text(
+                            text = option.label,
+                            color = if (isSelected) Color.White else Color(0xFF8E8E93),
+                            fontSize = 15.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+                    if (isSelected) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = AccentBlue,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  STEP 4 — Memory Dump Rules
+// ─────────────────────────────────────────────────────────────
+@Composable
+private fun CreateRoomStep4(viewModel: ProfileViewModel) {
+    val rolling  by viewModel.rollingExpiration.collectAsState()
+    val closure  by viewModel.scheduledClosureEnabled.collectAsState()
+
+    CreateRoomChrome(
+        step = 4,
+        onDismiss = { viewModel.closeOverlay() },
+        onBack = { viewModel.goToStep(ProfileStep.ROOM_ATMOSPHERE) },
+        onNext = { viewModel.goToStep(ProfileStep.ROOM_INVITE) }
+    ) {
+        Text("Memory Dump Rules", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text("Configure auto-archival for drops.", color = Color(0xFF8E8E93), fontSize = 14.sp)
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Rolling Expiration card
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(CardDarkBg, RoundedCornerShape(14.dp))
+                .padding(16.dp)
+        ) {
+            Text("Rolling Expiration (Snapchat Mode)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "Automatically archive memories X days after they are posted.",
+                color = Color(0xFF8E8E93), fontSize = 12.sp, lineHeight = 16.sp
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF2C2C2E), RoundedCornerShape(22.dp))
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                listOf("Never", "1 Day (24...)", "7 Days", "30 Days").forEach { option ->
+                    val sel = rolling == option
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(
+                                if (sel) Color.White else Color.Transparent,
+                                RoundedCornerShape(18.dp)
+                            )
+                            .clickable { viewModel.updateRollingExpiration(option) }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            option,
+                            color = if (sel) Color.Black else Color(0xFF8E8E93),
+                            fontSize = 12.sp,
+                            fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Scheduled Room Closure card
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(CardDarkBg, RoundedCornerShape(14.dp))
+                .padding(horizontal = 16.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Scheduled Room Closure", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text(
+                    "Lock the entire room into a read-only archive state after a specific date.",
+                    color = Color(0xFF8E8E93), fontSize = 12.sp, lineHeight = 16.sp
+                )
+            }
+            Switch(
+                checked = closure,
+                onCheckedChange = { viewModel.updateScheduledClosure(it) },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = AccentBlue
+                )
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  STEP 5 — Invite Friends
+// ─────────────────────────────────────────────────────────────
+@Composable
+private fun CreateRoomStep5(viewModel: ProfileViewModel) {
+    val emails by viewModel.inviteEmails.collectAsState()
+    var emailInput by remember { mutableStateOf("") }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    CreateRoomChrome(
+        step = 5,
+        onDismiss = { viewModel.closeOverlay() },
+        onBack = { viewModel.goToStep(ProfileStep.ROOM_MEMORY_RULES) },
+        onNext = { viewModel.finalizeRoom(context) },
+        nextLabel = "Create Room"
+    ) {
+        Text("Invite Friends", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text("Add people and assign them roles (Viewer or Contributor).", color = Color(0xFF8E8E93), fontSize = 14.sp)
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Email input + add button
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            BasicTextField(
+                value = emailInput,
+                onValueChange = { emailInput = it },
+                textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
+                cursorBrush = SolidColor(Color.White),
+                singleLine = true,
+                modifier = Modifier
+                    .weight(1f)
+                    .background(CardDarkBg, RoundedCornerShape(14.dp))
+                    .padding(horizontal = 16.dp, vertical = 18.dp),
+                decorationBox = { inner ->
+                    if (emailInput.isEmpty()) Text("Friend's Email Address", color = Color(0xFF636366), fontSize = 15.sp)
+                    inner()
+                }
+            )
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(Color(0xFF3A3A3C), androidx.compose.foundation.shape.CircleShape)
+                    .clickable {
+                        if (emailInput.isNotBlank()) {
+                            viewModel.addInviteEmail(emailInput.trim())
+                            emailInput = ""
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Add, null, tint = Color.White, modifier = Modifier.size(22.dp))
+            }
+        }
+
+        // Added emails list
+        if (emails.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                emails.forEach { email ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(CardDarkBg, RoundedCornerShape(12.dp))
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Person, null, tint = Color(0xFF8E8E93), modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(email, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        Icon(
+                            Icons.Default.Close, null, tint = Color(0xFF8E8E93), modifier = Modifier
+                                .size(18.dp)
+                                .clickable { viewModel.removeInviteEmail(email) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  LEGACY HELPERS (kept so old OverlayStepContainer callers compile)
+// ─────────────────────────────────────────────────────────────
+@Composable
+private fun RoomNameStep(viewModel: ProfileViewModel) {
+    CreateRoomStep1(viewModel)
+}
+@Composable
+private fun RoomTimeStep(viewModel: ProfileViewModel) {
+    CreateRoomStep2(viewModel)
+}
+@Composable
+private fun RoomModeStep(viewModel: ProfileViewModel) {
+    CreateRoomStep1(viewModel)
+}
+// Kept as alias for legacy callers
+@Composable
+private fun CreateRoomStep3(viewModel: ProfileViewModel) {
+    CreateRoomStep4(viewModel)
+}
+@Composable
+private fun CreateRoomStep4Alias(viewModel: ProfileViewModel) {
+    CreateRoomStep5(viewModel)
+}
+
 @Composable
 fun TimePickerDialog(
     onDismissRequest: () -> Unit,
@@ -1401,39 +2248,6 @@ fun TimePickerDialog(
         text = content
     )
 }
-
-// Room Mode Step
-@Composable
-private fun RoomModeStep(viewModel: ProfileViewModel) {
-    val isPublic by viewModel.isPublic.collectAsState()
-
-    OverlayStepContainer(
-        title = "Room Privacy",
-        subtitle = "Who can see this room?",
-        onBack = { viewModel.goToStep(ProfileStep.ROOM_TIME) },
-        onNext = { viewModel.finalizeRoom() }
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            ModeOption(
-                title = "Public",
-                icon = Icons.Default.Public,
-                selected = isPublic,
-                onClick = { viewModel.updateRoomMode(true) }
-            )
-            ModeOption(
-                title = "Private",
-                icon = Icons.Default.Lock,
-                selected = !isPublic,
-                onClick = { viewModel.updateRoomMode(false) }
-            )
-        }
-    }
-}
-
-
 
 
 @Composable

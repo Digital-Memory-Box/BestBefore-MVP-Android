@@ -124,7 +124,43 @@ class ProfileViewModel : ViewModel() {
     private val _targetMinute = MutableStateFlow(0)
     val targetMinute: StateFlow<Int> = _targetMinute.asStateFlow()
 
+    // ---- New wizard state ----
+    private val _isTimeCapsuleEnabled = MutableStateFlow(true)
+    val isTimeCapsuleEnabled: StateFlow<Boolean> = _isTimeCapsuleEnabled.asStateFlow()
 
+    // DURATION or SPECIFIC_DATE
+    private val _unlockMethod = MutableStateFlow(UnlockMethod.DURATION)
+    val unlockMethod: StateFlow<UnlockMethod> = _unlockMethod.asStateFlow()
+
+    private val _capsuleDays = MutableStateFlow(0)
+    val capsuleDays: StateFlow<Int> = _capsuleDays.asStateFlow()
+
+    private val _capsuleHours = MutableStateFlow(0)
+    val capsuleHours: StateFlow<Int> = _capsuleHours.asStateFlow()
+
+    private val _capsuleMins = MutableStateFlow(0)
+    val capsuleMins: StateFlow<Int> = _capsuleMins.asStateFlow()
+
+    private val _selectedPreset = MutableStateFlow<String?>("21 Days")
+    val selectedPreset: StateFlow<String?> = _selectedPreset.asStateFlow()
+
+    // Atmosphere room theme (string name, separate from AppTheme)
+    private val _roomAtmosphereTheme = MutableStateFlow("Default")
+    val roomAtmosphereTheme: StateFlow<String> = _roomAtmosphereTheme.asStateFlow()
+
+    // Atmosphere: background music
+    private val _selectedMusic = MutableStateFlow("None")
+    val selectedMusic: StateFlow<String> = _selectedMusic.asStateFlow()
+
+    // Rolling expiration: Never | 1 Day (24h) | 7 Days | 30 Days
+    private val _rollingExpiration = MutableStateFlow("Never")
+    val rollingExpiration: StateFlow<String> = _rollingExpiration.asStateFlow()
+
+    private val _scheduledClosureEnabled = MutableStateFlow(false)
+    val scheduledClosureEnabled: StateFlow<Boolean> = _scheduledClosureEnabled.asStateFlow()
+
+    private val _inviteEmails = MutableStateFlow<List<String>>(emptyList())
+    val inviteEmails: StateFlow<List<String>> = _inviteEmails.asStateFlow()
 
     private val _isPublic = MutableStateFlow(true)
     val isPublic: StateFlow<Boolean> = _isPublic.asStateFlow()
@@ -590,17 +626,20 @@ class ProfileViewModel : ViewModel() {
                 }
                 true
             }
-            ProfileStep.ROOM_TIME -> {
+            ProfileStep.ROOM_TIME_CAPSULE -> {
                 goToStep(ProfileStep.ROOM_NAME)
                 true
             }
-            ProfileStep.ROOM_MODE -> {
-                goToStep(ProfileStep.ROOM_TIME)
+            ProfileStep.ROOM_ATMOSPHERE -> {
+                goToStep(ProfileStep.ROOM_TIME_CAPSULE)
                 true
             }
-            ProfileStep.ROOM_MODE -> {
-                // Go back to time step
-                _currentStep.value = ProfileStep.ROOM_TIME
+            ProfileStep.ROOM_MEMORY_RULES -> {
+                goToStep(ProfileStep.ROOM_ATMOSPHERE)
+                true
+            }
+            ProfileStep.ROOM_INVITE -> {
+                goToStep(ProfileStep.ROOM_MEMORY_RULES)
                 true
             }
             ProfileStep.TIME_CAPSULE_LIST -> {
@@ -608,10 +647,8 @@ class ProfileViewModel : ViewModel() {
                 true
             }
             ProfileStep.ROOM_DETAIL -> {
-                 // return to Profile Menu default now? or Hallway logic?
-                 // Current default was Profile Menu, keeping it for now
-                 goToStep(ProfileStep.PROFILE_MENU)
-                 true
+                goToStep(ProfileStep.PROFILE_MENU)
+                true
             }
             else -> {
                 closeOverlay()
@@ -630,6 +667,18 @@ class ProfileViewModel : ViewModel() {
         _currentStep.value = ProfileStep.ROOM_NAME
         // Reset state
         _roomName.value = ""
+        _isPublic.value = true
+        _isTimeCapsuleEnabled.value = true
+        _unlockMethod.value = UnlockMethod.DURATION
+        _capsuleDays.value = 21
+        _capsuleHours.value = 0
+        _capsuleMins.value = 0
+        _selectedPreset.value = "21 Days"
+        _roomAtmosphereTheme.value = "Default"
+        _selectedMusic.value = "None"
+        _rollingExpiration.value = "Never"
+        _scheduledClosureEnabled.value = false
+        _inviteEmails.value = emptyList()
         _targetTime.value = System.currentTimeMillis() + 86400000
     }
 
@@ -685,15 +734,13 @@ class ProfileViewModel : ViewModel() {
     }
 
     // State Updates
-    fun updateRoomName(name: String) {
-        _roomName.value = name
-    }
+    fun updateRoomName(name: String) { _roomName.value = name }
+
+    fun updateRoomMode(public: Boolean) { _isPublic.value = public }
 
     fun updateTargetTime(hour: Int, minute: Int) {
         _targetHour.value = hour
         _targetMinute.value = minute
-        
-        // Update timestamp
         val calendar = java.util.Calendar.getInstance()
         calendar.timeInMillis = _targetTime.value
         calendar.set(java.util.Calendar.HOUR_OF_DAY, hour)
@@ -701,15 +748,33 @@ class ProfileViewModel : ViewModel() {
         _targetTime.value = calendar.timeInMillis
     }
 
-    fun updateTargetDate(dateMillis: Long) {
-        _targetTime.value = dateMillis
-        // Preserve time logic if needed, but for MVP dateMillis is sufficient base
+    fun updateTargetDate(dateMillis: Long) { _targetTime.value = dateMillis }
+
+    // New wizard state updaters
+    fun updateTimeCapsuleEnabled(enabled: Boolean) { _isTimeCapsuleEnabled.value = enabled }
+    fun updateUnlockMethod(method: UnlockMethod) { _unlockMethod.value = method }
+    fun updateCapsuleDays(d: Int) { _capsuleDays.value = d.coerceAtLeast(0) }
+    fun updateCapsuleHours(h: Int) { _capsuleHours.value = h.coerceAtLeast(0) }
+    fun updateCapsuleMins(m: Int) { _capsuleMins.value = m.coerceAtLeast(0) }
+    fun selectPreset(preset: String) {
+        _selectedPreset.value = preset
+        when (preset) {
+            "1 Week"  -> { _capsuleDays.value = 7;  _capsuleHours.value = 0; _capsuleMins.value = 0 }
+            "21 Days" -> { _capsuleDays.value = 21; _capsuleHours.value = 0; _capsuleMins.value = 0 }
+            "1 Month" -> { _capsuleDays.value = 30; _capsuleHours.value = 0; _capsuleMins.value = 0 }
+        }
     }
-
-
-
-    fun updateRoomMode(public: Boolean) {
-        _isPublic.value = public
+    fun updateSelectedTheme(theme: String) { _roomAtmosphereTheme.value = theme }
+    fun updateSelectedMusic(music: String) { _selectedMusic.value = music }
+    fun updateRollingExpiration(option: String) { _rollingExpiration.value = option }
+    fun updateScheduledClosure(enabled: Boolean) { _scheduledClosureEnabled.value = enabled }
+    fun addInviteEmail(email: String) {
+        if (email.isNotBlank() && !_inviteEmails.value.contains(email)) {
+            _inviteEmails.value = _inviteEmails.value + email
+        }
+    }
+    fun removeInviteEmail(email: String) {
+        _inviteEmails.value = _inviteEmails.value.filter { it != email }
     }
     
     fun selectRoomForEditing(room: TimeCapsuleRoom) {
@@ -1012,19 +1077,28 @@ class ProfileViewModel : ViewModel() {
 
 
 enum class ProfileStep {
-    NONE,                   // No overlay/screen shown
-    PROFILE_MENU,           // Main profile screen with 3 tabs
-    ROOM_NAME,
-    ROOM_TIME,
-    ROOM_MODE,
+    NONE,
+    PROFILE_MENU,
+    // Create Room wizard steps (in order)
+    ROOM_NAME,              // Step 1: name + public/private
+    ROOM_TIME_CAPSULE,      // Step 2: time capsule settings
+    ROOM_ATMOSPHERE,        // Step 3: room theme + background music
+    ROOM_MEMORY_RULES,      // Step 4: memory dump rules
+    ROOM_INVITE,            // Step 5: invite friends
+    // Other
     ROOM_DETAIL,
-    EDIT_ROOM,              // Added: Edit room screen
+    EDIT_ROOM,
     CREATE_HALLWAY,
     CAMERA,
-    TIME_CAPSULE_LIST,      // Browse existing time capsule rooms
-    NO_OP,                  // Placeholder for UI (no navigation)
-    SAVED_ROOMS_LIST
+    TIME_CAPSULE_LIST,
+    NO_OP,
+    SAVED_ROOMS_LIST,
+    // Legacy
+    ROOM_TIME,
+    ROOM_MODE
 }
+
+enum class UnlockMethod { DURATION, SPECIFIC_DATE }
 
 enum class RoomCreationSource {
     HALLWAY,
