@@ -254,6 +254,8 @@ fun ProfileScreen(
             val cards by hallwayViewModel.cards.collectAsState()
             val selectedIndex by hallwayViewModel.selectedCardIndex.collectAsState()
             val currentTab by hallwayViewModel.currentTab.collectAsState()
+            val notifRepo = remember { com.dmb.bestbefore.data.repository.NotificationRepository(context) }
+            val unreadCount by notifRepo.unreadCount.collectAsState()
 
             Box(modifier = Modifier.fillMaxSize()) {
                 // Header
@@ -272,105 +274,213 @@ fun ProfileScreen(
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        androidx.compose.material3.Icon(
+                    Box(
+                        modifier = Modifier.clickable {
+                            notifRepo.markAllRead()
+                            onNavigateToNotifications()
+                        }
+                    ) {
+                        Icon(
                             imageVector = Icons.Default.Notifications,
                             contentDescription = "Notifications",
                             tint = Color.White,
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clickable { onNavigateToNotifications() }
+                            modifier = Modifier.size(24.dp)
                         )
+                        if (unreadCount > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = 6.dp, y = (-4).dp)
+                                    .size(16.dp)
+                                    .background(Color.Red, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (unreadCount > 9) "9+" else unreadCount.toString(),
+                                    color = Color.White,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 }
 
-                // Main content row (Card Stack + Info)
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(top = 100.dp, bottom = 80.dp) // Leave space for header/footer
-                ) {
-                     // Card stack (left side ~60% of screen)
-                    Box(
+                // Main content
+                if (currentTab == BottomTab.ROOMING) {
+                    // ROOMING TAB: 1 room per row with info
+                    LazyColumn(
                         modifier = Modifier
-                            .weight(0.6f)
-                            .fillMaxHeight()
-                            .padding(start = 16.dp),
-                        contentAlignment = Alignment.Center
+                            .fillMaxSize()
+                            .padding(top = 100.dp, bottom = 100.dp, start = 16.dp, end = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        CardStack(
-                            cards = cards,
-                            selectedIndex = selectedIndex,
-                            onCardSelected = { hallwayViewModel.selectCard(it) },
-                            onCardTapped = { card -> viewModel.selectRoomFromHallway(card.id, card.title, card.timeCapsuleDays) }
-                        )
+                        items(cards.size) { index ->
+                            val card = cards[index]
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        Brush.linearGradient(
+                                            listOf(Color(0xFF1A1A2E), Color(0xFF16213E))
+                                        )
+                                    )
+                                    .clickable {
+                                        viewModel.selectRoomFromHallway(
+                                            card.id,
+                                            card.title,
+                                            card.timeCapsuleDays
+                                        )
+                                    }
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Room thumbnail
+                                Box(
+                                    modifier = Modifier
+                                        .size(70.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color(0xFF0A0A1A)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (card.imageUrl != null) {
+                                        coil.compose.AsyncImage(
+                                            model = card.imageUrl,
+                                            contentDescription = card.title,
+                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    } else {
+                                        Icon(
+                                            Icons.Default.Lock,
+                                            contentDescription = null,
+                                            tint = Color(0xFF007AFF),
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                // Room info
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = card.title,
+                                        color = Color.White,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = card.description,
+                                        color = Color(0xFFAAAAAA),
+                                        fontSize = 12.sp,
+                                        maxLines = 2,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = "Time Capsule: ${card.timeCapsuleDays} days",
+                                        color = Color(0xFF007AFF),
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                // Arrow
+                                Icon(
+                                    Icons.Default.ChevronRight,
+                                    contentDescription = null,
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
                     }
-
-                    // Side info panel (right side ~40% of screen)
-                    Column(
+                } else {
+                    // EVERYONE TAB: Card Stack + Info Panel
+                    Row(
                         modifier = Modifier
-                            .weight(0.4f)
-                            .fillMaxHeight()
-                            .padding(horizontal = 12.dp)
+                            .fillMaxSize()
+                            .padding(top = 100.dp, bottom = 80.dp)
                     ) {
-                        // Selected card info
-                        if (cards.isNotEmpty() && selectedIndex in cards.indices) {
-                            val selectedCard = cards[selectedIndex]
-                            
-                            Spacer(modifier = Modifier.height(60.dp))
-                            
-                            Text(
-                                text = selectedCard.title,
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Time Capsule: ${selectedCard.timeCapsuleDays} Days",
-                                fontSize = 12.sp,
-                                color = Color.Gray
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = "Description",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = selectedCard.description, // Ensure HallwayCard has description or use placeholder
-                                fontSize = 11.sp,
-                                color = Color(0xFFAAAAAA),
-                                lineHeight = 14.sp,
-                                maxLines = 4
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "> Full Description",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                modifier = Modifier.clickable { /* Handle full description */ }
+                        Box(
+                            modifier = Modifier
+                                .weight(0.6f)
+                                .fillMaxHeight()
+                                .padding(start = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CardStack(
+                                cards = cards,
+                                selectedIndex = selectedIndex,
+                                onCardSelected = { hallwayViewModel.selectCard(it) },
+                                onCardTapped = { card -> viewModel.selectRoomFromHallway(card.id, card.title, card.timeCapsuleDays) }
                             )
                         }
 
-                        Spacer(modifier = Modifier.weight(1f))
+                        Column(
+                            modifier = Modifier
+                                .weight(0.4f)
+                                .fillMaxHeight()
+                                .padding(horizontal = 12.dp)
+                        ) {
+                            if (cards.isNotEmpty() && selectedIndex in cards.indices) {
+                                val selectedCard = cards[selectedIndex]
 
-                        // Explore More section
-                        Text(
-                            text = "Explore More",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        ExploreItem(text = "> New York City")
-                        Spacer(modifier = Modifier.height(8.dp))
-                        ExploreItem(text = "> Daily Trip")
-                        
-                        Spacer(modifier = Modifier.height(24.dp))
+                                Spacer(modifier = Modifier.height(60.dp))
+
+                                Text(
+                                    text = selectedCard.title,
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Time Capsule: ${selectedCard.timeCapsuleDays} Days",
+                                    fontSize = 12.sp,
+                                    color = Color.Gray
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "Description",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = selectedCard.description,
+                                    fontSize = 11.sp,
+                                    color = Color(0xFFAAAAAA),
+                                    lineHeight = 14.sp,
+                                    maxLines = 4
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "> Full Description",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.clickable { /* Handle full description */ }
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.weight(1f))
+
+                            Text(
+                                text = "Explore More",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            ExploreItem(text = "> New York City")
+                            Spacer(modifier = Modifier.height(8.dp))
+                            ExploreItem(text = "> Daily Trip")
+
+                            Spacer(modifier = Modifier.height(24.dp))
+                        }
                     }
                 }
 
@@ -2872,6 +2982,7 @@ fun RoomDetailScreen(
     val roomMedia by viewModel.roomMedia.collectAsState() // Persisted room media
     val context = androidx.compose.ui.platform.LocalContext.current
     val isRecording by viewModel.isRecordingAudio.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     val recordAudioPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
@@ -2909,6 +3020,30 @@ fun RoomDetailScreen(
                     .verticalScroll(androidx.compose.foundation.rememberScrollState())
                     .padding(bottom = 32.dp)
             ) {
+                // Pull to refresh button
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { viewModel.refreshRoomMemories() }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (isRefreshing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = Color(0xFF007AFF),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Refreshing...", color = Color.Gray, fontSize = 12.sp)
+                        } else {
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Color(0xFF007AFF), modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Pull to refresh", color = Color.Gray, fontSize = 12.sp)
+                        }
+                    }
+                }
                 // Header: Back, Title, Grid/Menu Icon
                 Row(
                     modifier = Modifier
@@ -3162,8 +3297,23 @@ fun RoomDetailScreen(
                                             viewModel.openGalleryViewer(displayMedia, i)
                                         }
                                 ) {
-                                    val isAudio1 = item1.toString().startsWith("data:audio")
-                                    if (isAudio1) {
+                                    val itemStr = item1.toString()
+                                    val isAudio1 = itemStr.startsWith("data:audio")
+                                    val isNote1 = itemStr.startsWith("NOTE:")
+                                    if (isNote1) {
+                                        val parts = itemStr.removePrefix("NOTE:").split(":", limit = 2)
+                                        val noteTitle = parts.getOrElse(0) { "Note" }
+                                        val noteBody = parts.getOrElse(1) { "" }
+                                        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)).padding(10.dp)) {
+                                            Column {
+                                                Icon(Icons.Default.StickyNote2, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(24.dp))
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(noteTitle, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text(noteBody, color = Color(0xFFAAAAAA), fontSize = 10.sp, maxLines = 4, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                            }
+                                        }
+                                    } else if (isAudio1) {
                                         Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)), contentAlignment = Alignment.Center) {
                                             Icon(Icons.Default.Mic, null, tint = Color.White, modifier = Modifier.size(48.dp))
                                         }
@@ -3196,8 +3346,23 @@ fun RoomDetailScreen(
                                                 viewModel.openGalleryViewer(displayMedia, i + 1)
                                             }
                                     ) {
-                                        val isAudio2 = item2.toString().startsWith("data:audio")
-                                        if (isAudio2) {
+                                        val item2Str = item2.toString()
+                                        val isAudio2 = item2Str.startsWith("data:audio")
+                                        val isNote2 = item2Str.startsWith("NOTE:")
+                                        if (isNote2) {
+                                            val parts = item2Str.removePrefix("NOTE:").split(":", limit = 2)
+                                            val noteTitle2 = parts.getOrElse(0) { "Note" }
+                                            val noteBody2 = parts.getOrElse(1) { "" }
+                                            Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)).padding(10.dp)) {
+                                                Column {
+                                                    Icon(Icons.Default.StickyNote2, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(24.dp))
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(noteTitle2, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Text(noteBody2, color = Color(0xFFAAAAAA), fontSize = 10.sp, maxLines = 4, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                                }
+                                            }
+                                        } else if (isAudio2) {
                                             Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)), contentAlignment = Alignment.Center) {
                                                 Icon(Icons.Default.Mic, null, tint = Color.White, modifier = Modifier.size(48.dp))
                                             }

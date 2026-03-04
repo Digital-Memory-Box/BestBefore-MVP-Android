@@ -352,8 +352,12 @@ class ProfileViewModel : ViewModel() {
                     memoriesResult.onSuccess { memories ->
                         memories.forEach { memory ->
                             val content = memory["content"] as? String
+                            val type = memory["type"] as? String
+                            val title = memory["title"] as? String
                             if (content != null) {
                                 when {
+                                    type == "audio" -> memoriesUrls.add("data:audio/mp4;base64,$content")
+                                    type == "note" -> memoriesUrls.add("NOTE:${title ?: ""}:$content")
                                     content.startsWith("http") -> memoriesUrls.add(content)
                                     content.length > 100 -> memoriesUrls.add("data:image/jpeg;base64,$content")
                                 }
@@ -696,6 +700,41 @@ class ProfileViewModel : ViewModel() {
                 } else {
                     Toast.makeText(context, "Upload failed – check connection", Toast.LENGTH_SHORT).show()
                 }
+            }
+        }
+    }
+
+    // Refresh memories for the current room from the backend (pull-to-refresh)
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    fun refreshRoomMemories() {
+        val currentRoomId = _selectedRoom.value?.id ?: return
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            try {
+                val memoriesUrls = mutableListOf<String>()
+                val memoriesResult = roomRepository.getMemoriesByRoom(currentRoomId)
+                memoriesResult.onSuccess { memories ->
+                    memories.forEach { memory ->
+                        val content = memory["content"] as? String
+                        val type = memory["type"] as? String
+                        val title = memory["title"] as? String
+                        if (content != null) {
+                            when {
+                                type == "audio" -> memoriesUrls.add("data:audio/mp4;base64,$content")
+                                type == "note" -> memoriesUrls.add("NOTE:${title ?: ""}:$content")
+                                content.startsWith("http") -> memoriesUrls.add(content)
+                                content.length > 100 -> memoriesUrls.add("data:image/jpeg;base64,$content")
+                            }
+                        }
+                    }
+                }
+                _roomMedia.value = _roomMedia.value + (currentRoomId to memoriesUrls.map { Uri.parse(it) })
+            } catch (e: Exception) {
+                Log.e("ProfileViewModel", "refreshRoomMemories failed", e)
+            } finally {
+                _isRefreshing.value = false
             }
         }
     }

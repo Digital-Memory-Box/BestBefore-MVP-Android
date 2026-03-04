@@ -17,6 +17,9 @@ class NotificationRepository(context: Context) {
     private val _notifications = MutableStateFlow<List<AppNotification>>(emptyList())
     val notifications: StateFlow<List<AppNotification>> = _notifications.asStateFlow()
 
+    private val _unreadCount = MutableStateFlow(0)
+    val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
+
     init {
         loadNotifications()
     }
@@ -30,6 +33,7 @@ class NotificationRepository(context: Context) {
         } else {
             _notifications.value = emptyList()
         }
+        _unreadCount.value = prefs.getInt("unread_count", 0)
     }
 
     private fun saveNotifications(list: List<AppNotification>) {
@@ -42,6 +46,9 @@ class NotificationRepository(context: Context) {
         val current = _notifications.value.toMutableList()
         current.add(notification)
         saveNotifications(current)
+        val newCount = _unreadCount.value + 1
+        _unreadCount.value = newCount
+        prefs.edit().putInt("unread_count", newCount).apply()
     }
 
     fun removeNotification(notificationId: String) {
@@ -52,5 +59,12 @@ class NotificationRepository(context: Context) {
 
     fun clearAll() {
         saveNotifications(emptyList())
+        _unreadCount.value = 0
+        prefs.edit().putInt("unread_count", 0).apply()
+    }
+
+    fun markAllRead() {
+        _unreadCount.value = 0
+        prefs.edit().putInt("unread_count", 0).apply()
     }
 }

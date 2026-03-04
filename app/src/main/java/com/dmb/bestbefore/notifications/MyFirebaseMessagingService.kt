@@ -43,6 +43,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             val notifType = when (typeStr) {
                 "INVITATION" -> NotificationType.INVITATION
                 "INVITE_ACCEPTED" -> NotificationType.GENERAL
+                "MEMORY_ADDED" -> NotificationType.GENERAL
                 else -> NotificationType.GENERAL
             }
             

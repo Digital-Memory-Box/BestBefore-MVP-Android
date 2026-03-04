@@ -53,9 +53,7 @@ class HallwayViewModel : ViewModel() {
         val filteredRooms = when (tab) {
             BottomTab.ROOMING -> {
                 allApiRooms.filter { room ->
-                    room.ownerEmail == currentUserEmail ||
-                    room.collaborators?.any { it.toString().contains(currentUserEmail) } == true ||
-                    room.pendingCollaborators?.any { it.contains(currentUserEmail) } == true
+                    room.ownerEmail == currentUserEmail
                 }
             }
             BottomTab.EVERYONE -> {
