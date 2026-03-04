@@ -1,47 +1,21 @@
 package com.dmb.bestbefore.ui.screens.hallway
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.dmb.bestbefore.data.models.HallwayCard
+import com.dmb.bestbefore.data.repository.RoomRepository
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 class HallwayViewModel : ViewModel() {
 
-    private val _cards = MutableStateFlow(
-        listOf(
-            HallwayCard(
-                 title = "NYC Trip", 
-                 timeCapsuleDays = 21,
-                 description = "A memorable journey through the concrete jungle where dreams are made of. From Times Square to Central Park.",
-                 imageUrl = "https://picsum.photos/seed/nyc/400/600"
-            ),
-            HallwayCard(
-                title = "Daily Trip", 
-                timeCapsuleDays = 7,
-                description = "Capturing everyday moments that turn into lifetime memories.",
-                imageUrl = "https://picsum.photos/seed/daily/400/600"
-            ),
-            HallwayCard(
-                title = "Summer Vibes", 
-                timeCapsuleDays = 30,
-                description = "Sun, sand, and sea. Reliving the best summer moments.",
-                imageUrl = "https://picsum.photos/seed/summer/400/600"
-            ),
-            HallwayCard(
-                title = "Mountain Hike", 
-                timeCapsuleDays = 14,
-                description = "Scaling new heights and breathing in the fresh mountain air.",
-                imageUrl = "https://picsum.photos/seed/mountain/400/600"
-            ),
-            HallwayCard(
-                title = "City Lights", 
-                timeCapsuleDays = 10,
-                description = "The city never sleeps, and neither do the memories we make.",
-                imageUrl = "https://picsum.photos/seed/city/400/600"
-            )
-        )
-    )
+    private val roomRepository = RoomRepository()
+
+    private val _cards = MutableStateFlow<List<HallwayCard>>(emptyList())
     val cards: StateFlow<List<HallwayCard>> = _cards.asStateFlow()
 
     private val _selectedCardIndex = MutableStateFlow(0)
@@ -50,12 +24,72 @@ class HallwayViewModel : ViewModel() {
     private val _currentTab = MutableStateFlow(BottomTab.EVERYONE)
     val currentTab: StateFlow<BottomTab> = _currentTab.asStateFlow()
 
+    private var allApiRooms: List<com.dmb.bestbefore.data.api.models.RoomDto> = emptyList()
+
+    init {
+        fetchRooms()
+    }
+
+    private fun fetchRooms() {
+        viewModelScope.launch {
+            try {
+                val result = roomRepository.getRooms()
+                result.onSuccess { apiRooms ->
+                    allApiRooms = apiRooms
+                    filterCards(_currentTab.value)
+                }
+                result.onFailure {
+                    Log.e("HallwayViewModel", "Failed to fetch hallway rooms", it)
+                }
+            } catch (e: Exception) {
+                Log.e("HallwayViewModel", "Error fetching rooms", e)
+            }
+        }
+    }
+    
+    private fun filterCards(tab: BottomTab) {
+        val currentUserEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
+        
+        val filteredRooms = when (tab) {
+            BottomTab.ROOMING -> {
+                allApiRooms.filter { room ->
+                    room.ownerEmail == currentUserEmail ||
+                    room.collaborators?.any { it.toString().contains(currentUserEmail) } == true ||
+                    room.pendingCollaborators?.any { it.contains(currentUserEmail) } == true
+                }
+            }
+            BottomTab.EVERYONE -> {
+                allApiRooms.filter { room -> !room.isPrivate }
+            }
+            BottomTab.ARTISTS -> emptyList()
+        }
+        
+        val mappedCards = filteredRooms.map { room ->
+            HallwayCard(
+                id = room.id,
+                title = room.name,
+                timeCapsuleDays = room.capsuleDurationDays,
+                description = room.description ?: "A room awaiting memories.",
+                imageUrl = room.photos?.firstOrNull()
+            )
+        }
+        _cards.value = mappedCards
+        
+        if (mappedCards.isNotEmpty() && _selectedCardIndex.value >= mappedCards.size) {
+             _selectedCardIndex.value = mappedCards.size - 1
+        }
+    }
+
     fun selectCard(index: Int) {
-        _selectedCardIndex.value = index
+        if (index >= 0 && index < _cards.value.size) {
+            _selectedCardIndex.value = index
+        }
     }
 
     fun selectTab(tab: BottomTab) {
         _currentTab.value = tab
+        _selectedCardIndex.value = 0
+        filterCards(tab)
     }
 }
 

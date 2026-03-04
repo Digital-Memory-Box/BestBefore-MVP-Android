@@ -18,14 +18,20 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dmb.bestbefore.data.models.HallwayCard
 import com.dmb.bestbefore.ui.components.OrbMenu
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Notifications
 
 @Composable
 fun HallwayScreen(
     onNavigateToProfile: () -> Unit,
+    onNavigateToNotifications: () -> Unit,
     viewModel: HallwayViewModel = viewModel()
 ) {
     val cards by viewModel.cards.collectAsState()
@@ -51,98 +57,169 @@ fun HallwayScreen(
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )
-            Text(
-                text = "All",
-                fontSize = 28.sp,
-                color = Color.White.copy(alpha = 0.4f)
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "All",
+                    fontSize = 28.sp,
+                    color = Color.White.copy(alpha = 0.4f)
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                androidx.compose.material3.Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Default.Notifications,
+                    contentDescription = "Notifications",
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clickable { onNavigateToNotifications() }
+                )
+            }
         }
 
         // Main content row
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = 80.dp, bottom = 74.dp)
-        ) {
-            // Card stack (left side ~64% of screen)
+        if (cards.isEmpty()) {
             Box(
                 modifier = Modifier
-                    .weight(0.64f)
-                    .fillMaxHeight()
-                    .padding(start = 24.dp),
+                    .fillMaxSize()
+                    .padding(top = 80.dp, bottom = 74.dp),
                 contentAlignment = Alignment.Center
             ) {
-                CardStack(
-                    cards = cards,
-                    selectedIndex = selectedIndex,
-                    onCardSelected = { viewModel.selectCard(it) }
+                Text(
+                    text = "No rooms found",
+                    color = Color.Gray,
+                    fontSize = 20.sp
                 )
             }
+        } else {
+            if (currentTab == BottomTab.EVERYONE) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = 80.dp, bottom = 74.dp)
+                ) {
+                    // Card stack (left side ~64% of screen)
+                    Box(
+                        modifier = Modifier
+                            .weight(0.64f)
+                            .fillMaxHeight()
+                            .padding(start = 24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CardStack(
+                            cards = cards,
+                            selectedIndex = selectedIndex,
+                            onCardSelected = { viewModel.selectCard(it) }
+                        )
+                    }
 
-            // Side info panel (right side ~36% of screen)
-            Column(
-                modifier = Modifier
-                    .weight(0.36f)
-                    .fillMaxHeight()
-                    .padding(horizontal = 12.dp)
-            ) {
-                // Selected card info
-                if (cards.isNotEmpty() && selectedIndex in cards.indices) {
-                    val selectedCard = cards[selectedIndex]
+                    // Side info panel (right side ~36% of screen)
+                    Column(
+                        modifier = Modifier
+                            .weight(0.36f)
+                            .fillMaxHeight()
+                            .padding(horizontal = 12.dp)
+                    ) {
+                        // Selected card info
+                        if (cards.isNotEmpty() && selectedIndex in cards.indices) {
+                            val selectedCard = cards[selectedIndex]
 
-                    Spacer(modifier = Modifier.height(80.dp))
+                            Spacer(modifier = Modifier.height(80.dp))
 
-                    Text(
-                        text = selectedCard.title,
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Time Capsule: ${selectedCard.timeCapsuleDays} Days",
-                        fontSize = 13.sp,
-                        color = Color.White
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "Description",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = selectedCard.description,
-                        fontSize = 11.sp,
-                        color = Color(0xFFAAAAAA),
-                        lineHeight = 14.sp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "> Full Description",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        modifier = Modifier.clickable { /* Handle full description */ }
-                    )
+                            Text(
+                                text = selectedCard.title,
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Time Capsule: ${selectedCard.timeCapsuleDays} Days",
+                                fontSize = 13.sp,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Description",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = selectedCard.description,
+                                fontSize = 11.sp,
+                                color = Color(0xFFAAAAAA),
+                                lineHeight = 14.sp
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "> Full Description",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.clickable { /* Handle full description */ }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.weight(1f))
+
+                        // Explore More section
+                        Text(
+                            text = "Explore More",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        ExploreItem(text = "> New York City")
+                        Spacer(modifier = Modifier.height(8.dp))
+                        ExploreItem(text = "> Daily Trip")
+
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
                 }
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                // Explore More section
-                Text(
-                    text = "Explore More",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                ExploreItem(text = "> New York City")
-                Spacer(modifier = Modifier.height(8.dp))
-                ExploreItem(text = "> Daily Trip")
-
-                Spacer(modifier = Modifier.height(24.dp))
+            } else if (currentTab == BottomTab.ROOMING) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = 90.dp, bottom = 140.dp, start = 24.dp, end = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    items(cards) { card ->
+                        Box(modifier = Modifier.width(100.dp)) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { /* Enter Room from Hallway Rooming tab */ },
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .aspectRatio(0.8f) // Taller aspect ratio for Hallway cards
+                                        .background(Brush.linearGradient(listOf(Color(0xFF0038A8), Color(0xFF001F5C))), RoundedCornerShape(12.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    androidx.compose.material3.Icon(
+                                        Icons.Default.Notifications, // Placeholder icon
+                                        null, 
+                                        tint = Color(0xFF007AFF), 
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = card.title,
+                                    color = Color.White, 
+                                    fontSize = 12.sp, 
+                                    maxLines = 1, 
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -321,7 +398,7 @@ private fun BottomNavigation(
         BottomNavItem(
             text = "Artists",
             isSelected = currentTab == BottomTab.ARTISTS,
-            onClick = { onTabSelected(BottomTab.ARTISTS) }
+            onClick = { /* Artist screen coming soon — no-op */ }
         )
     }
 }

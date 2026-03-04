@@ -3,6 +3,7 @@ package com.dmb.bestbefore.data.local
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import com.google.firebase.auth.FirebaseAuth
 
 class SessionManager(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -19,9 +20,7 @@ class SessionManager(context: Context) {
         prefs.edit { putString(KEY_TOKEN, token) }
     }
 
-    fun getToken(): String? {
-        return prefs.getString(KEY_TOKEN, null)
-    }
+    fun getToken(): String? = prefs.getString(KEY_TOKEN, null)
 
     fun saveUser(userId: String, name: String, email: String) {
         prefs.edit {
@@ -31,19 +30,24 @@ class SessionManager(context: Context) {
         }
     }
 
+    fun getUserId(): String? = prefs.getString(KEY_USER_ID, null)
     fun getUserName(): String? = prefs.getString(KEY_USER_NAME, null)
-    
     fun getUserEmail(): String? = prefs.getString(KEY_USER_EMAIL, null)
-    
+
     fun saveUserEmail(email: String) {
         prefs.edit { putString(KEY_USER_EMAIL, email) }
     }
 
+    /**
+     * A user is considered logged in if Firebase still has an active session.
+     * The local token cache is a secondary convenience store.
+     */
     fun isLoggedIn(): Boolean {
-        return getToken() != null
+        return FirebaseAuth.getInstance().currentUser != null
     }
 
     fun clearSession() {
         prefs.edit { clear() }
+        FirebaseAuth.getInstance().signOut()
     }
 }

@@ -40,30 +40,7 @@ fun LoginScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // blurred blobs
-        Canvas(modifier = Modifier.fillMaxSize().blur(100.dp)) {
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(Color(0xFF0038A8).copy(alpha = 0.3f), Color.Transparent),
-                    center = center.copy(y = center.y - 400),
-                    radius = 500f
-                )
-            )
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(Color(0xFFAF52DE).copy(alpha = 0.2f), Color.Transparent),
-                    center = center.copy(y = center.y + 300, x = center.x - 300),
-                    radius = 400f
-                )
-            )
-             drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(Color(0xFF007AFF).copy(alpha = 0.2f), Color.Transparent),
-                    center = center.copy(y = center.y + 100, x = center.x + 300),
-                    radius = 400f
-                )
-            )
-        }
+        com.dmb.bestbefore.ui.components.AnimatedBackgroundView()
 
         Column(
             modifier = Modifier

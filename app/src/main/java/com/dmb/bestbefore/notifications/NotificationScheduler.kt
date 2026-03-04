@@ -97,5 +97,15 @@ class RoomUnlockReceiver : BroadcastReceiver() {
             .build()
         
         notificationManager.notify(roomId.hashCode(), notification)
+        
+        // Save to in-app Notification Center
+        val appNotification = com.dmb.bestbefore.data.models.AppNotification(
+            title = "Time Capsule Unlocked",
+            message = "\"$roomName\" is now available to see",
+            type = com.dmb.bestbefore.data.models.NotificationType.ROOM_UNLOCKED,
+            relatedRoomId = roomId
+        )
+        val notificationRepo = com.dmb.bestbefore.data.repository.NotificationRepository(context)
+        notificationRepo.addNotification(appNotification)
     }
 }

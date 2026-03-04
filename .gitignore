@@ -14,3 +14,4 @@ build/
 # Local configs
 local.properties
 .env
+service-account.json

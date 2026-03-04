@@ -7,11 +7,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.MultipartBody
-import okhttp3.RequestBody.Companion.asRequestBody
-import java.io.File
-import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -46,8 +41,8 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
-    // Database Integration - REMOVED (API Only)
-    private var roomRepository: com.dmb.bestbefore.data.repository.RoomRepository? = null
+    // RoomRepository — no token arg; fetches fresh Firebase token per request (matches iOS pattern)
+    private val roomRepository = com.dmb.bestbefore.data.repository.RoomRepository()
     
     // Switch createdRooms to loading from DB/API
     private val _createdRooms = MutableStateFlow<List<TimeCapsuleRoom>>(emptyList())
@@ -59,6 +54,14 @@ class ProfileViewModel : ViewModel() {
     
     private val _totalMemories = MutableStateFlow(0)
     val totalMemories: StateFlow<Int> = _totalMemories.asStateFlow()
+    
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _isRecordingAudio = MutableStateFlow(false)
+    val isRecordingAudio: StateFlow<Boolean> = _isRecordingAudio.asStateFlow()
+
+    private var audioRecorderHelper: com.dmb.bestbefore.utils.AudioRecorderHelper? = null
     
     private var creationSource: RoomCreationSource = RoomCreationSource.HALLWAY
 
@@ -73,7 +76,7 @@ class ProfileViewModel : ViewModel() {
     )
     
     enum class ActivityType {
-         CREATED_ROOM, ADDED_PHOTOS
+         CREATED_ROOM, ADDED_PHOTOS, ADDED_NOTE
     }
 
     private val _recentActivities = MutableStateFlow<List<RecentActivity>>(emptyList())
@@ -144,9 +147,52 @@ class ProfileViewModel : ViewModel() {
     private val _selectedPreset = MutableStateFlow<String?>("21 Days")
     val selectedPreset: StateFlow<String?> = _selectedPreset.asStateFlow()
 
+    // Calendar events
+    private val _calendarEvents = MutableStateFlow<List<com.dmb.bestbefore.data.models.CalendarEvent>>(emptyList())
+    val calendarEvents: StateFlow<List<com.dmb.bestbefore.data.models.CalendarEvent>> = _calendarEvents.asStateFlow()
+
+    fun loadCalendarEvents(context: Context) {
+        _calendarEvents.value = com.dmb.bestbefore.CalendarHelper.getUpcomingEvents(context)
+    }
+
+    fun applyCalendarEvent(event: com.dmb.bestbefore.data.models.CalendarEvent) {
+        _roomName.value = event.title
+        _unlockMethod.value = UnlockMethod.SPECIFIC_DATE
+        _targetTime.value = event.startTime.time
+        
+        val cal = java.util.Calendar.getInstance()
+        cal.timeInMillis = event.startTime.time
+        _targetHour.value = cal.get(java.util.Calendar.HOUR_OF_DAY)
+        _targetMinute.value = cal.get(java.util.Calendar.MINUTE)
+    }
+
     // Atmosphere room theme (string name, separate from AppTheme)
     private val _roomAtmosphereTheme = MutableStateFlow("Default")
     val roomAtmosphereTheme: StateFlow<String> = _roomAtmosphereTheme.asStateFlow()
+
+    private val _roomTags = MutableStateFlow<List<String>>(emptyList())
+    val roomTags: StateFlow<List<String>> = _roomTags.asStateFlow()
+
+    private val _roomDescription = MutableStateFlow("")
+    val roomDescription: StateFlow<String> = _roomDescription.asStateFlow()
+
+    fun updateRoomName(name: String) {
+        _roomName.value = name
+    }
+
+    fun updateRoomDescription(desc: String) {
+        _roomDescription.value = desc
+    }
+
+    fun addRoomTag(tag: String) {
+        if (!_roomTags.value.contains(tag)) {
+            _roomTags.value = _roomTags.value + tag
+        }
+    }
+
+    fun removeRoomTag(tag: String) {
+        _roomTags.value = _roomTags.value - tag
+    }
 
     // Atmosphere: background music
     private val _selectedMusic = MutableStateFlow("None")
@@ -158,6 +204,16 @@ class ProfileViewModel : ViewModel() {
 
     private val _scheduledClosureEnabled = MutableStateFlow(false)
     val scheduledClosureEnabled: StateFlow<Boolean> = _scheduledClosureEnabled.asStateFlow()
+
+    // Scheduled closure datetime
+    private val _scheduledClosureTime = MutableStateFlow(System.currentTimeMillis() + 7 * 86400000L)
+    val scheduledClosureTime: StateFlow<Long> = _scheduledClosureTime.asStateFlow()
+
+    private val _scheduledClosureHour = MutableStateFlow(23)
+    val scheduledClosureHour: StateFlow<Int> = _scheduledClosureHour.asStateFlow()
+
+    private val _scheduledClosureMinute = MutableStateFlow(59)
+    val scheduledClosureMinute: StateFlow<Int> = _scheduledClosureMinute.asStateFlow()
 
     private val _inviteEmails = MutableStateFlow<List<String>>(emptyList())
     val inviteEmails: StateFlow<List<String>> = _inviteEmails.asStateFlow()
@@ -199,9 +255,64 @@ class ProfileViewModel : ViewModel() {
     private val _unlockedPhotosRoom = MutableStateFlow<TimeCapsuleRoom?>(null)
     val unlockedPhotosRoom: StateFlow<TimeCapsuleRoom?> = _unlockedPhotosRoom.asStateFlow()
 
+    // Invite Pop-Up State
+    private val _pendingInviteRoomId = MutableStateFlow<String?>(null)
+    val pendingInviteRoomId: StateFlow<String?> = _pendingInviteRoomId.asStateFlow()
+    
+    private val _pendingInviteRoomName = MutableStateFlow<String?>(null)
+    val pendingInviteRoomName: StateFlow<String?> = _pendingInviteRoomName.asStateFlow()
+
+    fun showInviteDialog(roomId: String, roomName: String) {
+        _pendingInviteRoomId.value = roomId
+        _pendingInviteRoomName.value = roomName
+    }
+
+    fun hideInviteDialog() {
+        _pendingInviteRoomId.value = null
+        _pendingInviteRoomName.value = null
+    }
+
+    fun handleAcceptInvite(context: Context, roomId: String) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                val result = roomRepository.acceptInvite(roomId)
+                result.onSuccess {
+                    hideInviteDialog()
+                    Toast.makeText(context, "Invitation accepted!", Toast.LENGTH_SHORT).show()
+                    initDatabase(context) // Refresh room list
+                }
+                result.onFailure {
+                    Toast.makeText(context, "Failed to accept invite", Toast.LENGTH_SHORT).show()
+                }
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    fun handleDeclineInvite(context: Context, roomId: String) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                val result = roomRepository.declineInvite(roomId)
+                result.onSuccess {
+                    hideInviteDialog()
+                    Toast.makeText(context, "Invitation declined", Toast.LENGTH_SHORT).show()
+                }
+                result.onFailure {
+                    Toast.makeText(context, "Failed to decline invite", Toast.LENGTH_SHORT).show()
+                }
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
     // Callbacks for permissions
     var onRequestNotificationPermission: (() -> Unit)? = null
     var onRequestCalendarPermission: (() -> Unit)? = null
+    var onRequestReadCalendarPermission: (() -> Unit)? = null
     var onRequestCameraPermission: (() -> Unit)? = null
     var onRequestGalleryPermission: (() -> Unit)? = null
     var onRequestFilePermission: (() -> Unit)? = null
@@ -209,64 +320,93 @@ class ProfileViewModel : ViewModel() {
     // Helper context for DB init (Simple MVP approach)
     fun initDatabase(context: Context) {
         val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
-        val token = sessionManager.getToken()
-        
-        if (token != null) {
-            context.getSharedPreferences("BestBeforePrefs", Context.MODE_PRIVATE)
-            // Ideally RoomRepository should also take context or session manager, but for now we keep using token
-            roomRepository = com.dmb.bestbefore.data.repository.RoomRepository(token)
-            
-            val savedName = sessionManager.getUserName()
-            _userName.value = if (!savedName.isNullOrEmpty()) savedName else "User"
-        }
+        val savedName = sessionManager.getUserName()
+        _userName.value = if (!savedName.isNullOrEmpty()) savedName else "User"
 
-        if (roomRepository != null) {
-            viewModelScope.launch {
-                val result = roomRepository!!.getRooms()
-                val savedResult = roomRepository!!.getSavedRooms() // Fetch saved rooms too
-
+        // RoomRepository now fetches its own fresh Firebase token per request.
+        // Just launch the load — no token management needed here.
+        viewModelScope.launch {
+            try {
+                val result = roomRepository.getRooms()
                 val allRooms = mutableListOf<TimeCapsuleRoom>()
-
-                // Process Created Rooms
                 result.onSuccess { apiRooms ->
-                     allRooms.addAll(mapDtosToRooms(apiRooms, isSaved = false))
+                    Log.d("ProfileViewModel", "Fetched ${apiRooms.size} rooms from backend")
+                    val currentUserEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
+                    val myRooms = apiRooms.filter { room ->
+                        room.ownerEmail == currentUserEmail ||
+                        room.collaborators?.any { it.toString().contains(currentUserEmail) } == true
+                    }
+                    allRooms.addAll(mapDtosToRooms(myRooms, isSaved = false))
+                }
+                result.onFailure { e ->
+                    Log.e("ProfileViewModel", "getRooms failed: ${e.message}")
                 }
 
-                // Process Saved Rooms
-                savedResult.onSuccess { savedDtos ->
-                     val savedRooms = mapDtosToRooms(savedDtos, isSaved = true)
-                     allRooms.addAll(savedRooms)
+                // Fetch memories for each room
+                val mediaMap = mutableMapOf<String, List<Uri>>()
+                var totalLoadedMemories = 0
+
+                allRooms.forEach { room ->
+                    val memoriesUrls = mutableListOf<String>()
+                    val memoriesResult = roomRepository.getMemoriesByRoom(room.id)
+                    memoriesResult.onSuccess { memories ->
+                        memories.forEach { memory ->
+                            val content = memory["content"] as? String
+                            if (content != null) {
+                                when {
+                                    content.startsWith("http") -> memoriesUrls.add(content)
+                                    content.length > 100 -> memoriesUrls.add("data:image/jpeg;base64,$content")
+                                }
+                            }
+                        }
+                    }
+                    mediaMap[room.id] = memoriesUrls.map { Uri.parse(it) }
+                    totalLoadedMemories += memoriesUrls.size
                 }
-                
-                // Re-map media for all rooms
-                val mediaMap = allRooms.associate { room -> 
-                    room.id to (room.photos.map { Uri.parse(it) } )
-                }
+
                 _roomMedia.value = mediaMap
-                
+                _totalMemories.value = totalLoadedMemories
                 refreshRoomLists(allRooms)
+            } catch (e: Exception) {
+                Log.e("ProfileViewModel", "initDatabase failed", e)
             }
         }
     }
 
     private fun mapDtosToRooms(dtos: List<com.dmb.bestbefore.data.api.models.RoomDto>, isSaved: Boolean): List<TimeCapsuleRoom> {
         return dtos.map { dto ->
+            val createdMs = parseCreatedAt(dto.createdAt)
+            val unlock = createdMs + (dto.capsuleDurationDays * 24 * 3600 * 1000L) +
+                          (dto.capsuleDurationHours * 3600 * 1000L) + (dto.capsuleDurationMinutes * 60 * 1000L)
+            val closureMs = dto.expirationDate?.let { parseCreatedAt(it) } ?: 0L
+            val rollingString = when (dto.rollingExpiryDays) {
+                1 -> "24 hours"
+                7 -> "1 week"
+                30 -> "30 days"
+                365 -> "1 year"
+                else -> "Never"
+            }
             TimeCapsuleRoom(
                 id = dto.id,
                 roomName = dto.name,
-                capsuleDays = 0,
-                capsuleHours = 0,
-                notificationDays = 0,
-                notificationHours = 0,
-                isPublic = true,
-                isCollaboration = dto.isCollaboration,
+                capsuleDays = dto.capsuleDurationDays,
+                capsuleHours = dto.capsuleDurationHours,
+                capsuleMinutes = dto.capsuleDurationMinutes,
+                notificationDays = dto.capsuleDurationDays,
+                notificationHours = dto.capsuleDurationHours,
+                notificationMinutes = dto.capsuleDurationMinutes,
+                isPublic = !dto.isPrivate,
+                isCollaboration = dto.isTimeCapsule,
                 photos = dto.photos ?: emptyList(),
-                unlockTime = (parseCreatedAt(dto.createdAt)) + 
-                             ((dto.capsuleDays * 24 * 3600 * 1000L) + 
-                              (dto.capsuleHours * 3600 * 1000L) + 
-                              (dto.capsuleMinutes * 60 * 1000L)),
-                dateCreated = parseCreatedAt(dto.createdAt),
-                isSaved = isSaved
+                unlockTime = if (dto.unlockDate != null) parseCreatedAt(dto.unlockDate) else unlock,
+                scheduledClosureTime = closureMs,
+                dateCreated = createdMs,
+                isSaved = isSaved,
+                theme = dto.theme ?: "Default",
+                tags = dto.tags ?: emptyList(),
+                description = dto.description,
+                music = dto.backgroundMusic ?: "None",
+                rollingExpiration = rollingString
             )
         }
     }
@@ -313,94 +453,16 @@ class ProfileViewModel : ViewModel() {
         
         // Update Stats
         _totalRooms.value = active.size
-        _totalMemories.value = active.sumOf { it.photos.size }
-    }
-    
-    
-    // Calendar Events Integration
-    private val _calendarEvents = MutableStateFlow<List<CalendarEvent>>(emptyList())
-    val calendarEvents: StateFlow<List<CalendarEvent>> = _calendarEvents.asStateFlow()
-
-    fun loadUpcomingEvents(context: Context) {
-        if (roomRepository == null) return
-        
-        viewModelScope.launch {
-            val result = roomRepository!!.getUpcomingEvents()
-            
-            if (result.isSuccess) {
-                val dtos = result.getOrNull() ?: emptyList()
-                val events = dtos.mapNotNull { dto ->
-                     try {
-                         // Parse ISO 8601 strings from backend
-                         // Backend likely sends specific format (e.g. 2023-10-25T10:00:00.000Z)
-                         // SimpleDateFormat with 'X' or 'Z' might work, or Instants if API level allows.
-                         // For MVP, handling simplified ISO.
-                         val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
-                         sdf.timeZone = TimeZone.getTimeZone("UTC")
-                         // Fallback attempt if pattern mismatches could be added
-                         
-                         val start = sdf.parse(dto.start)
-                         val end = sdf.parse(dto.end)
-                         
-                         if (start != null && end != null) {
-                             CalendarEvent(
-                                 id = dto.id,
-                                 title = dto.title,
-                                 startTime = start,
-                                 endTime = end,
-                                 location = dto.location,
-                                 description = dto.description
-                             )
-                         } else null
-                     } catch (e: Exception) {
-                         null
-                     }
-                }
-                _calendarEvents.value = events
-            } else {
-                // If failed (likely 401), we might want to prompt connection
-                // For MVP, just clear list
-                _calendarEvents.value = emptyList()
-                Log.e("ProfileVM", "Failed to calendar events", result.exceptionOrNull())
-            }
+        _totalMemories.value = active.sumOf { room -> 
+            _roomMedia.value[room.id]?.size ?: 0 
         }
     }
     
-    fun connectGoogleCalendar(context: Context) {
-         if (roomRepository == null) {
-             Toast.makeText(context, "Sychronizing... Please wait.", Toast.LENGTH_SHORT).show()
-             return
-         }
-         viewModelScope.launch {
-             val result = roomRepository!!.getCalendarAuthUrl()
-             if (result.isSuccess) {
-                 val url = result.getOrNull()
-                 if (!url.isNullOrEmpty()) {
-                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                     context.startActivity(intent)
-                 }
-             }
-         }
-    } 
-
-    
-    // Callback for read permission
-    var onRequestReadCalendarPermission: (() -> Unit)? = null
-
-    // Image upload state
-    private val _selectedImageUri = MutableStateFlow<Uri?>(null)
-    val selectedImageUri: StateFlow<Uri?> = _selectedImageUri.asStateFlow()
-
-    fun updateSelectedImage(uri: Uri) {
-        _selectedImageUri.value = uri
-    }
-    
     // Camera capture state
-    private val _capturedImageUri = MutableStateFlow<Uri?>(null)
-    val capturedImageUri: StateFlow<Uri?> = _capturedImageUri.asStateFlow()
+    private val _capturedImageUri = kotlinx.coroutines.flow.MutableStateFlow<android.net.Uri?>(null)
+    val capturedImageUri: kotlinx.coroutines.flow.StateFlow<android.net.Uri?> = _capturedImageUri.asStateFlow()
     
-    fun setCapturedImage(uri: Uri) {
+    fun setCapturedImage(uri: android.net.Uri) {
         _capturedImageUri.value = uri
     }
     
@@ -415,63 +477,98 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
-    fun applyCalendarEvent(event: CalendarEvent) {
-        _roomName.value = event.title
-        _targetTime.value = event.startTime.time
-        
-        val calendar = java.util.Calendar.getInstance()
-        calendar.timeInMillis = event.startTime.time
-        _targetHour.value = calendar.get(java.util.Calendar.HOUR_OF_DAY)
-        _targetMinute.value = calendar.get(java.util.Calendar.MINUTE)
-    }
-
     fun finalizeRoom(context: Context? = null) {
         // Request notification permission before creating room
         onRequestNotificationPermission?.invoke()
         
-        // Calculate duration
+        // Calculate duration depending on the unlock method
         val now = System.currentTimeMillis()
-        val durationMillis = (_targetTime.value - now).coerceAtLeast(0)
+        val days: Int
+        val hours: Int
+        val minutes: Int
+        val finalTargetTime: Long
         
-        val days = (durationMillis / (24 * 60 * 60 * 1000)).toInt()
-        val hours = ((durationMillis % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000)).toInt()
-        val minutes = ((durationMillis % (60 * 60 * 1000)) / (60 * 1000)).toInt()
+        if (_unlockMethod.value == UnlockMethod.DURATION) {
+            days = _capsuleDays.value
+            hours = _capsuleHours.value
+            minutes = _capsuleMins.value
+            val durationMillis = (days * 24L * 3600 * 1000) + (hours * 3600L * 1000) + (minutes * 60L * 1000)
+            finalTargetTime = now + durationMillis
+        } else {
+            val durationMillis = (_targetTime.value - now).coerceAtLeast(0)
+            days = (durationMillis / (24 * 3600 * 1000)).toInt()
+            hours = ((durationMillis % (24 * 3600 * 1000)) / (3600 * 1000)).toInt()
+            minutes = ((durationMillis % (3600 * 1000)) / (60 * 1000)).toInt()
+            finalTargetTime = _targetTime.value
+        }
         
         val newRoom = TimeCapsuleRoom(
-            id = java.util.UUID.randomUUID().toString(), // Assign a local ID for immediate use
+            id = java.util.UUID.randomUUID().toString(),
             roomName = _roomName.value,
             capsuleDays = days,
             capsuleHours = hours,
             capsuleMinutes = minutes,
-            notificationDays = days, // Using same duration for compatibility
+            notificationDays = days,
             notificationHours = hours,
             notificationMinutes = minutes,
             isPublic = _isPublic.value,
-            isCollaboration = _isCollaboration.value,
-            unlockTime = _targetTime.value // Explicitly set unlock time
+            isCollaboration = _isTimeCapsuleEnabled.value,
+            unlockTime = finalTargetTime,
+            scheduledClosureTime = if (_scheduledClosureEnabled.value) _scheduledClosureTime.value else 0L,
+            theme = _roomAtmosphereTheme.value,
+            tags = _roomTags.value,
+            description = _roomDescription.value,
+            music = _selectedMusic.value,
+            rollingExpiration = _rollingExpiration.value
         )
         // Create Room via API
         viewModelScope.launch {
-             // 2. API Save - Wait for response to get real ID
-             val result = roomRepository?.createRoom(
+             // Convert scheduledClosureTime millis -> ISO-8601 string for backend
+             val closureIso: String? = if (_scheduledClosureEnabled.value) {
+                 java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
+                     timeZone = java.util.TimeZone.getTimeZone("UTC")
+                 }.format(java.util.Date(_scheduledClosureTime.value))
+             } else null
+
+             val unlockIso: String = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
+                 timeZone = java.util.TimeZone.getTimeZone("UTC")
+             }.format(java.util.Date(newRoom.unlockTime))
+
+             val rollingDays = when (newRoom.rollingExpiration) {
+                 "24 hours" -> 1
+                 "1 week" -> 7
+                 "30 days" -> 30
+                 "1 year" -> 365
+                 else -> 0
+             }
+
+             val result = roomRepository.createRoom(
                  newRoom.roomName,
                  newRoom.capsuleDays,
                  newRoom.capsuleHours,
                  newRoom.capsuleMinutes,
                  newRoom.isPublic,
-                 newRoom.isCollaboration
+                 newRoom.isCollaboration,
+                 newRoom.theme,
+                 collaborators = _inviteEmails.value,
+                 scheduledClosureIso = closureIso,
+                 unlockDateIso = unlockIso,
+                 rollingExpiryDays = rollingDays,
+                 description = newRoom.description,
+                 tags = newRoom.tags,
+                 music = newRoom.music
              )
-             
-             val finalRoom = if (result != null && result.isSuccess) {
+
+             val finalRoom = if (result.isSuccess) {
                  val realId = result.getOrNull()
+                 Log.d("ProfileViewModel", "Room created with id=$realId")
                  if (realId != null) {
                      newRoom.copy(id = realId)
                  } else {
                      newRoom
                  }
              } else {
-                 // API failed or offline - keep local UUID (but upload will fail until synced)
-                 // For MVP, we proceed with local UUID but warn
+                 Log.e("ProfileViewModel", "createRoom failed: ${result.exceptionOrNull()?.message}")
                  newRoom
              }
              
@@ -481,6 +578,17 @@ class ProfileViewModel : ViewModel() {
              
              // Keep user in flow by navigating to the new room detail
              selectRoom(finalRoom)
+             
+             // Save Room Created notification to in-app Notification Center
+             context?.let { ctx ->
+                 val appNotification = com.dmb.bestbefore.data.models.AppNotification(
+                     title = "Room Created",
+                     message = "You successfully created the room \"${finalRoom.roomName}\"",
+                     type = com.dmb.bestbefore.data.models.NotificationType.ROOM_CREATED,
+                     relatedRoomId = finalRoom.id
+                 )
+                 com.dmb.bestbefore.data.repository.NotificationRepository(ctx).addNotification(appNotification)
+             }
         }
 
         // Schedule notification (Fixed: Added back)
@@ -523,86 +631,152 @@ class ProfileViewModel : ViewModel() {
         viewModelScope.launch {
             val currentSelection = _selectedMediaUris.value
             val currentRoomId = _selectedRoom.value?.id
-            
+
             if (currentSelection.isNotEmpty() && currentRoomId != null) {
-                val uploadedUrls = mutableListOf<String>()
-                
+                val uploadedDataUris = mutableListOf<String>()
+
                 currentSelection.forEach { uri ->
                     try {
-                        val file = getFileFromUri(context, uri)
-                        if (file != null) {
-                            val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
-                            val body = MultipartBody.Part.createFormData("image", file.name, requestFile)
-                            
-                            val result = roomRepository?.uploadPhoto(currentRoomId, body)
-                            result?.onSuccess { url -> 
-                                uploadedUrls.add(url) 
-                            }
+                        val inputStream = context.contentResolver.openInputStream(uri) ?: return@forEach
+                        val bytes = inputStream.readBytes()
+                        inputStream.close()
+
+                        // Downsample the image to avoid OutOfMemory errors and reduce payload size
+                        val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                        
+                        var inSampleSize = 1
+                        while (options.outWidth / inSampleSize > 1024 || options.outHeight / inSampleSize > 1024) {
+                            inSampleSize *= 2
+                        }
+                        
+                        options.inJustDecodeBounds = false
+                        options.inSampleSize = inSampleSize
+                        val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                        
+                        val bos = java.io.ByteArrayOutputStream()
+                        bitmap?.compress(android.graphics.Bitmap.CompressFormat.JPEG, 60, bos)
+                        val compressed = bos.toByteArray()
+                        val base64 = android.util.Base64.encodeToString(compressed, android.util.Base64.NO_WRAP)
+
+                        // Save to MongoDB Memories collection via POST /rooms/{roomId}/memories
+                        val memoryData: Map<String, Any> = mapOf(
+                            "type" to "photo",
+                            "title" to "Photo Drop",
+                            "content" to base64,
+                            "metadata" to emptyMap<String, Any>()
+                        )
+                        val result = roomRepository.addMemoryToRoom(currentRoomId, memoryData)
+                        result.onSuccess {
+                            // data URI so Coil can display it immediately without another network round-trip
+                            uploadedDataUris.add("data:image/jpeg;base64,$base64")
                         }
                     } catch (e: Exception) {
-                        e.printStackTrace()
+                        Log.e("ProfileViewModel", "Upload failed for uri=$uri", e)
                     }
                 }
-                
-                if (uploadedUrls.isNotEmpty()) {
-                    // Update local state
-                    _createdRooms.value = _createdRooms.value.map { room ->
-                        if (room.id == currentRoomId) {
-                            room.copy(photos = room.photos + uploadedUrls)
-                        } else room
-                    }
-                    
-                    // Also update _roomMedia for the detail screen
+
+                if (uploadedDataUris.isNotEmpty()) {
+                    // Update local room media state so photos appear instantly
                     val currentMedia = _roomMedia.value[currentRoomId] ?: emptyList()
-                    val newUris = uploadedUrls.map { Uri.parse(it) }
+                    val newUris = uploadedDataUris.map { Uri.parse(it) }
                     _roomMedia.value = _roomMedia.value + (currentRoomId to (currentMedia + newUris))
-                    
-                    Toast.makeText(context, "Uploaded ${uploadedUrls.size} photos!", Toast.LENGTH_SHORT).show()
+
                     _selectedMediaUris.value = emptyList()
-                    
-                    // Add "Added Photos" activity
+                    _totalMemories.value += uploadedDataUris.size
+
                     val newActivity = RecentActivity(
                         type = ActivityType.ADDED_PHOTOS,
-                        title = "Added ${uploadedUrls.size} photos to \"${_selectedRoom.value?.roomName}\"",
+                        title = "Added ${uploadedDataUris.size} photo(s) to \"${_selectedRoom.value?.roomName}\"",
                         date = System.currentTimeMillis()
                     )
                     _recentActivities.value = listOf(newActivity) + _recentActivities.value
-                    
-                    // Update Memory Count immediately
-                    // Update roomMedia first to reflect locally
-                     val updatedMap = _roomMedia.value.toMutableMap()
-                     val roomID = _selectedRoom.value?.id ?: ""
-                     if (roomID.isNotEmpty()) {
-                         val currentList = updatedMap[roomID] ?: emptyList()
-                         updatedMap[roomID] = currentList + uploadedUrls.map { Uri.parse(it) }
-                         _roomMedia.value = updatedMap
-                         
-                         // Recalculate total memories
-                         // Note: We might be desynced with _createdRooms if we don't update that too, 
-                         // but for the stats counter, using roomMedia is one way, or just incrementing.
-                         // Let's just increment for now to be safe and simple.
-                         _totalMemories.value += uploadedUrls.size
-                     }
+
+                    Toast.makeText(context, "Uploaded ${uploadedDataUris.size} photo(s)!", Toast.LENGTH_SHORT).show()
                 } else {
-                     Toast.makeText(context, "Upload failed", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Upload failed – check connection", Toast.LENGTH_SHORT).show()
                 }
             }
         }
     }
 
-    private fun getFileFromUri(context: Context, uri: Uri): File? {
-        return try {
-            val contentResolver = context.contentResolver
-            val inputStream = contentResolver.openInputStream(uri) ?: return null
-            val tempFile = File.createTempFile("upload", ".jpg", context.cacheDir)
-            val outputStream = FileOutputStream(tempFile)
-            inputStream.copyTo(outputStream)
-            inputStream.close()
-            outputStream.close()
-            tempFile
+    fun startAudioRecording(context: Context) {
+        if (audioRecorderHelper == null) {
+            audioRecorderHelper = com.dmb.bestbefore.utils.AudioRecorderHelper(context)
+        }
+        audioRecorderHelper?.startRecording()
+        _isRecordingAudio.value = true
+    }
+
+    fun stopAudioRecordingAndUpload(context: Context) {
+        val file = audioRecorderHelper?.stopRecording()
+        _isRecordingAudio.value = false
+        
+        if (file != null && file.exists()) {
+            val currentRoomId = _selectedRoom.value?.id ?: return
+            viewModelScope.launch {
+                try {
+                    val bytes = file.readBytes()
+                    val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    val memoryData = mapOf(
+                        "type" to "audio",
+                        "title" to "Voice Memory",
+                        "content" to base64,
+                        "metadata" to emptyMap<String, Any>()
+                    )
+                    val result = roomRepository.addMemoryToRoom(currentRoomId, memoryData)
+                    result.onSuccess {
+                        // Use a custom scheme or parameters so the UI knows it's audio
+                        val uploadedDataUri = "data:audio/mp4;base64,$base64"
+                        val currentMedia = _roomMedia.value[currentRoomId] ?: emptyList()
+                        _roomMedia.value = _roomMedia.value + (currentRoomId to (currentMedia + Uri.parse(uploadedDataUri)))
+                        _totalMemories.value += 1
+                        
+                        val newActivity = RecentActivity(
+                            type = ActivityType.ADDED_NOTE, 
+                            title = "Added a voice memory to \"${_selectedRoom.value?.roomName}\"",
+                            date = System.currentTimeMillis()
+                        )
+                        _recentActivities.value = listOf(newActivity) + _recentActivities.value
+
+                        Toast.makeText(context, "Voice memory uploaded!", Toast.LENGTH_SHORT).show()
+                    }.onFailure {
+                        Toast.makeText(context, "Failed to upload voice memory", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    Log.e("ProfileViewModel", "Audio upload failed", e)
+                    Toast.makeText(context, "Error processing audio", Toast.LENGTH_SHORT).show()
+                } finally {
+                    file.delete()
+                }
+            }
+        }
+    }
+
+    private var mediaPlayer: android.media.MediaPlayer? = null
+
+    fun playBase64Audio(context: Context, dataUri: String) {
+        try {
+            mediaPlayer?.release()
+            
+            val base64String = dataUri.substringAfter("base64,")
+            val decodedBytes = android.util.Base64.decode(base64String, android.util.Base64.DEFAULT)
+            
+            val tempFile = java.io.File.createTempFile("playing_audio", ".m4a", context.cacheDir)
+            tempFile.writeBytes(decodedBytes)
+            
+            mediaPlayer = android.media.MediaPlayer().apply {
+                setDataSource(tempFile.absolutePath)
+                prepare()
+                start()
+                setOnCompletionListener { 
+                    it.release()
+                    mediaPlayer = null
+                }
+            }
         } catch (e: Exception) {
-            e.printStackTrace()
-            null
+            Log.e("ProfileViewModel", "Failed to play audio", e)
+            Toast.makeText(context, "Error playing audio", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -704,6 +878,23 @@ class ProfileViewModel : ViewModel() {
         checkRoomUnlockStatus(room)
     }
 
+    /** Opens a room from the Hallway card stack. Finds the matching TimeCapsuleRoom from createdRooms
+     *  or creates a lightweight placeholder so the detail screen can load memories from the backend. */
+    fun selectRoomFromHallway(cardId: String, cardTitle: String, capsuleDays: Int) {
+        val existing = _createdRooms.value.find { it.id == cardId }
+        val room = existing ?: TimeCapsuleRoom(
+            id = cardId,
+            roomName = cardTitle,
+            capsuleDays = capsuleDays,
+            capsuleHours = 0,
+            capsuleMinutes = 0,
+            notificationDays = 0,
+            notificationHours = 0,
+            isPublic = true
+        )
+        selectRoom(room)
+    }
+
     private fun checkRoomUnlockStatus(room: TimeCapsuleRoom) {
          if (!room.isSaved && System.currentTimeMillis() >= room.unlockTime && room.unlockTime > 0) {
              // Room is expired/unlocked but not saved/kept yet -> Show Dialog
@@ -734,7 +925,6 @@ class ProfileViewModel : ViewModel() {
     }
 
     // State Updates
-    fun updateRoomName(name: String) { _roomName.value = name }
 
     fun updateRoomMode(public: Boolean) { _isPublic.value = public }
 
@@ -756,6 +946,22 @@ class ProfileViewModel : ViewModel() {
     fun updateCapsuleDays(d: Int) { _capsuleDays.value = d.coerceAtLeast(0) }
     fun updateCapsuleHours(h: Int) { _capsuleHours.value = h.coerceAtLeast(0) }
     fun updateCapsuleMins(m: Int) { _capsuleMins.value = m.coerceAtLeast(0) }
+    fun updateScheduledClosure(enabled: Boolean) { _scheduledClosureEnabled.value = enabled }
+    fun updateScheduledClosureTime(millis: Long) { _scheduledClosureTime.value = millis }
+    fun updateScheduledClosureHour(h: Int) {
+        _scheduledClosureHour.value = h
+        val cal = java.util.Calendar.getInstance()
+        cal.timeInMillis = _scheduledClosureTime.value
+        cal.set(java.util.Calendar.HOUR_OF_DAY, h)
+        _scheduledClosureTime.value = cal.timeInMillis
+    }
+    fun updateScheduledClosureMinute(m: Int) {
+        _scheduledClosureMinute.value = m
+        val cal = java.util.Calendar.getInstance()
+        cal.timeInMillis = _scheduledClosureTime.value
+        cal.set(java.util.Calendar.MINUTE, m)
+        _scheduledClosureTime.value = cal.timeInMillis
+    }
     fun selectPreset(preset: String) {
         _selectedPreset.value = preset
         when (preset) {
@@ -767,7 +973,6 @@ class ProfileViewModel : ViewModel() {
     fun updateSelectedTheme(theme: String) { _roomAtmosphereTheme.value = theme }
     fun updateSelectedMusic(music: String) { _selectedMusic.value = music }
     fun updateRollingExpiration(option: String) { _rollingExpiration.value = option }
-    fun updateScheduledClosure(enabled: Boolean) { _scheduledClosureEnabled.value = enabled }
     fun addInviteEmail(email: String) {
         if (email.isNotBlank() && !_inviteEmails.value.contains(email)) {
             _inviteEmails.value = _inviteEmails.value + email
@@ -779,8 +984,22 @@ class ProfileViewModel : ViewModel() {
     
     fun selectRoomForEditing(room: TimeCapsuleRoom) {
         _selectedRoom.value = room
+        // Populate all wizard state from the room so Edit Room shows current values
         _roomName.value = room.roomName
         _isPublic.value = room.isPublic
+        _isTimeCapsuleEnabled.value = room.isCollaboration  // isCollaboration stores isTimeCapsule
+        _roomAtmosphereTheme.value = room.theme
+        _selectedMusic.value = room.music
+        _rollingExpiration.value = room.rollingExpiration
+        _scheduledClosureEnabled.value = room.scheduledClosureTime > 0
+        _scheduledClosureTime.value = if (room.scheduledClosureTime > 0) room.scheduledClosureTime
+            else System.currentTimeMillis() + 7 * 86400000L
+        _roomTags.value = room.tags
+        _roomDescription.value = room.description ?: ""
+        // Time capsule duration restored from local model
+        _capsuleDays.value = room.capsuleDays
+        _capsuleHours.value = room.capsuleHours
+        _capsuleMins.value = room.capsuleMinutes
         _currentStep.value = ProfileStep.EDIT_ROOM
     }
 
@@ -841,58 +1060,82 @@ class ProfileViewModel : ViewModel() {
     // Schedule notification for room unlock
 
     
-    // Keep room - mark as saved/permanent
+    // Keep room — feature removed (no keepRoom endpoint in backend)
     fun keepRoom(context: Context, room: TimeCapsuleRoom) {
+        dismissUnlockDialog()
+        Toast.makeText(context, "Room \"${room.roomName}\" kept.", Toast.LENGTH_SHORT).show()
+    }
+    
+    // Delete room from backend and local list
+    // fromInsideRoom=true  → navigate back to hallway (closeOverlay)
+    // fromInsideRoom=false → stay in current list view, just remove from list
+    fun deleteRoom(context: Context, room: TimeCapsuleRoom, fromInsideRoom: Boolean = true) {
         viewModelScope.launch {
             try {
-                // Call backend to save
-                val result = roomRepository?.keepRoom(room.id)
-                
-                if (result != null && result.isSuccess) {
-                    dismissUnlockDialog()
-                    Toast.makeText(
-                        context,
-                        "Room \"${room.roomName}\" saved to your collection",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    
-                    // Refresh saved status locally if we want to reflect it immediately?
-                    // Or just reload rooms.
-                    // For MVP simplicity, we might just re-fetch or assume success.
-                } else {
-                     Toast.makeText(context, "Failed to save room", Toast.LENGTH_SHORT).show()
+                roomRepository?.deleteRoom(room.id)
+                _createdRooms.value = _createdRooms.value.filter { it.id != room.id }
+                _roomMedia.value = _roomMedia.value.filterKeys { it != room.id }
+                dismissUnlockDialog()
+                if (fromInsideRoom) {
+                    showTimeCapsuleList()
                 }
+                Toast.makeText(context, "Room \"${room.roomName}\" deleted", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                Log.e("ProfileViewModel", "Error keeping room", e)
-                Toast.makeText(context, "Error saving room", Toast.LENGTH_SHORT).show()
+                Log.e("ProfileViewModel", "Error deleting room", e)
+                Toast.makeText(context, "Failed to delete room", Toast.LENGTH_SHORT).show()
             }
         }
     }
-    
-    // Delete room from backend and local storage
-    fun deleteRoom(context: Context, room: TimeCapsuleRoom) {
+
+    /** Save current VM state back to the backend for an existing room (Edit Room). */
+    fun saveRoomEdits(context: Context) {
+        val room = _selectedRoom.value ?: return
+        val closureIso: String? = if (_scheduledClosureEnabled.value) {
+            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
+                timeZone = java.util.TimeZone.getTimeZone("UTC")
+            }.format(java.util.Date(_scheduledClosureTime.value))
+        } else null
+
+        val fields: Map<String, Any?> = mapOf(
+            "name" to _roomName.value,
+            "isPrivate" to !_isPublic.value,
+            "isTimeCapsule" to _isTimeCapsuleEnabled.value,
+            "capsuleDurationDays" to _capsuleDays.value,
+            "capsuleDurationHours" to _capsuleHours.value,
+            "capsuleDurationMinutes" to _capsuleMins.value,
+            "theme" to _roomAtmosphereTheme.value,
+            "music" to _selectedMusic.value,
+            "rollingExpiration" to _rollingExpiration.value,
+            "scheduledClosureTime" to closureIso,
+            "description" to _roomDescription.value.ifBlank { null },
+            "tags" to _roomTags.value
+        ).filterValues { it != null }
+
+        @Suppress("UNCHECKED_CAST")
         viewModelScope.launch {
-            try {
-                // TODO: Call backend API to delete room
-                // For now, just remove locally
-                _createdRooms.value = _createdRooms.value.filter { it.id != room.id }
-                _roomMedia.value = _roomMedia.value.filterKeys { it != room.id }
-                
-                dismissUnlockDialog()
-                closeOverlay()
-                
-                Toast.makeText(
-                    context,
-                    "Room \"${room.roomName}\" deleted",
-                    Toast.LENGTH_SHORT
-                ).show()
-            } catch (e: Exception) {
-                Log.e("ProfileViewModel", "Error deleting room", e)
-                Toast.makeText(
-                    context,
-                    "Failed to delete room",
-                    Toast.LENGTH_SHORT
-                ).show()
+            val result = roomRepository?.updateRoom(room.id, fields as Map<String, Any>)
+            if (result?.isSuccess == true) {
+                // Update local list
+                val updatedRoom = room.copy(
+                    roomName = _roomName.value,
+                    isPublic = _isPublic.value,
+                    isCollaboration = _isTimeCapsuleEnabled.value,
+                    capsuleDays = _capsuleDays.value,
+                    capsuleHours = _capsuleHours.value,
+                    capsuleMinutes = _capsuleMins.value,
+                    theme = _roomAtmosphereTheme.value,
+                    music = _selectedMusic.value,
+                    rollingExpiration = _rollingExpiration.value,
+                    scheduledClosureTime = if (_scheduledClosureEnabled.value) _scheduledClosureTime.value else 0L,
+                    description = _roomDescription.value.ifBlank { null },
+                    tags = _roomTags.value
+                )
+                _createdRooms.value = _createdRooms.value.map { if (it.id == room.id) updatedRoom else it }
+                _selectedRoom.value = updatedRoom
+                Toast.makeText(context, "Room saved!", Toast.LENGTH_SHORT).show()
+                goBack()
+            } else {
+                Toast.makeText(context, "Failed to save room", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -948,23 +1191,24 @@ class ProfileViewModel : ViewModel() {
                         // Update email in Firebase
                         user.updateEmail(newEmail).addOnCompleteListener { updateTask ->
                             if (updateTask.isSuccessful) {
-                                // Update email in backend MongoDB
+                                // Update email in backend MongoDB via PATCH /auth/me
                                 viewModelScope.launch {
                                     try {
-                                        val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
-                                        val token = sessionManager.getToken()
-                                        
-                                        if (token != null) {
-                                            val apiService = com.dmb.bestbefore.data.api.RetrofitClient.apiService
-                                            val response = apiService.updateUserEmail(mapOf("email" to newEmail))
-                                            
-                                            if (response.isSuccessful) {
+                                        val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
+                                        val firebaseToken = authRepo.getFirebaseIdToken(true) // force refresh after email change
+                                        if (firebaseToken != null) {
+                                            val updateResult = authRepo.updateMe(
+                                                com.dmb.bestbefore.data.api.models.UpdateMeRequest(email = newEmail)
+                                            )
+                                            if (updateResult.isSuccess) {
                                                 _credentialUpdateSuccess.value = "Email updated successfully!"
-                                                // Update session with new email
+                                                val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
                                                 sessionManager.saveUserEmail(newEmail)
                                             } else {
                                                 _credentialUpdateError.value = "Backend update failed"
                                             }
+                                        } else {
+                                            _credentialUpdateError.value = "Auth token unavailable"
                                         }
                                     } catch (e: Exception) {
                                         _credentialUpdateError.value = "Backend error: ${e.message}"
@@ -1012,27 +1256,10 @@ class ProfileViewModel : ViewModel() {
                         // Update password in Firebase
                         user.updatePassword(newPassword).addOnCompleteListener { updateTask ->
                             if (updateTask.isSuccessful) {
-                                // Update password in backend MongoDB
+                                // Password is managed entirely in Firebase — no backend call needed
                                 viewModelScope.launch {
-                                    try {
-                                        val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
-                                        val token = sessionManager.getToken()
-                                        
-                                        if (token != null) {
-                                            val apiService = com.dmb.bestbefore.data.api.RetrofitClient.apiService
-                                            val response = apiService.updateUserPassword(mapOf("password" to newPassword))
-                                            
-                                            if (response.isSuccessful) {
-                                                _credentialUpdateSuccess.value = "Password updated successfully!"
-                                            } else {
-                                                _credentialUpdateError.value = "Backend update failed"
-                                            }
-                                        }
-                                    } catch (e: Exception) {
-                                        _credentialUpdateError.value = "Backend error: ${e.message}"
-                                    } finally {
-                                        _isUpdatingCredential.value = false
-                                    }
+                                    _credentialUpdateSuccess.value = "Password updated successfully!"
+                                    _isUpdatingCredential.value = false
                                 }
                             } else {
                                 _credentialUpdateError.value = updateTask.exception?.message ?: "Firebase update failed"

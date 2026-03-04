@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dmb.bestbefore.ui.screens.login.LoginScreen
 import com.dmb.bestbefore.ui.screens.opening.OpeningScreen
 import com.dmb.bestbefore.ui.screens.profile.ProfileScreen
@@ -18,6 +19,7 @@ object Routes {
     const val HALLWAY = "hallway"
     const val PROFILE = "profile"
     const val ROOM = "room/{roomId}/{roomName}"
+    const val NOTIFICATIONS = "notifications"
 }
 
 @Composable
@@ -89,6 +91,8 @@ fun AppNavigation() {
         }
 
         composable(Routes.PROFILE) {
+            val profileViewModel: com.dmb.bestbefore.ui.screens.profile.ProfileViewModel = viewModel()
+            val hallwayViewModel: com.dmb.bestbefore.ui.screens.hallway.HallwayViewModel = viewModel()
             ProfileScreen(
                 onNavigateBack = {
                     navController.popBackStack()
@@ -97,6 +101,19 @@ fun AppNavigation() {
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }
                     }
+                },
+                onNavigateToNotifications = {
+                    navController.navigate(Routes.NOTIFICATIONS)
+                },
+                viewModel = profileViewModel,
+                hallwayViewModel = hallwayViewModel
+            )
+        }
+
+        composable(Routes.NOTIFICATIONS) {
+            com.dmb.bestbefore.ui.screens.notifications.NotificationScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
                 }
             )
         }

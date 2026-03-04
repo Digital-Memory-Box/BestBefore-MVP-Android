@@ -7,28 +7,45 @@ import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.PATCH
+import retrofit2.http.DELETE
 import retrofit2.http.Multipart
 import retrofit2.http.Part
+import retrofit2.http.Path
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 
 interface ApiService {
-    @POST("signup")
-    suspend fun signup(@Body request: SignupRequest): Response<AuthResponse>
 
-    @POST("login")
-    suspend fun login(@Body request: LoginRequest): Response<AuthResponse>
+    // ── Auth ─────────────────────────────────────────────────────────────────
+    // POST /auth/sync — verify Firebase token, find-or-create MongoDB user
+    @POST("auth/sync")
+    suspend fun syncAuth(
+        @Header("Authorization") token: String
+    ): Response<SyncAuthResponse>
 
-    @Multipart
-    @POST("upload/room-photo")
-    suspend fun uploadRoomPhoto(
+    // GET /auth/me — fetch current user profile
+    @GET("auth/me")
+    suspend fun getMe(
+        @Header("Authorization") token: String
+    ): Response<SyncAuthResponse>
+
+    // PATCH /auth/me — update user profile fields
+    @PATCH("auth/me")
+    suspend fun updateMe(
         @Header("Authorization") token: String,
-        @Part image: MultipartBody.Part,
-        @Part("roomId") roomId: RequestBody
-    ): UploadResponse
+        @Body request: UpdateMeRequest
+    ): Response<SyncAuthResponse>
 
+    // ── Rooms ─────────────────────────────────────────────────────────────────
     @GET("rooms")
-    suspend fun getRooms(@Header("Authorization") token: String): Response<List<RoomDto>>
+    suspend fun getRooms(
+        @Header("Authorization") token: String
+    ): Response<List<RoomDto>>
+
+    @GET("rooms/discover")
+    suspend fun getDiscoverRooms(
+        @Header("Authorization") token: String
+    ): Response<List<RoomDto>>
 
     @POST("rooms")
     suspend fun createRoom(
@@ -36,28 +53,73 @@ interface ApiService {
         @Body request: CreateRoomRequest
     ): Response<CreateRoomResponse>
 
-    @GET("calendar/auth")
-    suspend fun getCalendarAuthUrl(@Header("Authorization") token: String): Response<CalendarAuthResponse>
-
-    @GET("calendar/events")
-    suspend fun getCalendarEvents(@Header("Authorization") token: String): Response<Map<String, List<CalendarEventDto>>>
-
-    @POST("rooms/{roomId}/keep")
-    suspend fun keepRoom(
+    @PATCH("rooms/{id}")
+    suspend fun updateRoom(
         @Header("Authorization") token: String,
-        @retrofit2.http.Path("roomId") roomId: String
+        @Path("id") roomId: String,
+        @Body request: Map<String, @JvmSuppressWildcards Any>
     ): Response<Unit>
 
-    @retrofit2.http.PATCH("user/email")
-    suspend fun updateUserEmail(
-        @Body request: Map<String, String>
+    @DELETE("rooms/{id}")
+    suspend fun deleteRoom(
+        @Header("Authorization") token: String,
+        @Path("id") roomId: String
     ): Response<Unit>
 
-    @retrofit2.http.PATCH("user/password")
-    suspend fun updateUserPassword(
-        @Body request: Map<String, String>
+    @POST("rooms/{id}/accept-invite")
+    suspend fun acceptInvite(
+        @Header("Authorization") token: String,
+        @Path("id") roomId: String
     ): Response<Unit>
 
-    @GET("rooms/saved")
-    suspend fun getSavedRooms(@Header("Authorization") token: String): Response<List<RoomDto>>
+    @POST("rooms/{id}/decline-invite")
+    suspend fun declineInvite(
+        @Header("Authorization") token: String,
+        @Path("id") roomId: String
+    ): Response<Unit>
+
+    // ── Memories ──────────────────────────────────────────────────────────────
+    @GET("rooms/{roomId}/memories")
+    suspend fun getMemoriesByRoom(
+        @Header("Authorization") token: String,
+        @Path("roomId") roomId: String
+    ): Response<List<Map<String, @JvmSuppressWildcards Any>>>
+
+    @GET("rooms/{roomId}/memories/archived")
+    suspend fun getArchivedMemoriesByRoom(
+        @Header("Authorization") token: String,
+        @Path("roomId") roomId: String
+    ): Response<List<Map<String, @JvmSuppressWildcards Any>>>
+
+    @POST("rooms/{roomId}/memories")
+    suspend fun addMemoryToRoom(
+        @Header("Authorization") token: String,
+        @Path("roomId") roomId: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<Unit>
+
+    @POST("rooms/{roomId}/dump")
+    suspend fun dumpMemories(
+        @Header("Authorization") token: String,
+        @Path("roomId") roomId: String
+    ): Response<Unit>
+
+    @GET("memories/trending")
+    suspend fun getTrendingMemories(
+        @Header("Authorization") token: String
+    ): Response<List<Map<String, @JvmSuppressWildcards Any>>>
+
+    @GET("memories/count")
+    suspend fun getMemoryCount(
+        @Header("Authorization") token: String
+    ): Response<Map<String, @JvmSuppressWildcards Any>>
+
+    // ── Upload ────────────────────────────────────────────────────────────────
+    @Multipart
+    @POST("upload/room-photo")
+    suspend fun uploadRoomPhoto(
+        @Header("Authorization") token: String,
+        @Part image: MultipartBody.Part,
+        @Part("roomId") roomId: RequestBody
+    ): UploadResponse
 }

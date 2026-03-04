@@ -43,6 +43,7 @@ fun SignupScreen(
             .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
+        com.dmb.bestbefore.ui.components.AnimatedBackgroundView()
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp)

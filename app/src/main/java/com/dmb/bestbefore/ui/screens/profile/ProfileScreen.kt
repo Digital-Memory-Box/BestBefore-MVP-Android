@@ -35,6 +35,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.verticalScroll
 
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+
 import com.dmb.bestbefore.data.models.TimeCapsuleRoom
 import com.dmb.bestbefore.ui.components.OrbMenu
 
@@ -54,6 +60,7 @@ import androidx.compose.foundation.layout.statusBars
 fun ProfileScreen(
     onNavigateBack: () -> Unit,
     onLogout: () -> Unit,
+    onNavigateToNotifications: () -> Unit,
     viewModel: ProfileViewModel = viewModel(),
     hallwayViewModel: HallwayViewModel = viewModel()
 ) {
@@ -80,7 +87,7 @@ fun ProfileScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            viewModel.loadUpcomingEvents(context)
+            viewModel.loadCalendarEvents(context)
         }
     }
     
@@ -148,6 +155,7 @@ fun ProfileScreen(
     ) { uris ->
         if (uris.isNotEmpty()) {
             viewModel.updateSelectedMedia(uris)
+            viewModel.uploadMedia(context)
         }
     }
     
@@ -158,6 +166,8 @@ fun ProfileScreen(
     ) { success ->
         if (success && cameraImageUri != null) {
             viewModel.setCapturedImage(cameraImageUri!!)
+            viewModel.acceptCapturedImage()
+            viewModel.uploadMedia(context)
         }
     }
     
@@ -192,18 +202,47 @@ fun ProfileScreen(
             viewModel.handleDeepLink(pendingId)
             com.dmb.bestbefore.MainActivity.clearPending()
         }
+        
+        val pendingInviteId = com.dmb.bestbefore.MainActivity.pendingInviteRoomId
+        val pendingInviteName = com.dmb.bestbefore.MainActivity.pendingInviteRoomName
+        if (pendingInviteId != null && pendingInviteName != null) {
+            viewModel.showInviteDialog(pendingInviteId, pendingInviteName)
+            com.dmb.bestbefore.MainActivity.clearPendingInvite()
+        }
     }
 
 
 
 
     // Moved Overlay Logic to inside the Box for correct Z-ordering
+    
+    val pendingInviteRoomId by viewModel.pendingInviteRoomId.collectAsState()
+    val pendingInviteRoomName by viewModel.pendingInviteRoomName.collectAsState()
 
+    if (pendingInviteRoomId != null && pendingInviteRoomName != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.hideInviteDialog() },
+            containerColor = Color(0xFF1C1C1E),
+            title = { Text("Room Invitation", color = Color.White) },
+            text = { Text("You have been invited to collaborate in \"$pendingInviteRoomName\". Do you accept?", color = Color.LightGray) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.handleAcceptInvite(context, pendingInviteRoomId!!) }) {
+                    Text("Accept", color = Color(0xFF34C759), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.handleDeclineInvite(context, pendingInviteRoomId!!) }) {
+                    Text("Decline", color = Color.Red)
+                }
+            }
+        )
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .windowInsetsPadding(WindowInsets.navigationBars)
     ) {
         // 1. HALLWAY (Main Page)
         // Show only if no overlay step AND "ALL" is not visible
@@ -233,13 +272,16 @@ fun ProfileScreen(
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
-                    Text(
-                        text = "All",
-                        fontSize = 20.sp, // Made smaller and clickable
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier.clickable { viewModel.toggleAllMedia(true) }
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = "Notifications",
+                            tint = Color.White,
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clickable { onNavigateToNotifications() }
+                        )
+                    }
                 }
 
                 // Main content row (Card Stack + Info)
@@ -259,7 +301,8 @@ fun ProfileScreen(
                         CardStack(
                             cards = cards,
                             selectedIndex = selectedIndex,
-                            onCardSelected = { hallwayViewModel.selectCard(it) }
+                            onCardSelected = { hallwayViewModel.selectCard(it) },
+                            onCardTapped = { card -> viewModel.selectRoomFromHallway(card.id, card.title, card.timeCapsuleDays) }
                         )
                     }
 
@@ -334,7 +377,13 @@ fun ProfileScreen(
                 // Bottom navigation
                 BottomNavigation(
                     currentTab = currentTab,
-                    onTabSelected = { hallwayViewModel.selectTab(it) },
+                    onTabSelected = { 
+                        if (it == BottomTab.EVERYONE) {
+                            viewModel.closeOverlay()
+                        }
+                        hallwayViewModel.selectTab(it)
+                    },
+                    onProfileClick = { viewModel.openProfileMenu() },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .windowInsetsPadding(WindowInsets.navigationBars) // Added safe area padding
@@ -551,30 +600,40 @@ private fun DashboardTab(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .height(100.dp)
+                        .height(140.dp)
                         .background(Color(0xFF1C1C1E), RoundedCornerShape(16.dp))
                         .padding(16.dp)
                 ) {
-                    Column {
-                         Icon(Icons.Default.Home, null, tint = Color(0xFF007AFF), modifier = Modifier.size(24.dp))
-                         Spacer(modifier = Modifier.height(8.dp))
-                         Text("3", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                         Text("My Rooms", color = Color.Gray, fontSize = 12.sp)
+                    Column(
+                        modifier = Modifier.fillMaxHeight(),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                         Icon(Icons.Default.Home, null, tint = Color(0xFF007AFF), modifier = Modifier.size(32.dp))
+                         Column {
+                             val totalRooms by viewModel.totalRooms.collectAsState()
+                             Text(totalRooms.toString(), color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                             Text("My Rooms", color = Color.Gray, fontSize = 14.sp)
+                         }
                     }
                 }
                  // Memories Card
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .height(100.dp)
+                        .height(140.dp)
                         .background(Color(0xFF1C1C1E), RoundedCornerShape(16.dp))
                         .padding(16.dp)
                 ) {
-                    Column {
-                         Icon(Icons.Default.Image, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(24.dp))
-                         Spacer(modifier = Modifier.height(8.dp))
-                         Text("6", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                         Text("Memories", color = Color.Gray, fontSize = 12.sp)
+                    Column(
+                        modifier = Modifier.fillMaxHeight(),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                         Icon(Icons.Default.Image, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(32.dp))
+                         Column {
+                             val totalMemories by viewModel.totalMemories.collectAsState()
+                             Text(totalMemories.toString(), color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                             Text("Memories", color = Color.Gray, fontSize = 14.sp)
+                         }
                     }
                 }
             }
@@ -1052,12 +1111,31 @@ private fun SettingsTab(viewModel: ProfileViewModel, onLogout: () -> Unit) {
 // --- EDIT ROOM SCREEN ---
 @Composable
 private fun EditRoomScreen(viewModel: ProfileViewModel) {
-    // Reference: "Edit Room" Screenshot
-    val roomName by viewModel.roomName.collectAsState()
-    val isPublic by viewModel.isPublic.collectAsState()
-    
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val roomName      by viewModel.roomName.collectAsState()
+    val isPublic      by viewModel.isPublic.collectAsState()
+    val tcEnabled     by viewModel.isTimeCapsuleEnabled.collectAsState()
+    val days          by viewModel.capsuleDays.collectAsState()
+    val hours         by viewModel.capsuleHours.collectAsState()
+    val mins          by viewModel.capsuleMins.collectAsState()
+    val theme         by viewModel.roomAtmosphereTheme.collectAsState()
+    val music         by viewModel.selectedMusic.collectAsState()
+    val rolling       by viewModel.rollingExpiration.collectAsState()
+    val closure       by viewModel.scheduledClosureEnabled.collectAsState()
+    val closureTime   by viewModel.scheduledClosureTime.collectAsState()
+    val closureHour   by viewModel.scheduledClosureHour.collectAsState()
+    val closureMin    by viewModel.scheduledClosureMinute.collectAsState()
+    val tags          by viewModel.roomTags.collectAsState()
+    val description   by viewModel.roomDescription.collectAsState()
+    var tagInput      by remember { mutableStateOf("") }
+
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .padding(horizontal = 24.dp)
+        ) {
             // Header
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
@@ -1066,130 +1144,240 @@ private fun EditRoomScreen(viewModel: ProfileViewModel) {
             ) {
                 Text("Edit Room", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 Box(
-                    modifier = Modifier.size(32.dp).background(Color(0xFF2C2C2E), CircleShape).clickable { viewModel.goBack() },
+                    modifier = Modifier.size(32.dp).background(Color(0xFF2C2C2E), CircleShape)
+                        .clickable { viewModel.goBack() },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Default.Close, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
                 }
             }
-            
-            // Room Name
+
+            // ─── Room Name ───────────────────────────────────────────────
             Text("Room Name", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             BasicTextField(
                 value = roomName,
                 onValueChange = { viewModel.updateRoomName(it) },
                 textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFF1C1C1E), RoundedCornerShape(10.dp))
-                    .padding(16.dp)
+                cursorBrush = SolidColor(Color.White),
+                modifier = Modifier.fillMaxWidth().background(Color(0xFF1C1C1E), RoundedCornerShape(10.dp)).padding(16.dp)
             )
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // Privacy Status
-            Text("Privacy Status", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Spacer(modifier = Modifier.height(12.dp))
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ─── Privacy ─────────────────────────────────────────────────
+            Text("Privacy", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                // Public
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(100.dp)
-                        .border(if(isPublic) 2.dp else 0.dp, if(isPublic) Color(0xFF007AFF) else Color.Transparent, RoundedCornerShape(12.dp))
-                        .background(Color(0xFF1C1C1E), RoundedCornerShape(12.dp))
-                        .clickable { viewModel.updateRoomMode(true) }
-                        .padding(12.dp)
-                ) {
-                    Column(verticalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxSize()) {
-                        Icon(Icons.Default.Public, null, tint = Color.White)
-                        Column {
-                            Text("Public", color = Color.White, fontWeight = FontWeight.Bold)
-                            Text("Anyone can see.", color = Color.Gray, fontSize = 10.sp)
-                        }
-                    }
-                }
-                
-                // Private
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(100.dp)
-                        .border(if(!isPublic) 2.dp else 0.dp, if(!isPublic) Color(0xFF007AFF) else Color.Transparent, RoundedCornerShape(12.dp))
-                        .background(Color(0xFF1C1C1E), RoundedCornerShape(12.dp))
-                        .clickable { viewModel.updateRoomMode(false) }
-                        .padding(12.dp)
-                ) {
-                    Column(verticalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxSize()) {
-                        Icon(Icons.Default.Lock, null, tint = Color.Gray)
-                        Column {
-                            Text("Private", color = Color.Gray, fontWeight = FontWeight.Bold)
-                            Text("Only invited.", color = Color.Gray, fontSize = 10.sp)
+                listOf(true to "Public" to Icons.Default.Public, false to "Private" to Icons.Default.Lock).forEach { (pair, icon) ->
+                    val (pub, label) = pair
+                    val sel = isPublic == pub
+                    Box(
+                        modifier = Modifier.weight(1f).height(90.dp)
+                            .border(if (sel) 2.dp else 0.dp, if (sel) AccentBlue else Color.Transparent, RoundedCornerShape(12.dp))
+                            .background(Color(0xFF1C1C1E), RoundedCornerShape(12.dp))
+                            .clickable { viewModel.updateRoomMode(pub) }.padding(12.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxSize()) {
+                            Icon(icon, null, tint = if (sel) Color.White else Color.Gray)
+                            Text(label, color = if (sel) Color.White else Color.Gray, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // Enable Time Capsule switch
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ─── Time Capsule ─────────────────────────────────────────────
             Row(
-                 modifier = Modifier.fillMaxWidth().background(Color(0xFF1C1C1E), RoundedCornerShape(12.dp)).padding(16.dp),
-                 horizontalArrangement = Arrangement.SpaceBetween,
-                 verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.fillMaxWidth().background(Color(0xFF1C1C1E), RoundedCornerShape(12.dp)).padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                 Column {
-                     Text("Enable Time Capsule", color = Color.White, fontWeight = FontWeight.Bold)
-                     Text("Content hidden until timer ends.", color = Color.Gray, fontSize = 12.sp)
-                 }
-                 Switch(checked = false, onCheckedChange = {})
+                Column {
+                    Text("Enable Time Capsule", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("Content hidden until timer ends.", color = Color.Gray, fontSize = 12.sp)
+                }
+                Switch(
+                    checked = tcEnabled,
+                    onCheckedChange = { viewModel.updateTimeCapsuleEnabled(it) },
+                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = AccentBlue)
+                )
             }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // Atmosphere
-            Text("Atmosphere", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Spacer(modifier = Modifier.height(12.dp))
-             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFF1C1C1E), RoundedCornerShape(12.dp))
-                    .padding(vertical = 8.dp) 
+
+            if (tcEnabled) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("Duration", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().background(CardDarkBg, RoundedCornerShape(14.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    DurationStepper("Days",  days,  { viewModel.updateCapsuleDays(days - 1)  }, { viewModel.updateCapsuleDays(days + 1)  })
+                    DurationStepper("Hours", hours, { viewModel.updateCapsuleHours(hours - 1) }, { viewModel.updateCapsuleHours(hours + 1) })
+                    DurationStepper("Mins",  mins,  { viewModel.updateCapsuleMins(mins - 1)  }, { viewModel.updateCapsuleMins(mins + 1)  })
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ─── Music ───────────────────────────────────────────────────
+            Text("Music", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            Column(
+                modifier = Modifier.fillMaxWidth().background(Color(0xFF1C1C1E), RoundedCornerShape(12.dp)).padding(8.dp)
             ) {
-                 Row(
-                     modifier = Modifier.fillMaxWidth().clickable {}.border(1.dp, Color(0xFF007AFF), RoundedCornerShape(12.dp)).padding(16.dp),
-                     verticalAlignment = Alignment.CenterVertically
-                 ) {
-                     Icon(Icons.AutoMirrored.Filled.VolumeOff, null, tint = Color.White)
-                     Spacer(modifier = Modifier.width(16.dp))
-                     Text("None", color = Color.White, fontWeight = FontWeight.Bold)
-                     Spacer(modifier = Modifier.weight(1f))
-                     Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF007AFF)) 
-                 }
-                 Row(modifier = Modifier.padding(16.dp)) {
-                      Icon(Icons.Default.MusicNote, null, tint = Color.Gray)
-                      Spacer(modifier = Modifier.width(16.dp))
-                      Text("Loft Beats", color = Color.Gray, fontWeight = FontWeight.Bold)
-                 }
-                 Row(modifier = Modifier.padding(16.dp)) {
-                      Icon(Icons.Default.Eco, null, tint = Color.Gray)
-                      Spacer(modifier = Modifier.width(16.dp))
-                      Text("Nature Ambience", color = Color.Gray, fontWeight = FontWeight.Bold)
-                 }
+                val musicOpts = listOf("None", "Loft Beats", "Nature Ambience", "Lo-Fi", "Cinematic")
+                musicOpts.forEach { m ->
+                    val sel = music == m
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { viewModel.updateSelectedMusic(m) }.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (sel) Icon(Icons.Default.CheckCircle, null, tint = AccentBlue, modifier = Modifier.size(18.dp))
+                        else Spacer(modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(m, color = if (sel) Color.White else Color.Gray, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
+                    }
+                }
             }
-            
-            Spacer(modifier = Modifier.weight(1f))
-            
-            // Save Button
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ─── Rolling Expiration ───────────────────────────────────────
+            Text("Rolling Expiration", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().background(Color(0xFF1C1C1E), RoundedCornerShape(12.dp)).padding(4.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                listOf("Never", "1 Day", "7 Days", "30 Days").forEach { opt ->
+                    val sel = rolling == opt
+                    Box(
+                        modifier = Modifier.weight(1f)
+                            .background(if (sel) Color.White else Color.Transparent, RoundedCornerShape(18.dp))
+                            .clickable { viewModel.updateRollingExpiration(opt) }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(opt, color = if (sel) Color.Black else Color.Gray, fontSize = 12.sp,
+                            fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal, textAlign = TextAlign.Center)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ─── Scheduled Closure ────────────────────────────────────────
+            Column(
+                modifier = Modifier.fillMaxWidth().background(Color(0xFF1C1C1E), RoundedCornerShape(12.dp)).padding(16.dp)
+            ) {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Scheduled Room Closure", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Lock to read-only after a specific date.", color = Color.Gray, fontSize = 12.sp)
+                    }
+                    Switch(
+                        checked = closure,
+                        onCheckedChange = { viewModel.updateScheduledClosure(it) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = AccentBlue)
+                    )
+                }
+                if (closure) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Close on:", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    InlineCalendar(
+                        selectedMillis = closureTime,
+                        hour = closureHour,
+                        minute = closureMin,
+                        onDateSelected = { viewModel.updateScheduledClosureTime(it) },
+                        onTimeChanged = { h, m ->
+                            viewModel.updateScheduledClosureHour(h)
+                            viewModel.updateScheduledClosureMinute(m)
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ─── Description ─────────────────────────────────────────────
+            Text("Description", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            BasicTextField(
+                value = description,
+                onValueChange = { viewModel.updateRoomDescription(it) },
+                textStyle = TextStyle(color = Color.White, fontSize = 14.sp, lineHeight = 20.sp),
+                cursorBrush = SolidColor(Color.White),
+                modifier = Modifier.fillMaxWidth().height(90.dp)
+                    .background(Color(0xFF1C1C1E), RoundedCornerShape(10.dp)).padding(12.dp),
+                decorationBox = { inner ->
+                    if (description.isEmpty()) Text("Add a description…", color = Color.Gray, fontSize = 14.sp)
+                    inner()
+                }
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ─── Tags ─────────────────────────────────────────────────────
+            Text("Tags", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().background(Color(0xFF1C1C1E), RoundedCornerShape(10.dp)).padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BasicTextField(
+                    value = tagInput,
+                    onValueChange = { tagInput = it },
+                    textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+                    cursorBrush = SolidColor(Color.White),
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                    decorationBox = { inner ->
+                        if (tagInput.isEmpty()) Text("Add tag…", color = Color.Gray, fontSize = 14.sp)
+                        inner()
+                    }
+                )
+                Icon(
+                    Icons.Default.Add, null, tint = AccentBlue,
+                    modifier = Modifier.size(24.dp).clickable {
+                        if (tagInput.isNotBlank()) { viewModel.addRoomTag(tagInput.trim()); tagInput = "" }
+                    }
+                )
+            }
+
+            if (tags.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    tags.forEach { tag ->
+                        Row(
+                            modifier = Modifier.background(AccentBlue.copy(alpha = 0.2f), RoundedCornerShape(20.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(tag, color = AccentBlue, fontSize = 13.sp)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(Icons.Default.Close, null, tint = AccentBlue, modifier = Modifier.size(14.dp).clickable { viewModel.removeRoomTag(tag) })
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // ─── Save Button ──────────────────────────────────────────────
             Button(
-                onClick = { viewModel.goBack() },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF)),
+                onClick = { viewModel.saveRoomEdits(context) },
+                colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth().height(50.dp).padding(bottom=24.dp)
+                modifier = Modifier.fillMaxWidth().height(50.dp)
             ) {
                 Text("Save Changes", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
+
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }
@@ -1200,7 +1388,8 @@ private fun EditRoomScreen(viewModel: ProfileViewModel) {
 fun CardStack(
     cards: List<HallwayCard>,
     selectedIndex: Int,
-    onCardSelected: (Int) -> Unit
+    onCardSelected: (Int) -> Unit,
+    onCardTapped: (HallwayCard) -> Unit = {}
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         if (cards.isEmpty()) {
@@ -1221,7 +1410,7 @@ fun CardStack(
                             .aspectRatio(0.7f)
                             .clip(RoundedCornerShape(16.dp))
                             .background(Color.DarkGray)
-                            .clickable { onCardSelected(index) }
+                            .clickable { onCardTapped(card) }
                     ) {
                         coil.compose.AsyncImage(
                             model = card.imageUrl,
@@ -1240,18 +1429,37 @@ fun CardStack(
 fun BottomNavigation(
     currentTab: BottomTab,
     onTabSelected: (BottomTab) -> Unit,
+    onProfileClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
      Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 40.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-         // Consistent with HallwayScreen navigation structure
-         Icon(Icons.Default.Circle, null, tint = if(currentTab == BottomTab.ROOMING) Color.White else Color.Gray, modifier = Modifier.clickable { onTabSelected(BottomTab.ROOMING) })
-         Icon(Icons.Default.Menu, null, tint = if(currentTab == BottomTab.EVERYONE) Color.White else Color.Gray, modifier = Modifier.clickable { onTabSelected(BottomTab.EVERYONE) })
-         Icon(Icons.Default.Person, null, tint = if(currentTab == BottomTab.ARTISTS) Color.White else Color.Gray, modifier = Modifier.clickable { onTabSelected(BottomTab.ARTISTS) })
+         Text(
+             text = "Rooming",
+             fontSize = if(currentTab == BottomTab.ROOMING) 20.sp else 18.sp,
+             fontWeight = if(currentTab == BottomTab.ROOMING) FontWeight.Bold else FontWeight.Normal,
+             color = if(currentTab == BottomTab.ROOMING) Color.White else Color.Gray,
+             modifier = Modifier.clickable { onTabSelected(BottomTab.ROOMING) }
+         )
+         Text(
+             text = "Hallway",
+             fontSize = if(currentTab == BottomTab.EVERYONE) 20.sp else 18.sp,
+             fontWeight = if(currentTab == BottomTab.EVERYONE) FontWeight.Bold else FontWeight.Normal,
+             color = if(currentTab == BottomTab.EVERYONE) Color.White else Color.Gray,
+             modifier = Modifier.clickable { onTabSelected(BottomTab.EVERYONE) }
+         )
+         Text(
+             text = "Artist",
+             fontSize = if(currentTab == BottomTab.ARTISTS) 20.sp else 18.sp,
+             fontWeight = if(currentTab == BottomTab.ARTISTS) FontWeight.Bold else FontWeight.Normal,
+             color = if(currentTab == BottomTab.ARTISTS) Color.White else Color.Gray,
+             modifier = Modifier.clickable { /* Artist screen coming soon – no-op */ }
+         )
     }
 }
 
@@ -1263,6 +1471,16 @@ fun ExploreItem(text: String) {
         color = Color.Gray,
         modifier = Modifier.clickable { }
     )
+}
+
+fun getRoomThemeColor(themeName: String): Color {
+    return when(themeName) {
+        "Ocean"     -> Color(0xFF00C6A2)
+        "Sunset"    -> Color(0xFFE8820C)
+        "Forest"    -> Color(0xFF22A84A)
+        "Cyberpunk" -> Color(0xFFAA3FD6)
+        else        -> Color(0xFF1A7AF8) // Default
+    }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1280,13 +1498,13 @@ private fun CreateRoomChrome(
     onNext: () -> Unit,
     nextLabel: String = "Next",
     nextEnabled: Boolean = true,
+    themeColor: Color? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
+        modifier = Modifier.fillMaxSize()
     ) {
+        com.dmb.bestbefore.ui.components.AnimatedBackgroundView(baseColor = themeColor)
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -1403,10 +1621,21 @@ private fun CreateRoomChrome(
 // ─────────────────────────────────────────────────────────────
 //  STEP 1 — What's the name? + Public/Private
 // ─────────────────────────────────────────────────────────────
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CreateRoomStep1(viewModel: ProfileViewModel) {
     val roomName by viewModel.roomName.collectAsState()
+    val roomDescription by viewModel.roomDescription.collectAsState()
+    val roomTags by viewModel.roomTags.collectAsState()
+    
     val isPublic by viewModel.isPublic.collectAsState()
+    val themeName by viewModel.roomAtmosphereTheme.collectAsState()
+
+    var tagInput by remember { mutableStateOf("") }
+    val suggestedTags = remember(tagInput) {
+        if (tagInput.isBlank()) emptyList()
+        else com.dmb.bestbefore.data.local.TagsDictionary.predefinedTags.filter { it.contains(tagInput, ignoreCase = true) && !roomTags.contains(it) }.take(5)
+    }
 
     CreateRoomChrome(
         step = 1,
@@ -1415,7 +1644,8 @@ private fun CreateRoomStep1(viewModel: ProfileViewModel) {
         onNext = {
             if (roomName.isNotBlank()) viewModel.goToStep(ProfileStep.ROOM_TIME_CAPSULE)
         },
-        nextEnabled = roomName.isNotBlank()
+        nextEnabled = roomName.isNotBlank(),
+        themeColor = getRoomThemeColor(themeName)
     ) {
         Text(
             text = "What's the name?",
@@ -1447,6 +1677,116 @@ private fun CreateRoomStep1(viewModel: ProfileViewModel) {
                 inner()
             }
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Description field
+        BasicTextField(
+            value = roomDescription,
+            onValueChange = { viewModel.updateRoomDescription(it) },
+            textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+            cursorBrush = SolidColor(Color.White),
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(CardDarkBg, RoundedCornerShape(14.dp))
+                .padding(horizontal = 16.dp, vertical = 18.dp)
+                .heightIn(min = 60.dp),
+            decorationBox = { inner ->
+                if (roomDescription.isEmpty()) Text("Description (Optional)", color = Color(0xFF636366), fontSize = 16.sp)
+                inner()
+            }
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Tags Section
+        Text("Tags", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        // Added Tags Display
+        if (roomTags.isNotEmpty()) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                roomTags.forEach { tag ->
+                    Box(
+                        modifier = Modifier
+                            .background(getRoomThemeColor(themeName).copy(alpha = 0.2f), RoundedCornerShape(16.dp))
+                            .border(1.dp, getRoomThemeColor(themeName), RoundedCornerShape(16.dp))
+                            .clickable { viewModel.removeRoomTag(tag) }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(text = "#$tag", color = getRoomThemeColor(themeName), fontSize = 14.sp)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        // Tag Input Field
+        BasicTextField(
+            value = tagInput,
+            onValueChange = { tagInput = it },
+            textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+            cursorBrush = SolidColor(Color.White),
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(CardDarkBg, RoundedCornerShape(14.dp))
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            decorationBox = { inner ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("#", color = Color(0xFF636366), fontSize = 16.sp)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Box(modifier = Modifier.weight(1f)) {
+                        if (tagInput.isEmpty()) Text("Add tag...", color = Color(0xFF636366), fontSize = 16.sp)
+                        inner()
+                    }
+                    if (tagInput.isNotBlank()) {
+                        Text(
+                            text = "Add",
+                            color = getRoomThemeColor(themeName),
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable {
+                                val newTag = tagInput.trim().lowercase().replace(" ", "-")
+                                if (newTag.isNotEmpty()) {
+                                    viewModel.addRoomTag(newTag)
+                                    tagInput = ""
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        )
+
+        // Suggestion Row
+        if (suggestedTags.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            androidx.compose.foundation.lazy.LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(
+                    items = suggestedTags,
+                    key = { it }
+                ) { suggestion ->
+                    Text(
+                        text = suggestion,
+                        color = Color.LightGray,
+                        modifier = Modifier
+                            .background(Color(0xFF2C2C2E), RoundedCornerShape(8.dp))
+                            .clickable {
+                                viewModel.addRoomTag(suggestion)
+                                tagInput = ""
+                            }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(28.dp))
         Text("Privacy Status", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
@@ -1518,11 +1858,38 @@ private fun CreateRoomStep2(viewModel: ProfileViewModel) {
     val targetHour by viewModel.targetHour.collectAsState()
     val targetMin  by viewModel.targetMinute.collectAsState()
 
+    val themeName by viewModel.roomAtmosphereTheme.collectAsState()
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val calendarPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.loadCalendarEvents(context)
+        } else {
+            android.util.Log.d("ProfileScreen", "Calendar permission denied")
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.READ_CALENDAR
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            viewModel.loadCalendarEvents(context)
+        } else {
+            calendarPermissionLauncher.launch(android.Manifest.permission.READ_CALENDAR)
+        }
+    }
+
     CreateRoomChrome(
         step = 2,
         onDismiss = { viewModel.closeOverlay() },
         onBack = { viewModel.goToStep(ProfileStep.ROOM_NAME) },
-        onNext = { viewModel.goToStep(ProfileStep.ROOM_ATMOSPHERE) }
+        onNext = { viewModel.goToStep(ProfileStep.ROOM_ATMOSPHERE) },
+        themeColor = getRoomThemeColor(themeName)
     ) {
         androidx.compose.foundation.rememberScrollState().let { scroll ->
             Column(modifier = Modifier
@@ -1557,6 +1924,10 @@ private fun CreateRoomStep2(viewModel: ProfileViewModel) {
                 }
 
                 if (enabled) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    CalendarEventDropdown(viewModel)
+
                     Spacer(modifier = Modifier.height(20.dp))
                     Text("Unlock Method", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(10.dp))
@@ -1640,6 +2011,62 @@ private fun CreateRoomStep2(viewModel: ProfileViewModel) {
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun CalendarEventDropdown(viewModel: ProfileViewModel) {
+    val events by viewModel.calendarEvents.collectAsState()
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text("Link Calendar Event", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Box {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(CardDarkBg, RoundedCornerShape(14.dp))
+                    .clickable { expanded = true }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Event, contentDescription = "Event", tint = AccentBlue, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(12.dp))
+                if (events.isEmpty()) {
+                    Text("No upcoming event", color = Color(0xFF8E8E93), fontSize = 15.sp)
+                } else {
+                    Text("Select upcoming event...", color = Color.White, fontSize = 15.sp)
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                Icon(Icons.Default.ArrowDropDown, contentDescription = "Drop Down", tint = Color.White)
+            }
+            
+            if (events.isNotEmpty()) {
+                androidx.compose.material3.DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier.background(CardDarkBg).fillMaxWidth(0.85f)
+                ) {
+                    val dateFormat = java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault())
+                    events.forEach { event ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { 
+                                Column {
+                                    Text(event.title, color = Color.White, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                    Text(dateFormat.format(event.startTime), color = Color(0xFF8E8E93), fontSize = 12.sp)
+                                }
+                            },
+                            onClick = {
+                                viewModel.applyCalendarEvent(event)
+                                expanded = false
+                            }
+                        )
+                    }
+                }
             }
         }
     }
@@ -1821,74 +2248,89 @@ private fun InlineCalendar(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // ── Time picker row ──
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+            // ── Time picker — premium drum style ──
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF2C2C2E), RoundedCornerShape(14.dp))
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                Text("Time", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // — Hour spinner —
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(
+                    // ─── Hour drum ───────────────────────────────────
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.width(72.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ExpandLess,
+                            contentDescription = "Hour up",
+                            tint = AccentBlue,
                             modifier = Modifier
-                                .size(28.dp)
-                                .background(Color(0xFF3A3A3C), androidx.compose.foundation.shape.CircleShape)
-                                .clickable { onTimeChanged((hour + 1) % 24, minute) },
-                            contentAlignment = Alignment.Center
-                        ) { Text("+", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Box(
+                                .size(36.dp)
+                                .clickable { onTimeChanged((hour + 1) % 24, minute) }
+                        )
+                        Text(
+                            text = String.format("%02d", hour),
+                            color = Color.White,
+                            fontSize = 40.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        Text("HH", color = Color(0xFF8E8E93), fontSize = 11.sp)
+                        Icon(
+                            Icons.Default.ExpandMore,
+                            contentDescription = "Hour down",
+                            tint = AccentBlue,
                             modifier = Modifier
-                                .background(Color(0xFF2C2C2E), RoundedCornerShape(8.dp))
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text(String.format("%02d", hour), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .background(Color(0xFF3A3A3C), androidx.compose.foundation.shape.CircleShape)
-                                .clickable { onTimeChanged((hour - 1 + 24) % 24, minute) },
-                            contentAlignment = Alignment.Center
-                        ) { Text("-", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                                .size(36.dp)
+                                .clickable { onTimeChanged((hour - 1 + 24) % 24, minute) }
+                        )
                     }
 
-                    Text(":", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    // ─── Colon separator ──────────────────────────────
+                    Text(
+                        text = ":",
+                        color = Color.White,
+                        fontSize = 36.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp).padding(bottom = 20.dp)
+                    )
 
-                    // — Minute spinner —
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(
+                    // ─── Minute drum ─────────────────────────────────
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.width(72.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ExpandLess,
+                            contentDescription = "Minute up",
+                            tint = AccentBlue,
                             modifier = Modifier
-                                .size(28.dp)
-                                .background(Color(0xFF3A3A3C), androidx.compose.foundation.shape.CircleShape)
-                                .clickable { onTimeChanged(hour, (minute + 5) % 60) },
-                            contentAlignment = Alignment.Center
-                        ) { Text("+", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Box(
+                                .size(36.dp)
+                                .clickable { onTimeChanged(hour, (minute + 5) % 60) }
+                        )
+                        Text(
+                            text = String.format("%02d", minute),
+                            color = Color.White,
+                            fontSize = 40.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        Text("MM", color = Color(0xFF8E8E93), fontSize = 11.sp)
+                        Icon(
+                            Icons.Default.ExpandMore,
+                            contentDescription = "Minute down",
+                            tint = AccentBlue,
                             modifier = Modifier
-                                .background(Color(0xFF2C2C2E), RoundedCornerShape(8.dp))
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text(String.format("%02d", minute), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .background(Color(0xFF3A3A3C), androidx.compose.foundation.shape.CircleShape)
-                                .clickable { onTimeChanged(hour, (minute - 5 + 60) % 60) },
-                            contentAlignment = Alignment.Center
-                        ) { Text("-", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                                .size(36.dp)
+                                .clickable { onTimeChanged(hour, (minute - 5 + 60) % 60) }
+                        )
                     }
                 }
             }
@@ -1926,7 +2368,8 @@ private fun CreateRoomStep3Atmosphere(viewModel: ProfileViewModel) {
         step = 3,
         onDismiss = { viewModel.closeOverlay() },
         onBack = { viewModel.goToStep(ProfileStep.ROOM_TIME_CAPSULE) },
-        onNext = { viewModel.goToStep(ProfileStep.ROOM_MEMORY_RULES) }
+        onNext = { viewModel.goToStep(ProfileStep.ROOM_MEMORY_RULES) },
+        themeColor = getRoomThemeColor(selectedTheme)
     ) {
         Text("Atmosphere", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(4.dp))
@@ -2034,92 +2477,124 @@ private fun CreateRoomStep3Atmosphere(viewModel: ProfileViewModel) {
 private fun CreateRoomStep4(viewModel: ProfileViewModel) {
     val rolling  by viewModel.rollingExpiration.collectAsState()
     val closure  by viewModel.scheduledClosureEnabled.collectAsState()
+    val closureTime  by viewModel.scheduledClosureTime.collectAsState()
+    val closureHour  by viewModel.scheduledClosureHour.collectAsState()
+    val closureMin   by viewModel.scheduledClosureMinute.collectAsState()
+    val themeName by viewModel.roomAtmosphereTheme.collectAsState()
 
     CreateRoomChrome(
         step = 4,
         onDismiss = { viewModel.closeOverlay() },
         onBack = { viewModel.goToStep(ProfileStep.ROOM_ATMOSPHERE) },
-        onNext = { viewModel.goToStep(ProfileStep.ROOM_INVITE) }
+        onNext = { viewModel.goToStep(ProfileStep.ROOM_INVITE) },
+        themeColor = getRoomThemeColor(themeName)
     ) {
-        Text("Memory Dump Rules", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text("Configure auto-archival for drops.", color = Color(0xFF8E8E93), fontSize = 14.sp)
-        Spacer(modifier = Modifier.height(20.dp))
+        androidx.compose.foundation.rememberScrollState().let { scroll ->
+            Column(modifier = Modifier.fillMaxWidth().verticalScroll(scroll)) {
 
-        // Rolling Expiration card
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(CardDarkBg, RoundedCornerShape(14.dp))
-                .padding(16.dp)
-        ) {
-            Text("Rolling Expiration (Snapchat Mode)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                "Automatically archive memories X days after they are posted.",
-                color = Color(0xFF8E8E93), fontSize = 12.sp, lineHeight = 16.sp
-            )
-            Spacer(modifier = Modifier.height(14.dp))
+                Text("Memory Dump Rules", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("Configure auto-archival for drops.", color = Color(0xFF8E8E93), fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(20.dp))
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFF2C2C2E), RoundedCornerShape(22.dp))
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                listOf("Never", "1 Day (24...)", "7 Days", "30 Days").forEach { option ->
-                    val sel = rolling == option
-                    Box(
+                // Rolling Expiration card
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(CardDarkBg, RoundedCornerShape(14.dp))
+                        .padding(16.dp)
+                ) {
+                    Text("Rolling Expiration (Snapchat Mode)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Automatically archive memories X days after they are posted.",
+                        color = Color(0xFF8E8E93), fontSize = 12.sp, lineHeight = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
                         modifier = Modifier
-                            .weight(1f)
-                            .background(
-                                if (sel) Color.White else Color.Transparent,
-                                RoundedCornerShape(18.dp)
-                            )
-                            .clickable { viewModel.updateRollingExpiration(option) }
-                            .padding(vertical = 8.dp),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .background(Color(0xFF2C2C2E), RoundedCornerShape(22.dp))
+                            .padding(4.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        Text(
-                            option,
-                            color = if (sel) Color.Black else Color(0xFF8E8E93),
-                            fontSize = 12.sp,
-                            fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
-                            textAlign = TextAlign.Center,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        listOf("Never", "1 Day (24...)", "7 Days", "30 Days").forEach { option ->
+                            val sel = rolling == option
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .background(
+                                        if (sel) Color.White else Color.Transparent,
+                                        RoundedCornerShape(18.dp)
+                                    )
+                                    .clickable { viewModel.updateRollingExpiration(option) }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    option,
+                                    color = if (sel) Color.Black else Color(0xFF8E8E93),
+                                    fontSize = 12.sp,
+                                    fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Scheduled Room Closure card  — expands to show date picker when toggled ON
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(CardDarkBg, RoundedCornerShape(14.dp))
+                        .padding(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Scheduled Room Closure", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Text(
+                                "Lock the entire room into a read-only archive after a specific date.",
+                                color = Color(0xFF8E8E93), fontSize = 12.sp, lineHeight = 16.sp
+                            )
+                        }
+                        Switch(
+                            checked = closure,
+                            onCheckedChange = { viewModel.updateScheduledClosure(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = AccentBlue
+                            )
+                        )
+                    }
+
+                    if (closure) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Close on:", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        InlineCalendar(
+                            selectedMillis = closureTime,
+                            hour = closureHour,
+                            minute = closureMin,
+                            onDateSelected = { viewModel.updateScheduledClosureTime(it) },
+                            onTimeChanged = { h, m ->
+                                viewModel.updateScheduledClosureHour(h)
+                                viewModel.updateScheduledClosureMinute(m)
+                            }
                         )
                     }
                 }
-            }
-        }
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Scheduled Room Closure card
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(CardDarkBg, RoundedCornerShape(14.dp))
-                .padding(horizontal = 16.dp, vertical = 18.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Scheduled Room Closure", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                Text(
-                    "Lock the entire room into a read-only archive state after a specific date.",
-                    color = Color(0xFF8E8E93), fontSize = 12.sp, lineHeight = 16.sp
-                )
+                Spacer(modifier = Modifier.height(8.dp))
             }
-            Switch(
-                checked = closure,
-                onCheckedChange = { viewModel.updateScheduledClosure(it) },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = AccentBlue
-                )
-            )
         }
     }
 }
@@ -2133,12 +2608,15 @@ private fun CreateRoomStep5(viewModel: ProfileViewModel) {
     var emailInput by remember { mutableStateOf("") }
     val context = androidx.compose.ui.platform.LocalContext.current
 
+    val themeName by viewModel.roomAtmosphereTheme.collectAsState()
+
     CreateRoomChrome(
         step = 5,
         onDismiss = { viewModel.closeOverlay() },
         onBack = { viewModel.goToStep(ProfileStep.ROOM_MEMORY_RULES) },
         onNext = { viewModel.finalizeRoom(context) },
-        nextLabel = "Create Room"
+        nextLabel = "Create Room",
+        themeColor = getRoomThemeColor(themeName)
     ) {
         Text("Invite Friends", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(4.dp))
@@ -2393,6 +2871,17 @@ fun RoomDetailScreen(
     val room by viewModel.selectedRoom.collectAsState()
     val roomMedia by viewModel.roomMedia.collectAsState() // Persisted room media
     val context = androidx.compose.ui.platform.LocalContext.current
+    val isRecording by viewModel.isRecordingAudio.collectAsState()
+
+    val recordAudioPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.startAudioRecording(context)
+        } else {
+            android.widget.Toast.makeText(context, "Microphone permission is required.", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
     
     // UI State
     var showQrCode by remember { mutableStateOf(false) }
@@ -2405,7 +2894,10 @@ fun RoomDetailScreen(
     // Combine room-specific media
     val currentRoomMedia = roomMedia[room?.id] ?: emptyList()
     
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        com.dmb.bestbefore.ui.components.AnimatedBackgroundView(
+            baseColor = getRoomThemeColor(room?.theme ?: "Default")
+        )
         if (room == null) {
             Text("Room not found", color = Color.White, modifier = Modifier.align(Alignment.Center))
         } else {
@@ -2414,6 +2906,8 @@ fun RoomDetailScreen(
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(horizontal = 24.dp)
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                    .padding(bottom = 32.dp)
             ) {
                 // Header: Back, Title, Grid/Menu Icon
                 Row(
@@ -2472,14 +2966,14 @@ fun RoomDetailScreen(
                                      text = { Text("Edit Room", color = Color.White) },
                                      onClick = {
                                          show3DotMenu = false
-                                         viewModel.goToStep(ProfileStep.EDIT_ROOM)
+                                         room?.let { viewModel.selectRoomForEditing(it) }
                                      }
                                  )
                                  DropdownMenuItem(
                                      text = { Text("Delete Room", color = Color.Red) },
                                      onClick = {
                                          show3DotMenu = false
-                                         room?.let { viewModel.deleteRoom(context, it) }
+                                         room?.let { viewModel.deleteRoom(context, it, fromInsideRoom = true) }
                                      }
                                  )
                              }
@@ -2504,42 +2998,76 @@ fun RoomDetailScreen(
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
+                val currentTime = System.currentTimeMillis()
+                val isLocked = room!!.unlockTime > currentTime
+                val isRoomClosed = room!!.scheduledClosureTime > 0L && currentTime >= room!!.scheduledClosureTime
+
                 // Grid of Actions
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     userScrollEnabled = false,
-                    modifier = Modifier.height(330.dp) // Increased height for 3 rows of buttons
+                    modifier = Modifier.height(330.dp)
                 ) {
                     // Item 1: Add Photo (Blue)
-                    item { MemoryActionCard(Icons.Default.Image, "Add Photo", Color(0xFF007AFF)) {
-                         multiplePhotoPickerLauncher.launch(
+                    item { MemoryActionCard(Icons.Default.Image, "Add Photo", if (isRoomClosed) Color.Gray else Color(0xFF007AFF)) {
+                         if (isRoomClosed) android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
+                         else multiplePhotoPickerLauncher.launch(
                              androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                          )
-                    }}
+                     }}
                     // Item 2: Write Note (Purple)
-                    item { MemoryActionCard(Icons.Default.Edit, "Write Note", Color(0xFFAF52DE)) { 
-                        showWriteNoteDialog = true
+                    item { MemoryActionCard(Icons.Default.Edit, "Write Note", if (isRoomClosed) Color.Gray else Color(0xFFAF52DE)) {
+                        if (isRoomClosed) android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
+                        else showWriteNoteDialog = true
                     }}
                     // Item 3: Add Video (Orange)
-                    item { MemoryActionCard(Icons.Default.Videocam, "Add Video", Color(0xFFFF9500)) { 
-                        multiplePhotoPickerLauncher.launch(
+                    item { MemoryActionCard(Icons.Default.Videocam, "Add Video", if (isRoomClosed) Color.Gray else Color(0xFFFF9500)) {
+                        if (isRoomClosed) android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
+                        else multiplePhotoPickerLauncher.launch(
                             androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
                         )
                     }}
                     // Item 4: Add Music (Red)
-                    item { MemoryActionCard(Icons.Default.MusicNote, "Add Music", Color(0xFFFF3B30)) { 
-                        filePickerLauncher.launch(arrayOf("audio/*"))
+                    item { MemoryActionCard(Icons.Default.MusicNote, "Add Music", if (isRoomClosed) Color.Gray else Color(0xFFFF3B30)) {
+                        if (isRoomClosed) android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
+                        else filePickerLauncher.launch(arrayOf("audio/*"))
                     }}
                     // Item 5: Record Audio (Pink/Red)
-                    item { MemoryActionCard(Icons.Default.Mic, "Record Audio", Color(0xFFFF2D55)) { 
-                        android.widget.Toast.makeText(context, "Audio recording feature coming soon!", android.widget.Toast.LENGTH_SHORT).show()
-                    }}
-                    // Item 6: View All (Green)
-                    item { MemoryActionCard(Icons.Default.FolderOpen, "View All", Color(0xFF34C759)) { 
-                        viewModel.openGalleryViewer(currentRoomMedia)
-                    }}
+                    item { 
+                        val label = if (isRecording) "Stop Recording" else "Record Audio"
+                        val icon = if (isRecording) Icons.Default.Stop else Icons.Default.Mic
+                        MemoryActionCard(icon, label, if (isRoomClosed) Color.Gray else Color(0xFFFF2D55)) {
+                            if (isRoomClosed) {
+                                android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                if (isRecording) {
+                                    viewModel.stopAudioRecordingAndUpload(context)
+                                } else {
+                                    val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                                    if (hasPermission) {
+                                        viewModel.startAudioRecording(context)
+                                    } else {
+                                        recordAudioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Item 6: View All (Green) — only shown when not TimeCapsule and no Scheduled Closure
+                    item {
+                        val isTimeCapsuleLocal = room!!.isCollaboration
+                        val isClosedLocal = room!!.scheduledClosureTime > 0L &&
+                                           System.currentTimeMillis() >= room!!.scheduledClosureTime
+                        if (!isTimeCapsuleLocal && !isClosedLocal) {
+                            MemoryActionCard(Icons.Default.FolderOpen, "View All", Color(0xFF34C759)) {
+                                viewModel.openGalleryViewer(currentRoomMedia)
+                            }
+                        } else {
+                            Box(modifier = Modifier.fillMaxWidth()) {} // empty placeholder to keep grid layout
+                        }
+                    }
                 }
                 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -2547,8 +3075,56 @@ fun RoomDetailScreen(
                 // Recent Drops Section
                 Text("Recent Drops", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 Spacer(modifier = Modifier.height(16.dp))
+
+                val isTimeCapsule = room!!.isCollaboration
+                val isClosed = room!!.scheduledClosureTime > 0L &&
+                              System.currentTimeMillis() >= room!!.scheduledClosureTime
+                val showViewAll = !isTimeCapsule && !isClosed
+
+                if (isLocked) {
+                    val sdf = java.text.SimpleDateFormat("MMM dd, yyyy 'at' hh:mm a", java.util.Locale.getDefault())
+                    val unlockDateString = sdf.format(java.util.Date(room!!.unlockTime))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF1C1C1E).copy(alpha = 0.8f), RoundedCornerShape(16.dp))
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Lock, contentDescription = "Locked", tint = Color.Gray, modifier = Modifier.size(48.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text("This Time Capsule is locked", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(unlockDateString, color = Color.Gray, fontSize = 14.sp)
+                            Spacer(modifier = Modifier.height(24.dp))
+                            CountdownTimer(targetTimeMillis = room!!.unlockTime)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                } else if (isClosed) {
+                    val sdf = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
+                    Text(
+                        "📦 Archived — Closed on ${sdf.format(java.util.Date(room!!.scheduledClosureTime))}",
+                        color = Color(0xFF8E8E93), fontSize = 13.sp
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                } else if (room!!.scheduledClosureTime > 0L) {
+                    val sdf = java.text.SimpleDateFormat("MMM dd 'at' h:mm a", java.util.Locale.getDefault())
+                    Box(modifier = Modifier.fillMaxWidth().background(Color(0xFF1C1C1E).copy(alpha = 0.6f), RoundedCornerShape(12.dp)).padding(16.dp), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Room closes on ${sdf.format(java.util.Date(room!!.scheduledClosureTime))}", color = Color.Gray, fontSize = 14.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            CountdownTimer(targetTimeMillis = room!!.scheduledClosureTime)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
                 
-                if (currentRoomMedia.isEmpty()) {
+                // Display Media Strategy
+                val displayMedia = if (isLocked || isClosed) currentRoomMedia.takeLast(2) else currentRoomMedia
+                
+                if (displayMedia.isEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -2563,32 +3139,94 @@ fun RoomDetailScreen(
                         }
                     }
                 } else {
-                    androidx.compose.foundation.lazy.LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        modifier = Modifier.fillMaxWidth()
+                    // Show photos in "Recent Drops" (Up to 2 per line)
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        items(currentRoomMedia) { uri ->
-                            Box(
-                                modifier = Modifier
-                                    .size(150.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(Color.DarkGray)
-                                    .clickable { 
-                                        viewModel.openGalleryViewer(currentRoomMedia, currentRoomMedia.indexOf(uri))
-                                    }
+                        for (i in displayMedia.indices step 2) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
-                                coil.compose.AsyncImage(
-                                    model = uri,
-                                    contentDescription = "Room Media",
-                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
+                                val item1 = displayMedia[i]
+                                val item2 = displayMedia.getOrNull(i + 1)
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .aspectRatio(1f)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(Color.DarkGray)
+                                        .clickable {
+                                            viewModel.openGalleryViewer(displayMedia, i)
+                                        }
+                                ) {
+                                    val isAudio1 = item1.toString().startsWith("data:audio")
+                                    if (isAudio1) {
+                                        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)), contentAlignment = Alignment.Center) {
+                                            Icon(Icons.Default.Mic, null, tint = Color.White, modifier = Modifier.size(48.dp))
+                                        }
+                                    } else {
+                                        val modelData1 = if (item1.toString().startsWith("data:image")) {
+                                            val base64String = item1.toString().substringAfter("base64,")
+                                            val decodedBytes = android.util.Base64.decode(base64String, android.util.Base64.DEFAULT)
+                                            java.nio.ByteBuffer.wrap(decodedBytes)
+                                        } else {
+                                            item1
+                                        }
+                                        
+                                        coil.compose.AsyncImage(
+                                            model = modelData1,
+                                            contentDescription = "Room Media",
+                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                }
+                                
+                                if (item2 != null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .aspectRatio(1f)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(Color.DarkGray)
+                                            .clickable {
+                                                viewModel.openGalleryViewer(displayMedia, i + 1)
+                                            }
+                                    ) {
+                                        val isAudio2 = item2.toString().startsWith("data:audio")
+                                        if (isAudio2) {
+                                            Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)), contentAlignment = Alignment.Center) {
+                                                Icon(Icons.Default.Mic, null, tint = Color.White, modifier = Modifier.size(48.dp))
+                                            }
+                                        } else {
+                                            val modelData2 = if (item2.toString().startsWith("data:image")) {
+                                                val base64String = item2.toString().substringAfter("base64,")
+                                                val decodedBytes = android.util.Base64.decode(base64String, android.util.Base64.DEFAULT)
+                                                java.nio.ByteBuffer.wrap(decodedBytes)
+                                            } else {
+                                                item2
+                                            }
+                                            
+                                            coil.compose.AsyncImage(
+                                                model = modelData2,
+                                                contentDescription = "Room Media",
+                                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
                             }
                         }
                     }
-                }
-            }
-        }
+                } // End of isLocked / isClosed / isEmpty check
+            } // End of Column (has room)
+        } // End of room == null else block
         
         // Image Viewer Overlay
         val isGalleryOpen by viewModel.isGalleryViewerOpen.collectAsState()
@@ -2786,22 +3424,127 @@ fun ProfileGalleryViewer(viewModel: ProfileViewModel) {
     // Sync pager changes back to VM if needed, or just let it slide
     
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        com.dmb.bestbefore.ui.components.AnimatedBackgroundView()
         androidx.compose.foundation.pager.HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
-             coil.compose.AsyncImage(
-                 model = media[page],
-                 contentDescription = null,
-                 contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                 modifier = Modifier.fillMaxSize()
-             )
+             var scale by remember { mutableStateOf(1f) }
+             var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+             val state = rememberTransformableState { zoomChange, panChange, rotationChange ->
+                 scale = (scale * zoomChange).coerceIn(1f, 5f)
+                 
+                 // Constrain offset when zooming out
+                 if (scale == 1f) {
+                     offset = androidx.compose.ui.geometry.Offset.Zero
+                 } else {
+                     offset += panChange
+                 }
+             }
+             
+             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                 val isAudio = media[page].toString().startsWith("data:audio")
+                 if (isAudio) {
+                     val context = androidx.compose.ui.platform.LocalContext.current
+                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                         Icon(Icons.Default.PlayCircle, null, tint = Color.White, modifier = Modifier.size(80.dp).clickable {
+                             viewModel.playBase64Audio(context, media[page].toString())
+                         })
+                         Spacer(modifier = Modifier.height(16.dp))
+                         Text("Tap to Play Audio", color = Color.White, fontSize = 16.sp)
+                     }
+                 } else {
+                     val displayModel = if (media[page].toString().startsWith("data:image")) {
+                         val base64Str = media[page].toString().substringAfter("base64,")
+                         val bytes = android.util.Base64.decode(base64Str, android.util.Base64.DEFAULT)
+                         java.nio.ByteBuffer.wrap(bytes)
+                     } else {
+                         media[page]
+                     }
+                     
+                     coil.compose.AsyncImage(
+                         model = displayModel,
+                         contentDescription = null,
+                         contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                         modifier = Modifier
+                             .fillMaxSize()
+                             .graphicsLayer(
+                                 scaleX = scale,
+                                 scaleY = scale,
+                                 translationX = offset.x,
+                                 translationY = offset.y
+                             )
+                             .transformable(state)
+                             .pointerInput(page) {
+                                 detectTapGestures(onDoubleTap = {
+                                     scale = if (scale > 1f) 1f else 2.5f
+                                     offset = androidx.compose.ui.geometry.Offset.Zero
+                                 })
+                             }
+                     )
+                 }
+             }
         }
         
         // Close Button
         IconButton(
             onClick = { viewModel.closeGalleryViewer() },
-            modifier = Modifier.align(Alignment.TopStart).padding(16.dp)
+            modifier = Modifier.align(Alignment.TopStart).padding(16.dp).windowInsetsPadding(WindowInsets.statusBars)
         ) {
-             Icon(Icons.Default.Close, null, tint = Color.White)
+             Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(32.dp))
         }
+    }
+}
+
+@Composable
+fun CountdownTimer(targetTimeMillis: Long) {
+    var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
+    
+    LaunchedEffect(targetTimeMillis) {
+        while (currentTime < targetTimeMillis) {
+            kotlinx.coroutines.delay(1000L)
+            currentTime = System.currentTimeMillis()
+        }
+    }
+    
+    val diff = targetTimeMillis - currentTime
+    if (diff <= 0) {
+        Text("Unlocked!", color = Color(0xFF34C759), fontSize = 28.sp, fontWeight = FontWeight.Bold)
+    } else {
+        val days = java.util.concurrent.TimeUnit.MILLISECONDS.toDays(diff)
+        val hours = java.util.concurrent.TimeUnit.MILLISECONDS.toHours(diff) % 24
+        val minutes = java.util.concurrent.TimeUnit.MILLISECONDS.toMinutes(diff) % 60
+        val seconds = java.util.concurrent.TimeUnit.MILLISECONDS.toSeconds(diff) % 60
+        
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (days > 0) {
+                TimeUnitBox(value = days, unit = "DAYS")
+                Text(":", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
+            }
+            TimeUnitBox(value = hours, unit = "HOURS")
+            Text(":", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
+            TimeUnitBox(value = minutes, unit = "MINS")
+            Text(":", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
+            TimeUnitBox(value = seconds, unit = "SECS")
+        }
+    }
+}
+
+@Composable
+private fun TimeUnitBox(value: Long, unit: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .background(Color(0xFF2C2C2E), RoundedCornerShape(12.dp))
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = String.format("%02d", value),
+                color = Color.White,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(unit, color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -2861,6 +3604,36 @@ private fun RoomDetailsBottomSheet(
                 }
                 
                 Text(unlockDateText, color = Color.Gray, fontSize = 14.sp)
+
+                if (!room.description.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Description", color = Color.Gray, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(room.description, color = Color.White, fontSize = 14.sp)
+                }
+
+                if (room.tags.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Tags", color = Color.Gray, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    @OptIn(ExperimentalLayoutApi::class)
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        room.tags.forEach { tag ->
+                            Box(
+                                modifier = Modifier
+                                    .background(getRoomThemeColor(room.theme).copy(alpha = 0.2f), RoundedCornerShape(16.dp))
+                                    .border(1.dp, getRoomThemeColor(room.theme), RoundedCornerShape(16.dp))
+                                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Text(text = "#$tag", color = getRoomThemeColor(room.theme), fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
             }
             
             Spacer(modifier = Modifier.height(40.dp))
