@@ -620,7 +620,43 @@ class ProfileViewModel : ViewModel() {
     
     // Media Persistence (Room ID -> List of Uris)
 
+    fun uploadNote(context: Context, noteContent: String) {
+        val currentRoomId = _selectedRoom.value?.id ?: return
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                val memoryData: Map<String, Any> = mapOf(
+                    "type" to "note",
+                    "title" to "Written Note",
+                    "content" to noteContent,
+                    "metadata" to emptyMap<String, Any>()
+                )
+                val result = roomRepository.addMemoryToRoom(currentRoomId, memoryData)
+                result.onSuccess {
+                    val currentMedia = _roomMedia.value[currentRoomId] ?: emptyList()
+                    val dataUri = Uri.parse("NOTE:Written Note:$noteContent")
+                    _roomMedia.value = _roomMedia.value + (currentRoomId to (currentMedia + dataUri))
+                    _totalMemories.value += 1
 
+                    val newActivity = RecentActivity(
+                        type = ActivityType.ADDED_NOTE,
+                        title = "Added a note to \"${_selectedRoom.value?.roomName}\"",
+                        date = System.currentTimeMillis()
+                    )
+                    _recentActivities.value = listOf(newActivity) + _recentActivities.value
+
+                    Toast.makeText(context, "Note saved!", Toast.LENGTH_SHORT).show()
+                }.onFailure {
+                    Toast.makeText(context, "Failed to save note", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Log.e("ProfileViewModel", "Failed to upload note", e)
+                Toast.makeText(context, "Error saving note", Toast.LENGTH_SHORT).show()
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
     fun toggleAllMedia(visible: Boolean) {
         _isAllMediaVisible.value = visible
     }
@@ -1174,9 +1210,15 @@ class ProfileViewModel : ViewModel() {
                 roomRepository?.deleteRoom(room.id)
                 _createdRooms.value = _createdRooms.value.filter { it.id != room.id }
                 _roomMedia.value = _roomMedia.value.filterKeys { it != room.id }
+                
+                // Refresh top stats after local deletion
+                _totalRooms.value = _createdRooms.value.size
+                _totalMemories.value = _createdRooms.value.sumOf { r -> _roomMedia.value[r.id]?.size ?: 0 }
+                
                 dismissUnlockDialog()
                 if (fromInsideRoom) {
-                    closeOverlay()
+                    _currentStep.value = ProfileStep.PROFILE_MENU
+                    _selectedRoom.value = null
                 }
                 Toast.makeText(context, "Room \"${room.roomName}\" deleted", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {

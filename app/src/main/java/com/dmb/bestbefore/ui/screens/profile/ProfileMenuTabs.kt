@@ -42,6 +42,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.Image
 
 
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.ExperimentalMaterial3Api
 
 // --- REFACTORED PROFILE MENU (iOS Tab Style) ---
 
@@ -139,17 +141,24 @@ fun ProfileMenuScreen(
 }
 
 // --- TAB 1: DASHBOARD ---
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardTab(
     viewModel: ProfileViewModel,
     createdRooms: List<TimeCapsuleRoom>
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isRefreshing by viewModel.isLoading.collectAsState()
 
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = { viewModel.initDatabase(context) },
+        modifier = Modifier.fillMaxSize()
     ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+        ) {
         // Stats Cards
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -301,7 +310,7 @@ fun DashboardTab(
                                      },
                                      onClick = {
                                          showMenu = false
-                                         viewModel.deleteRoom(context, room)
+                                         viewModel.deleteRoom(context, room, fromInsideRoom = false)
                                      }
                                  )
                              }

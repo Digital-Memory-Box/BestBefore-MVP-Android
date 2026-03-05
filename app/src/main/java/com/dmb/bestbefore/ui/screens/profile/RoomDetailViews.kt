@@ -248,12 +248,10 @@ fun RoomDetailScreen(
                             }
                         }
                     }
-                    // Item 6: View All (Green) â€” only shown when not TimeCapsule and no Scheduled Closure
+                    // Item 6: View All (Green) — shown when room is unlocked
                     item {
-                        val isTimeCapsuleLocal = room!!.isCollaboration
-                        val isClosedLocal = room!!.scheduledClosureTime > 0L &&
-                                           System.currentTimeMillis() >= room!!.scheduledClosureTime
-                        if (!isTimeCapsuleLocal && !isClosedLocal) {
+                        val isLockedLocal = System.currentTimeMillis() < room!!.unlockTime
+                        if (!isLockedLocal) {
                             MemoryActionCard(Icons.Default.FolderOpen, "View All", Color(0xFF34C759)) {
                                 viewModel.openGalleryViewer(currentRoomMedia)
                             }
@@ -613,8 +611,7 @@ fun RoomDetailScreen(
                     TextButton(
                         onClick = {
                             if (noteContent.isNotBlank()) {
-                                // TODO: Save note to room via ViewModel
-                                android.widget.Toast.makeText(context, "Note saved!", android.widget.Toast.LENGTH_SHORT).show()
+                                viewModel.uploadNote(context, noteContent)
                                 showWriteNoteDialog = false
                                 noteContent = ""
                             }
@@ -896,26 +893,35 @@ fun RoomDetailsBottomSheet(
                     .padding(20.dp)
             ) {
                 // Room name
-                Text(room.roomName, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(room.roomName, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // Status
+                val isUnlocked = System.currentTimeMillis() >= room.unlockTime
+                DetailRow("Status", if (isUnlocked) "Unlocked" else "Locked")
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 // Unlock Date/Time
                 val unlockDateText = if (room.unlockTime > 0) {
-                    java.text.SimpleDateFormat("d MMM yyyy 'at' HH:mm", java.util.Locale.US).format(
+                    java.text.SimpleDateFormat("d MMM yyyy, HH:mm", java.util.Locale.US).format(
                         java.util.Date(room.unlockTime)
                     )
                 } else {
                     "No unlock time set"
                 }
                 
-                Text(unlockDateText, color = Color.Gray, fontSize = 14.sp)
+                DetailRow("Unlock Time", unlockDateText)
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                DetailRow("Privacy", if (room.isPublic) "Public" else "Private")
 
                 if (!room.description.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Description", color = Color.Gray, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text("Description", color = Color.Gray, fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(room.description, color = Color.White, fontSize = 14.sp)
+                    Text(room.description, color = Color.White, fontSize = 16.sp)
                 }
 
                 if (room.tags.isNotEmpty()) {
