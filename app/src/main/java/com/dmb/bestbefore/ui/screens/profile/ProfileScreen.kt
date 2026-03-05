@@ -281,12 +281,28 @@ fun ProfileScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Hallway",
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                    val headerText = when (currentTab) {
+                        BottomTab.ROOMING -> "Rooming"
+                        BottomTab.EVERYONE -> "Hallway"
+                        BottomTab.ARTISTS -> "Artists"
+                    }
+                    androidx.compose.animation.AnimatedContent(
+                        targetState = headerText,
+                        transitionSpec = {
+                            (fadeIn(animationSpec = androidx.compose.animation.core.tween(300)) +
+                                slideInVertically(animationSpec = androidx.compose.animation.core.tween(300)) { -it / 2 })
+                                .togetherWith(fadeOut(animationSpec = androidx.compose.animation.core.tween(200)) +
+                                    slideOutVertically(animationSpec = androidx.compose.animation.core.tween(200)) { it / 2 })
+                        },
+                        label = "headerTextAnimation"
+                    ) { text ->
+                        Text(
+                            text = text,
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
                     Box(
                         modifier = Modifier.clickable {
                             notifRepo.markAllRead()

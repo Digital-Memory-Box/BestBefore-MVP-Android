@@ -44,6 +44,7 @@ import androidx.compose.foundation.Image
 
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import com.dmb.bestbefore.ui.theme.LocalBestBeforeColors
 
 // --- REFACTORED PROFILE MENU (iOS Tab Style) ---
 
@@ -62,7 +63,8 @@ fun ProfileMenuScreen(
     
     var selectedTab by remember { mutableIntStateOf(0) } // Default to Dashboard (0)
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    val colors = LocalBestBeforeColors.current
+    Box(modifier = Modifier.fillMaxSize().background(colors.background)) {
         Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
             // Header
             Box(
@@ -85,7 +87,7 @@ fun ProfileMenuScreen(
                 )
                 Text(
                     text = "Save",
-                    color = Color(0xFF007AFF),
+                    color = colors.primary,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.align(Alignment.CenterEnd).clickable { viewModel.closeOverlay() } // Mock Save
@@ -98,7 +100,7 @@ fun ProfileMenuScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
                     .height(32.dp)
-                    .background(Color(0xFF1C1C1E), RoundedCornerShape(8.dp))
+                    .background(colors.surface, RoundedCornerShape(8.dp))
                     .padding(2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -398,19 +400,30 @@ fun CustomizationTab(viewModel: ProfileViewModel) {
         Text(text = "Public Name", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
         val userName by viewModel.userName.collectAsState()
-        BasicTextField(
-            value = userName,
-            onValueChange = { /* Update Name - Add to VM if needed */ },
-            textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+        Row(
             modifier = Modifier
-                .fillMaxWidth() // Fill width
+                .fillMaxWidth()
                 .background(Color(0xFF1C1C1E), RoundedCornerShape(10.dp))
-                .padding(16.dp),
-            decorationBox = { innerTextField ->
-                if (userName.isEmpty()) Text("Enter name", color = Color.Gray)
-                innerTextField()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BasicTextField(
+                value = userName,
+                onValueChange = { viewModel.updateUserName(it) },
+                textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                modifier = Modifier.weight(1f),
+                decorationBox = { innerTextField ->
+                    if (userName.isEmpty()) Text("Enter name", color = Color.Gray)
+                    innerTextField()
+                }
+            )
+            androidx.compose.material3.TextButton(
+                onClick = { viewModel.savePublicName(context) },
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text("Save", color = accentColor, fontWeight = FontWeight.Bold)
             }
-        )
+        }
         
         Spacer(modifier = Modifier.height(24.dp))
         
@@ -428,7 +441,7 @@ fun CustomizationTab(viewModel: ProfileViewModel) {
                        .weight(1f)
                        .height(36.dp)
                        .background(
-                           if (isSelected) Color(0xFF007AFF) else Color(0xFF1C1C1E),
+                           if (isSelected) accentColor else Color(0xFF1C1C1E),
                            RoundedCornerShape(18.dp)
                        )
                        .clickable { viewModel.selectTheme(context, theme) },

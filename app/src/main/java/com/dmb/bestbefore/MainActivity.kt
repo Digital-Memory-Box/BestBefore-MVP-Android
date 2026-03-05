@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import com.dmb.bestbefore.ui.navigation.AppNavigation
 import com.dmb.bestbefore.ui.theme.BestBeforeTheme
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.remember
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,7 +58,12 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            BestBeforeTheme {
+            val prefsManager = remember { com.dmb.bestbefore.data.local.PreferencesManager(this@MainActivity) }
+            val savedThemeName = prefsManager.getTheme()
+            val savedAccent = prefsManager.getAccentColor()
+            val appTheme = com.dmb.bestbefore.ui.theme.AppThemes.getThemeByName(savedThemeName)
+
+            BestBeforeTheme(appTheme = appTheme, accentColor = savedAccent) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

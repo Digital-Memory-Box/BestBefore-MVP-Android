@@ -1281,6 +1281,36 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
+    // ========== PROFILE CUSTOMIZATION ====================
+    fun updateUserName(name: String) {
+        _userName.value = name
+    }
+
+    fun savePublicName(context: Context) {
+        viewModelScope.launch {
+            try {
+                _isUpdatingCredential.value = true
+                val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
+                val firebaseToken = authRepo.getFirebaseIdToken(false)
+                if (firebaseToken != null) {
+                    val updateResult = authRepo.updateMe(
+                        com.dmb.bestbefore.data.api.models.UpdateMeRequest(name = _userName.value)
+                    )
+                    if (updateResult.isSuccess) {
+                        Toast.makeText(context, "Public Name updated!", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Failed to string name", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ProfileViewModel", "Error saving public name", e)
+                Toast.makeText(context, "Error updating name", Toast.LENGTH_SHORT).show()
+            } finally {
+                _isUpdatingCredential.value = false
+            }
+        }
+    }
+
     // ========== THEME & CUSTOMIZATION FUNCTIONS ==========
     
     fun loadThemePreferences(context: Context) {
