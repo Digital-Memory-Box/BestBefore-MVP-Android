@@ -1,6 +1,10 @@
 ﻿package com.dmb.bestbefore.ui.screens.profile
 
 import androidx.compose.animation.*
+import com.dmb.bestbefore.data.models.HallwayCard
+import com.dmb.bestbefore.ui.screens.hallway.BottomTab
+import androidx.compose.ui.zIndex
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -1292,7 +1296,7 @@ fun CreateRoomStep3Atmosphere(viewModel: ProfileViewModel) {
     // Music options: icon emoji + label
     data class MusicOption(val icon: androidx.compose.ui.graphics.vector.ImageVector, val label: String)
     val musicOptions = listOf(
-        MusicOption(Icons.Default.VolumeOff,   "None"),
+        MusicOption(Icons.AutoMirrored.Filled.VolumeOff,   "None"),
         MusicOption(Icons.Default.MusicNote,   "Lofi Beats"),
         MusicOption(Icons.Default.Star,        "Nature Ambience"),
         MusicOption(Icons.Default.Favorite,    "Minimal Piano")

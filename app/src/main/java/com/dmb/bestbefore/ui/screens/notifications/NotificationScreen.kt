@@ -15,7 +15,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -58,14 +62,17 @@ fun NotificationScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black)
             )
         }
-    } { padding ->
-        var isRefreshing by androidx.compose.runtime.mutableStateOf(false)
+    ) { padding ->
+        var isRefreshing by mutableStateOf(false)
+        val scope = rememberCoroutineScope()
         androidx.compose.material3.pulltorefresh.PullToRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = {
-                isRefreshing = true
-                viewModel.refresh()
-                isRefreshing = false
+                scope.launch {
+                    isRefreshing = true
+                    kotlinx.coroutines.delay(500) // Dummy refresh
+                    isRefreshing = false
+                }
             },
             modifier = Modifier
                 .fillMaxSize()

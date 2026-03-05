@@ -1,6 +1,8 @@
 ﻿package com.dmb.bestbefore.ui.screens.profile
 
 import androidx.compose.animation.*
+import com.dmb.bestbefore.data.models.HallwayCard
+import com.dmb.bestbefore.ui.screens.hallway.BottomTab
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable

@@ -1,6 +1,10 @@
 ﻿package com.dmb.bestbefore.ui.screens.profile
 
 import androidx.compose.animation.*
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
