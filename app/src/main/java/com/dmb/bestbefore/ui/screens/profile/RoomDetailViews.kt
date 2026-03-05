@@ -488,41 +488,21 @@ fun RoomDetailScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                             Text("Generating invite link...", color = Color.Gray, fontSize = 12.sp)
                         } else {
-                            // Generate QR bitmap from invite link
                             val qrBitmap = remember(invLink) {
                                 invLink?.let { link ->
                                     try {
                                         val size = 512
+                                        val bitMatrix = com.google.zxing.qrcode.QRCodeWriter().encode(
+                                            link,
+                                            com.google.zxing.BarcodeFormat.QR_CODE,
+                                            size,
+                                            size
+                                        )
                                         val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
-                                        // Simple QR-like encoding using the link hash
-                                        val hash = link.hashCode()
-                                        val canvas = android.graphics.Canvas(bitmap)
-                                        canvas.drawColor(android.graphics.Color.WHITE)
-                                        val paint = android.graphics.Paint().apply { color = android.graphics.Color.BLACK }
-                                        val cellSize = size / 32
-                                        val bytes = link.toByteArray()
-                                        for (row in 0 until 32) {
-                                            for (col in 0 until 32) {
-                                                val byteIndex = (row * 32 + col) % bytes.size
-                                                val bitIndex = (row * 32 + col) % 8
-                                                if ((bytes[byteIndex].toInt() shr bitIndex) and 1 == 1) {
-                                                    canvas.drawRect(
-                                                        (col * cellSize).toFloat(),
-                                                        (row * cellSize).toFloat(),
-                                                        ((col + 1) * cellSize).toFloat(),
-                                                        ((row + 1) * cellSize).toFloat(),
-                                                        paint
-                                                    )
-                                                }
+                                        for (x in 0 until size) {
+                                            for (y in 0 until size) {
+                                                bitmap.setPixel(x, y, if (bitMatrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
                                             }
-                                        }
-                                        // Draw finder patterns (top-left, top-right, bottom-left)
-                                        val fp = 7 * cellSize
-                                        listOf(0 to 0, (size - fp) to 0, 0 to (size - fp)).forEach { (x, y) ->
-                                            canvas.drawRect(x.toFloat(), y.toFloat(), (x + fp).toFloat(), (y + fp).toFloat(), paint)
-                                            val white = android.graphics.Paint().apply { color = android.graphics.Color.WHITE }
-                                            canvas.drawRect((x + cellSize).toFloat(), (y + cellSize).toFloat(), (x + fp - cellSize).toFloat(), (y + fp - cellSize).toFloat(), white)
-                                            canvas.drawRect((x + 2 * cellSize).toFloat(), (y + 2 * cellSize).toFloat(), (x + fp - 2 * cellSize).toFloat(), (y + fp - 2 * cellSize).toFloat(), paint)
                                         }
                                         bitmap
                                     } catch (e: Exception) {
