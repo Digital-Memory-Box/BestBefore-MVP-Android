@@ -1116,7 +1116,7 @@ class ProfileViewModel : ViewModel() {
                 _roomMedia.value = _roomMedia.value.filterKeys { it != room.id }
                 dismissUnlockDialog()
                 if (fromInsideRoom) {
-                    showTimeCapsuleList()
+                    closeOverlay()
                 }
                 Toast.makeText(context, "Room \"${room.roomName}\" deleted", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {

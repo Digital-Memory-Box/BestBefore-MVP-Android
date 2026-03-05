@@ -58,12 +58,23 @@ fun NotificationScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black)
             )
         }
-    ) { padding ->
+    } { padding ->
+        var isRefreshing by androidx.compose.runtime.mutableStateOf(false)
+        androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                isRefreshing = true
+                viewModel.refresh()
+                isRefreshing = false
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
         if (notifications.isEmpty()) {
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                    .fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -76,7 +87,6 @@ fun NotificationScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding)
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp)
@@ -125,6 +135,7 @@ fun NotificationScreen(
                 }
             }
         }
+        } // end PullToRefreshBox
     }
 }
 

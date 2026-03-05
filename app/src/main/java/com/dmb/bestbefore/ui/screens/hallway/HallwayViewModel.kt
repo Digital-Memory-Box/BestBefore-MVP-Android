@@ -89,6 +89,27 @@ class HallwayViewModel : ViewModel() {
         _selectedCardIndex.value = 0
         filterCards(tab)
     }
+
+    // Pull-to-refresh support
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    fun refreshRooms() {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            try {
+                val result = roomRepository.getRooms()
+                result.onSuccess { apiRooms ->
+                    allApiRooms = apiRooms
+                    filterCards(_currentTab.value)
+                }
+            } catch (e: Exception) {
+                Log.e("HallwayViewModel", "Error refreshing rooms", e)
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
+    }
 }
 
 enum class BottomTab {

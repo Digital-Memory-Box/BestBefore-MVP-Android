@@ -256,7 +256,13 @@ fun ProfileScreen(
             val currentTab by hallwayViewModel.currentTab.collectAsState()
             val notifRepo = remember { com.dmb.bestbefore.data.repository.NotificationRepository(context) }
             val unreadCount by notifRepo.unreadCount.collectAsState()
+            val hallwayRefreshing by hallwayViewModel.isRefreshing.collectAsState()
 
+            androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+                isRefreshing = hallwayRefreshing,
+                onRefresh = { hallwayViewModel.refreshRooms() },
+                modifier = Modifier.fillMaxSize()
+            ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 // Header
                 Row(
@@ -509,6 +515,7 @@ fun ProfileScreen(
                     onChatClick = { /* Chat icon only */ }
                 )
             }
+            } // end PullToRefreshBox
         }
 
         // 2. ALL SECTION (Picture Gallery)
@@ -3012,6 +3019,11 @@ fun RoomDetailScreen(
         if (room == null) {
             Text("Room not found", color = Color.White, modifier = Modifier.align(Alignment.Center))
         } else {
+            androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = { viewModel.refreshRoomMemories() },
+                modifier = Modifier.fillMaxSize()
+            ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -3020,30 +3032,6 @@ fun RoomDetailScreen(
                     .verticalScroll(androidx.compose.foundation.rememberScrollState())
                     .padding(bottom = 32.dp)
             ) {
-                // Pull to refresh button
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { viewModel.refreshRoomMemories() }
-                        .padding(vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (isRefreshing) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                color = Color(0xFF007AFF),
-                                strokeWidth = 2.dp
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Refreshing...", color = Color.Gray, fontSize = 12.sp)
-                        } else {
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Color(0xFF007AFF), modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Pull to refresh", color = Color.Gray, fontSize = 12.sp)
-                        }
-                    }
-                }
                 // Header: Back, Title, Grid/Menu Icon
                 Row(
                     modifier = Modifier
@@ -3391,6 +3379,7 @@ fun RoomDetailScreen(
                     }
                 } // End of isLocked / isClosed / isEmpty check
             } // End of Column (has room)
+            } // End of PullToRefreshBox
         } // End of room == null else block
         
         // Image Viewer Overlay
