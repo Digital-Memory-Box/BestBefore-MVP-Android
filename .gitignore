@@ -15,3 +15,10 @@ build/
 local.properties
 .env
 service-account.json
+
+# Exclude backend and iOS from Android repo
+backend/
+BestBefore_Prototype_IOS/
+
+# Temp scripts
+split_profile.ps1
