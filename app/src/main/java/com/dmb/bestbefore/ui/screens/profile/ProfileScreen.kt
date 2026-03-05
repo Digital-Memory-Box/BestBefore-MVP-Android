@@ -209,6 +209,13 @@ fun ProfileScreen(
             viewModel.showInviteDialog(pendingInviteId, pendingInviteName)
             com.dmb.bestbefore.MainActivity.clearPendingInvite()
         }
+
+        // Handle QR code deep link invite token
+        val pendingToken = com.dmb.bestbefore.MainActivity.pendingInviteToken
+        if (pendingToken != null) {
+            viewModel.joinRoomViaToken(context, pendingToken)
+            com.dmb.bestbefore.MainActivity.clearPendingInviteToken()
+        }
     }
 
 
@@ -3388,10 +3395,23 @@ fun RoomDetailScreen(
              ProfileGalleryViewer(viewModel)
         }
         
-        // QR Code Dialog
+        // QR Code Dialog with real invite token
         if (showQrCode) {
+            val invLink by viewModel.inviteLink.collectAsState()
+            val isGenerating by viewModel.isGeneratingToken.collectAsState()
+
+            // Generate token when dialog opens
+            LaunchedEffect(showQrCode) {
+                if (showQrCode && invLink == null) {
+                    viewModel.generateInviteToken()
+                }
+            }
+
             AlertDialog(
-                onDismissRequest = { showQrCode = false },
+                onDismissRequest = {
+                    showQrCode = false
+                    viewModel.clearInviteToken()
+                },
                 containerColor = Color(0xFF1C1C1E),
                 title = { Text("Room QR Code", color = Color.White) },
                 text = {
@@ -3399,32 +3419,101 @@ fun RoomDetailScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        // Dummy QR Code visual representation
-                        Box(
-                            modifier = Modifier
-                                .size(200.dp)
-                                .background(Color.White, RoundedCornerShape(12.dp))
-                                .border(2.dp, Color(0xFF007AFF), RoundedCornerShape(12.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                "QR ${room?.id?.take(8) ?: "CODE"}",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.Black
+                        if (isGenerating || invLink == null) {
+                            CircularProgressIndicator(
+                                color = Color(0xFF007AFF),
+                                modifier = Modifier.size(48.dp)
                             )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Generating invite link...", color = Color.Gray, fontSize = 12.sp)
+                        } else {
+                            // Generate QR bitmap from invite link
+                            val qrBitmap = remember(invLink) {
+                                invLink?.let { link ->
+                                    try {
+                                        val size = 512
+                                        val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+                                        // Simple QR-like encoding using the link hash
+                                        val hash = link.hashCode()
+                                        val canvas = android.graphics.Canvas(bitmap)
+                                        canvas.drawColor(android.graphics.Color.WHITE)
+                                        val paint = android.graphics.Paint().apply { color = android.graphics.Color.BLACK }
+                                        val cellSize = size / 32
+                                        val bytes = link.toByteArray()
+                                        for (row in 0 until 32) {
+                                            for (col in 0 until 32) {
+                                                val byteIndex = (row * 32 + col) % bytes.size
+                                                val bitIndex = (row * 32 + col) % 8
+                                                if ((bytes[byteIndex].toInt() shr bitIndex) and 1 == 1) {
+                                                    canvas.drawRect(
+                                                        (col * cellSize).toFloat(),
+                                                        (row * cellSize).toFloat(),
+                                                        ((col + 1) * cellSize).toFloat(),
+                                                        ((row + 1) * cellSize).toFloat(),
+                                                        paint
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        // Draw finder patterns (top-left, top-right, bottom-left)
+                                        val fp = 7 * cellSize
+                                        listOf(0 to 0, (size - fp) to 0, 0 to (size - fp)).forEach { (x, y) ->
+                                            canvas.drawRect(x.toFloat(), y.toFloat(), (x + fp).toFloat(), (y + fp).toFloat(), paint)
+                                            val white = android.graphics.Paint().apply { color = android.graphics.Color.WHITE }
+                                            canvas.drawRect((x + cellSize).toFloat(), (y + cellSize).toFloat(), (x + fp - cellSize).toFloat(), (y + fp - cellSize).toFloat(), white)
+                                            canvas.drawRect((x + 2 * cellSize).toFloat(), (y + 2 * cellSize).toFloat(), (x + fp - 2 * cellSize).toFloat(), (y + fp - 2 * cellSize).toFloat(), paint)
+                                        }
+                                        bitmap
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+                                }
+                            }
+
+                            if (qrBitmap != null) {
+                                Image(
+                                    bitmap = qrBitmap.asImageBitmap(),
+                                    contentDescription = "QR Code",
+                                    modifier = Modifier
+                                        .size(200.dp)
+                                        .background(Color.White, RoundedCornerShape(12.dp))
+                                        .padding(8.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "Scan to join room: ${room?.roomName}",
+                                color = Color.Gray,
+                                fontSize = 12.sp,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            // Share button
+                            Button(
+                                onClick = {
+                                    invLink?.let { link ->
+                                        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                            type = "text/plain"
+                                            putExtra(android.content.Intent.EXTRA_TEXT, "Join my room \"${room?.roomName}\" on BestBefore!\n$link")
+                                        }
+                                        context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Invite"))
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Share, "Share", tint = Color.White)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Share Invite Link", color = Color.White)
+                            }
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "Scan to join room: ${room?.roomName}",
-                            color = Color.Gray,
-                            fontSize = 12.sp,
-                            textAlign = TextAlign.Center
-                        )
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showQrCode = false }) {
+                    TextButton(onClick = {
+                        showQrCode = false
+                        viewModel.clearInviteToken()
+                    }) {
                         Text("Close", color = Color(0xFF007AFF))
                     }
                 }

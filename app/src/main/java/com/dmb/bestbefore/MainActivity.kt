@@ -74,7 +74,18 @@ class MainActivity : ComponentActivity() {
     }
     
     private fun handleNotificationIntent(intent: android.content.Intent?) {
-        // Check for both the action AND/OR just the extras, as PendingIntent might not always set action perfectly depending on launch mode
+        // Handle deep link (bestbefore://invite/{token})
+        val data = intent?.data
+        if (data != null && data.scheme == "bestbefore" && data.host == "invite") {
+            val token = data.pathSegments?.firstOrNull()
+            if (token != null) {
+                pendingInviteToken = token
+                android.util.Log.d("MainActivity", "Deep link invite token: $token")
+                return
+            }
+        }
+
+        // Handle notification intent
         val roomId = intent?.getStringExtra("extra_room_id")
         val roomName = intent?.getStringExtra("extra_room_name")
         val isInvite = intent?.getBooleanExtra("isInvite", false) == true
@@ -84,7 +95,6 @@ class MainActivity : ComponentActivity() {
                 pendingInviteRoomId = roomId
                 pendingInviteRoomName = roomName
             } else {
-                // Store for navigation to pick up
                 pendingRoomId = roomId
                 pendingRoomName = roomName
             }
@@ -96,6 +106,7 @@ class MainActivity : ComponentActivity() {
         var pendingRoomName: String? = null
         var pendingInviteRoomId: String? = null
         var pendingInviteRoomName: String? = null
+        var pendingInviteToken: String? = null
         
         fun clearPending() {
             pendingRoomId = null
@@ -105,6 +116,10 @@ class MainActivity : ComponentActivity() {
         fun clearPendingInvite() {
             pendingInviteRoomId = null
             pendingInviteRoomName = null
+        }
+
+        fun clearPendingInviteToken() {
+            pendingInviteToken = null
         }
     }
 }

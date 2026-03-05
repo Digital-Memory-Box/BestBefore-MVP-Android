@@ -122,4 +122,18 @@ interface ApiService {
         @Part image: MultipartBody.Part,
         @Part("roomId") roomId: RequestBody
     ): UploadResponse
+
+    // ── Invite Tokens ─────────────────────────────────────────────────────────
+    @POST("rooms/{id}/invite-token")
+    suspend fun generateInviteToken(
+        @Header("Authorization") token: String,
+        @Path("id") roomId: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<Map<String, @JvmSuppressWildcards Any>>
+
+    @POST("invite/{token}/join")
+    suspend fun joinViaInviteToken(
+        @Header("Authorization") authToken: String,
+        @Path("token") inviteToken: String
+    ): Response<Map<String, @JvmSuppressWildcards Any>>
 }

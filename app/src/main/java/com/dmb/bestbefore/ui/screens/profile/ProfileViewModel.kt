@@ -739,6 +739,66 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
+    // ── Invite Token Management ─────────────────────────────────────────────
+    private val _inviteToken = MutableStateFlow<String?>(null)
+    val inviteToken: StateFlow<String?> = _inviteToken.asStateFlow()
+
+    private val _inviteLink = MutableStateFlow<String?>(null)
+    val inviteLink: StateFlow<String?> = _inviteLink.asStateFlow()
+
+    private val _isGeneratingToken = MutableStateFlow(false)
+    val isGeneratingToken: StateFlow<Boolean> = _isGeneratingToken.asStateFlow()
+
+    fun generateInviteToken() {
+        val roomId = _selectedRoom.value?.id ?: return
+        viewModelScope.launch {
+            _isGeneratingToken.value = true
+            try {
+                val result = roomRepository?.generateInviteToken(roomId)
+                result?.onSuccess { data ->
+                    _inviteToken.value = data["token"] as? String
+                    _inviteLink.value = data["inviteLink"] as? String
+                }
+                result?.onFailure { e ->
+                    Log.e("ProfileViewModel", "Failed to generate invite token", e)
+                }
+            } catch (e: Exception) {
+                Log.e("ProfileViewModel", "generateInviteToken exception", e)
+            } finally {
+                _isGeneratingToken.value = false
+            }
+        }
+    }
+
+    fun joinRoomViaToken(context: Context, token: String) {
+        viewModelScope.launch {
+            try {
+                val result = roomRepository?.joinViaInviteToken(token)
+                result?.onSuccess { data ->
+                    val roomName = data["roomName"] as? String ?: "Room"
+                    val alreadyMember = data["alreadyMember"] as? Boolean ?: false
+                    if (alreadyMember) {
+                        Toast.makeText(context, "You're already a member of \"$roomName\"", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Joined \"$roomName\" successfully!", Toast.LENGTH_SHORT).show()
+                    }
+                    initDatabase(context)
+                }
+                result?.onFailure { e ->
+                    Toast.makeText(context, "Failed to join: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Log.e("ProfileViewModel", "joinRoomViaToken exception", e)
+                Toast.makeText(context, "Failed to join room", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun clearInviteToken() {
+        _inviteToken.value = null
+        _inviteLink.value = null
+    }
+
     fun startAudioRecording(context: Context) {
         if (audioRecorderHelper == null) {
             audioRecorderHelper = com.dmb.bestbefore.utils.AudioRecorderHelper(context)

@@ -200,4 +200,31 @@ class RoomRepository {
             Result.failure(e)
         }
     }
+
+    // ── Invite Tokens ────────────────────────────────────────────────────────
+    suspend fun generateInviteToken(roomId: String, expiresInHours: Int? = null, maxUses: Int? = null): Result<Map<String, Any>> {
+        return try {
+            val body = mapOf<String, Any?>("expiresInHours" to expiresInHours, "maxUses" to maxUses)
+            val response = api.generateInviteToken(freshBearer(), roomId, body)
+            if (response.isSuccessful) Result.success(response.body()!!)
+            else Result.failure(Exception("Failed to generate invite token: ${response.code()}"))
+        } catch (e: Exception) {
+            Log.e("RoomRepository", "generateInviteToken exception", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun joinViaInviteToken(inviteToken: String): Result<Map<String, Any>> {
+        return try {
+            val response = api.joinViaInviteToken(freshBearer(), inviteToken)
+            if (response.isSuccessful) Result.success(response.body()!!)
+            else {
+                val errorCode = response.code()
+                Result.failure(Exception("Join failed: $errorCode"))
+            }
+        } catch (e: Exception) {
+            Log.e("RoomRepository", "joinViaInviteToken exception", e)
+            Result.failure(e)
+        }
+    }
 }
