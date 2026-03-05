@@ -356,6 +356,7 @@ fun DashboardTab(
         }
     }
 }
+}
 
 @Composable
 fun ActivityItem(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, date: String) {
