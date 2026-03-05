@@ -46,8 +46,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import com.dmb.bestbefore.data.models.TimeCapsuleRoom
 import com.dmb.bestbefore.ui.components.OrbMenu
 
-import com.dmb.bestbefore.data.models.HallwayCard
-import com.dmb.bestbefore.ui.screens.hallway.BottomTab
 import com.dmb.bestbefore.ui.screens.hallway.HallwayViewModel
 import android.net.Uri
 import androidx.compose.material.icons.Icons

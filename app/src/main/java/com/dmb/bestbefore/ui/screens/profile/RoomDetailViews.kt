@@ -2,6 +2,8 @@
 
 import androidx.compose.animation.*
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.gestures.detectTapGestures
