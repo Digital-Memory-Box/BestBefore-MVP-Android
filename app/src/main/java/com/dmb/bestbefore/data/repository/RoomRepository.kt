@@ -2,18 +2,13 @@ package com.dmb.bestbefore.data.repository
 
 import android.util.Log
 import com.dmb.bestbefore.data.api.RetrofitClient
-import com.dmb.bestbefore.data.api.models.CreateRoomRequest
-import com.dmb.bestbefore.data.api.models.RoomDto
+import com.dmb.bestbefore.data.api.models.*
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.tasks.await
 
 /**
- * RoomRepository — mirrors the iOS BackendAPIClient pattern.
- *
- * KEY CHANGE: Instead of storing a token at construction time (which expires),
- * every public function calls [freshBearer] to get a brand-new Firebase ID token
- * before making its request. This matches exactly how the working iOS project
- * handles auth (see Database.swift / BackendAPIClient.authorizedRequest).
+ * RoomRepository — handles Room data and dynamic analytics/recommendations.
+ * Restored with all original functionality plus new recommendation features.
  */
 class RoomRepository {
 
@@ -25,7 +20,6 @@ class RoomRepository {
             ?: throw IllegalStateException("User not signed in")
         val token = user.getIdToken(false).await().token
             ?: throw IllegalStateException("Could not obtain Firebase ID token")
-        Log.d("RoomRepository", "Token fetched (uid=${user.uid}, len=${token.length})")
         return "Bearer $token"
     }
 
@@ -34,16 +28,13 @@ class RoomRepository {
     suspend fun getRooms(): Result<List<RoomDto>> {
         return try {
             val response = api.getRooms(freshBearer())
-            Log.d("RoomRepository", "getRooms → ${response.code()}")
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {
                 val err = response.errorBody()?.string() ?: "HTTP ${response.code()}"
-                Log.e("RoomRepository", "getRooms failed: $err")
                 Result.failure(Exception("Failed to fetch rooms: $err"))
             }
         } catch (e: Exception) {
-            Log.e("RoomRepository", "getRooms exception", e)
             Result.failure(e)
         }
     }
@@ -61,10 +52,6 @@ class RoomRepository {
         }
     }
 
-    /**
-     * Create a room. isPublic → isPrivate=false on backend (matches iOS createRoom).
-     * Returns the new room's MongoDB _id on success.
-     */
     suspend fun createRoom(
         name: String,
         days: Int,
@@ -99,16 +86,13 @@ class RoomRepository {
                 backgroundMusic = music
             )
             val response = api.createRoom(freshBearer(), request)
-            Log.d("RoomRepository", "createRoom → ${response.code()}")
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!.id)
             } else {
                 val err = response.errorBody()?.string() ?: "HTTP ${response.code()}"
-                Log.e("RoomRepository", "createRoom failed: $err")
                 Result.failure(Exception("Failed to create room: $err"))
             }
         } catch (e: Exception) {
-            Log.e("RoomRepository", "createRoom exception", e)
             Result.failure(e)
         }
     }
@@ -158,35 +142,23 @@ class RoomRepository {
     suspend fun getMemoriesByRoom(roomId: String): Result<List<Map<String, Any>>> {
         return try {
             val response = api.getMemoriesByRoom(freshBearer(), roomId)
-            Log.d("RoomRepository", "getMemoriesByRoom($roomId) → ${response.code()}")
             if (response.isSuccessful && response.body() != null) {
                 @Suppress("UNCHECKED_CAST")
                 Result.success(response.body()!! as List<Map<String, Any>>)
             } else {
-                val err = response.errorBody()?.string() ?: "HTTP ${response.code()}"
-                Log.e("RoomRepository", "getMemoriesByRoom failed: $err")
-                Result.failure(Exception("Failed to fetch memories: $err"))
+                Result.failure(Exception("Failed to fetch memories: ${response.code()}"))
             }
         } catch (e: Exception) {
-            Log.e("RoomRepository", "getMemoriesByRoom exception", e)
             Result.failure(e)
         }
     }
 
-    /** Mirrors iOS Database.addMemory — posts type/title/content to /rooms/{id}/memories */
     suspend fun addMemoryToRoom(roomId: String, memoryData: Map<String, Any>): Result<Unit> {
         return try {
             val response = api.addMemoryToRoom(freshBearer(), roomId, memoryData)
-            Log.d("RoomRepository", "addMemoryToRoom($roomId) → ${response.code()}")
-            if (response.isSuccessful) {
-                Result.success(Unit)
-            } else {
-                val err = response.errorBody()?.string() ?: "HTTP ${response.code()}"
-                Log.e("RoomRepository", "addMemoryToRoom failed: $err")
-                Result.failure(Exception("Failed to add memory: $err"))
-            }
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("Failed to add memory: ${response.code()}"))
         } catch (e: Exception) {
-            Log.e("RoomRepository", "addMemoryToRoom exception", e)
             Result.failure(e)
         }
     }
@@ -201,6 +173,44 @@ class RoomRepository {
         }
     }
 
+    // ── Recommendations & Analytics ──────────────────────────────────────────
+
+    suspend fun trackInteraction(
+        roomId: String,
+        dwellTimeSeconds: Long,
+        type: String? = null,
+        lat: Double? = null,
+        lon: Double? = null
+    ): Result<Unit> {
+        return try {
+            val request = RoomInteractionRequest(
+                roomId = roomId,
+                dwellTimeSeconds = dwellTimeSeconds,
+                interactionType = type,
+                latitude = lat,
+                longitude = lon
+            )
+            val response = api.trackInteraction(freshBearer(), request)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("Analytics track failed: ${response.code()}"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getPersonalizedRecommendations(): Result<List<RoomRecommendationDto>> {
+        return try {
+            val response = api.getPersonalizedRecommendations(freshBearer())
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("Failed to fetch recommendations: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // ── Invite Tokens ────────────────────────────────────────────────────────
     suspend fun generateInviteToken(roomId: String, expiresInHours: Int? = null, maxUses: Int? = null): Result<Map<String, Any>> {
         return try {
@@ -209,7 +219,6 @@ class RoomRepository {
             if (response.isSuccessful) Result.success(response.body()!!)
             else Result.failure(Exception("Failed to generate invite token: ${response.code()}"))
         } catch (e: Exception) {
-            Log.e("RoomRepository", "generateInviteToken exception", e)
             Result.failure(e)
         }
     }
@@ -218,12 +227,8 @@ class RoomRepository {
         return try {
             val response = api.joinViaInviteToken(freshBearer(), inviteToken)
             if (response.isSuccessful) Result.success(response.body()!!)
-            else {
-                val errorCode = response.code()
-                Result.failure(Exception("Join failed: $errorCode"))
-            }
+            else Result.failure(Exception("Join failed: ${response.code()}"))
         } catch (e: Exception) {
-            Log.e("RoomRepository", "joinViaInviteToken exception", e)
             Result.failure(e)
         }
     }

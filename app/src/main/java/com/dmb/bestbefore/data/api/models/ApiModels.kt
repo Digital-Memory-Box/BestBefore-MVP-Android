@@ -70,6 +70,25 @@ data class RoomDto(
     val backgroundMusic: String? = null
 )
 
+// --- Dynamic Recommendation Models ---
+
+data class RoomInteractionRequest(
+    val roomId: String,
+    val dwellTimeSeconds: Long,
+    val interactionType: String? = null, // "LIKE", "COMMENT", "FUTURE_LOCK"
+    val latitude: Double? = null,
+    val longitude: Double? = null
+)
+
+data class RoomRecommendationDto(
+    val roomId: String,
+    val roomName: String,
+    val relevanceScore: Double,
+    val connectionType: String, // "DYNAMIC" (80+ score) or "AI_CONFIRMED" (OpenAI decision)
+    val tagsMatch: List<String>,
+    val description: String? = null
+)
+
 data class UploadResponse(
     val imageUrl: String
 )

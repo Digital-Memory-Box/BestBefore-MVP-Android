@@ -1,10 +1,10 @@
 package com.dmb.bestbefore.ui.screens.room
 
 import android.app.Application
-
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dmb.bestbefore.data.models.CalendarEvent
+import com.dmb.bestbefore.data.repository.RoomRepository
 import com.dmb.bestbefore.notifications.NotificationHelper
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -14,9 +14,8 @@ import java.util.concurrent.TimeUnit
 
 class RoomViewModel(application: Application) : AndroidViewModel(application) {
     
-    // Stub: No repositories
+    private val repository = RoomRepository()
     private val notificationHelper = NotificationHelper(application)
-    // CalendarHelper removed (logic moved to backend/ProfileViewModel)
 
     private val _roomId = MutableStateFlow("")
     val roomId: StateFlow<String> = _roomId.asStateFlow()
@@ -42,19 +41,41 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
     private val _countdownText = MutableStateFlow("00:00:00")
     val countdownText: StateFlow<String> = _countdownText.asStateFlow()
 
-
-
     private val _calendarEvents = MutableStateFlow<List<CalendarEvent>>(emptyList())
     val calendarEvents: StateFlow<List<CalendarEvent>> = _calendarEvents.asStateFlow()
 
     private var countdownJob: Job? = null
+    
+    // --- Dynamic Analytics State ---
+    private var entryTime: Long = 0
 
     fun initialize(roomId: String, roomName: String) {
         _roomId.value = roomId
         _roomName.value = roomName
+        
+        // Track entry for dwell time
+        entryTime = System.currentTimeMillis()
+    }
 
-        // Stub: Load mocked frames if needed
-        // Stub: Check if time capsule is active (mocked inactive)
+    /**
+     * Call this when user leaves the room (e.g., Back button, navigation).
+     * Calculates dwell time and reports to backend for Recommendation Engine.
+     */
+    fun onRoomExited(lat: Double? = null, lon: Double? = null) {
+        if (entryTime == 0L) return
+        
+        val durationSeconds = (System.currentTimeMillis() - entryTime) / 1000
+        val currentRoomId = _roomId.value
+        
+        viewModelScope.launch {
+            repository.trackInteraction(
+                roomId = currentRoomId,
+                dwellTimeSeconds = durationSeconds,
+                type = "VIEW",
+                lat = lat,
+                lon = lon
+            )
+        }
     }
 
     fun toggleProfileMenu() {
@@ -76,8 +97,6 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-
-
     fun startTimeCapsule(hours: Int, minutes: Int, seconds: Int) {
         val totalSeconds = hours * 3600L + minutes * 60L + seconds
         if (totalSeconds <= 0) return
@@ -85,11 +104,17 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
         val endTime = System.currentTimeMillis() + (totalSeconds * 1000)
         _lockEndTime.value = endTime
 
-        // Stub: Not saving to DB
-        notificationHelper.scheduleTimeCapsuleNotification(
-        )
-
+        notificationHelper.scheduleTimeCapsuleNotification()
         startCountdown(endTime)
+        
+        // Report Future Lock interaction to AI weights
+        viewModelScope.launch {
+            repository.trackInteraction(
+                roomId = _roomId.value,
+                dwellTimeSeconds = 0,
+                type = "FUTURE_LOCK"
+            )
+        }
     }
 
     private fun startCountdown(endTime: Long) {
@@ -102,56 +127,38 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
                 if (remaining <= 0) {
                     _lockEndTime.value = null
                     _countdownText.value = "00:00:00"
-                    // Stub: deactivated
                     break
                 }
 
                 val h = TimeUnit.MILLISECONDS.toHours(remaining)
                 val m = TimeUnit.MILLISECONDS.toMinutes(remaining) % 60
                 val s = TimeUnit.MILLISECONDS.toSeconds(remaining) % 60
-
                 _countdownText.value = String.format("%02d:%02d:%02d", h, m, s)
-
                 delay(1000)
             }
         }
     }
 
     fun deleteRoom() {
-        // Stub
+        viewModelScope.launch {
+            repository.deleteRoom(_roomId.value)
+        }
     }
 
     fun renameRoom(newName: String) {
-         _roomName.value = newName
-         // Stub: Not updating repo
+         viewModelScope.launch {
+             repository.updateRoom(_roomId.value, mapOf("name" to newName))
+             _roomName.value = newName
+         }
     }
 
     private fun loadCalendarEvents() {
-        // Feature moved to ProfileViewModel with Backend integration.
-        // Stubbing out for RoomScreen if still used.
         _calendarEvents.value = emptyList()
-    }
-
-    fun createRoomFromCalendarEvent(event: CalendarEvent) {
-        // Stub
-    }
-
-    fun keepRoom() {
-        viewModelScope.launch {
-            try {
-                // TODO: Use Repository when available
-                // val response = apiService.keepRoom("Bearer $token", _roomId.value)
-                // if (response.isSuccessful) { ... }
-                // For now, we need to know where the API service is accessed.
-                // Since this file has stubs, I will look for the Repository to add the method there first.
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
     }
 
     override fun onCleared() {
         super.onCleared()
+        onRoomExited() // Final tracking on VM destruction
         countdownJob?.cancel()
     }
 }

@@ -114,6 +114,18 @@ interface ApiService {
         @Header("Authorization") token: String
     ): Response<Map<String, @JvmSuppressWildcards Any>>
 
+    // ── Dynamic Recommendation & Analytics ───────────────────────────────────
+    @POST("analytics/interaction")
+    suspend fun trackInteraction(
+        @Header("Authorization") token: String,
+        @Body request: RoomInteractionRequest
+    ): Response<Unit>
+
+    @GET("recommendations/personalized")
+    suspend fun getPersonalizedRecommendations(
+        @Header("Authorization") token: String
+    ): Response<List<RoomRecommendationDto>>
+
     // ── Upload ────────────────────────────────────────────────────────────────
     @Multipart
     @POST("upload/room-photo")
