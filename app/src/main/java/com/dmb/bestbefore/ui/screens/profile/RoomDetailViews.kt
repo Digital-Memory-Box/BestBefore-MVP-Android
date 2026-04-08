@@ -1,4 +1,4 @@
-﻿package com.dmb.bestbefore.ui.screens.profile
+package com.dmb.bestbefore.ui.screens.profile
 
 import androidx.compose.animation.*
 import androidx.activity.result.contract.ActivityResultContracts
@@ -47,6 +47,52 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.Image
 
 
+import androidx.compose.foundation.Image
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+// Helper to prevent UI thread blocking while decoding large Base64 images from backend
+@Composable
+fun AsyncBase64Image(
+    itemData: Any,
+    contentScale: androidx.compose.ui.layout.ContentScale,
+    modifier: Modifier = Modifier
+) {
+    val modelStr = itemData.toString()
+    if (modelStr.startsWith("data:image")) {
+        var bytes by remember { mutableStateOf<ByteArray?>(null) }
+        LaunchedEffect(modelStr) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val cleanStr = modelStr.substringAfter("base64,")
+                    bytes = android.util.Base64.decode(cleanStr, android.util.Base64.DEFAULT)
+                } catch (e: Exception) {
+                    bytes = ByteArray(0)
+                }
+            }
+        }
+        if (bytes != null && bytes!!.isNotEmpty()) {
+            coil.compose.AsyncImage(
+                model = java.nio.ByteBuffer.wrap(bytes!!),
+                contentDescription = null,
+                contentScale = contentScale,
+                modifier = modifier
+            )
+        } else if (bytes == null) {
+            Box(modifier = modifier, contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color(0xFF007AFF), modifier = Modifier.size(24.dp))
+            }
+        }
+    } else {
+        coil.compose.AsyncImage(
+            model = itemData,
+            contentDescription = null,
+            contentScale = contentScale,
+            modifier = modifier
+        )
+    }
+}
+
 // --- ROOM DETAIL SCREEN ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,8 +123,24 @@ fun RoomDetailScreen(
     var showRoomDetailsSheet by remember { mutableStateOf(false) }
     var showWriteNoteDialog by remember { mutableStateOf(false) }
     var noteContent by remember { mutableStateOf("") }
+    var showAllMediaGrid by remember { mutableStateOf(false) }
     
-    // Combine room-specific media
+    var showMusicSelector by remember { mutableStateOf(false) }
+    var authToken by remember { mutableStateOf<String?>(null) }
+    val musicViewModel: com.dmb.bestbefore.ui.components.MusicViewModel = viewModel()
+
+    LaunchedEffect(Unit) {
+        authToken = viewModel.getAuthToken(context)
+    }
+
+    if (showMusicSelector && authToken != null) {
+        com.dmb.bestbefore.ui.components.MusicSelectorBottomSheet(
+            viewModel = musicViewModel,
+            token = authToken!!,
+            onDismissRequest = { showMusicSelector = false }
+        )
+    }
+    
     // Combine room-specific media
     val currentRoomMedia = roomMedia[room?.id] ?: emptyList()
     
@@ -121,6 +183,17 @@ fun RoomDetailScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                          // Grid Icon Removed
                          
+                         // Music Note Button
+                         Icon(
+                             Icons.Default.MusicNote,
+                             "Music",
+                             tint = Color.White,
+                             modifier = Modifier
+                                 .size(24.dp)
+                                 .clickable { showMusicSelector = true }
+                         )
+                         Spacer(modifier = Modifier.width(16.dp))
+
                          // QR Code Button
                          Icon(
                              Icons.Default.QrCode2,
@@ -253,7 +326,7 @@ fun RoomDetailScreen(
                         val isLockedLocal = System.currentTimeMillis() < room!!.unlockTime
                         if (!isLockedLocal) {
                             MemoryActionCard(Icons.Default.FolderOpen, "View All", Color(0xFF34C759)) {
-                                viewModel.openGalleryViewer(currentRoomMedia)
+                                showAllMediaGrid = true
                             }
                         } else {
                             Box(modifier = Modifier.fillMaxWidth()) {} // empty placeholder to keep grid layout
@@ -374,17 +447,8 @@ fun RoomDetailScreen(
                                             Icon(Icons.Default.Mic, null, tint = Color.White, modifier = Modifier.size(48.dp))
                                         }
                                     } else {
-                                        val modelData1 = if (item1.toString().startsWith("data:image")) {
-                                            val base64String = item1.toString().substringAfter("base64,")
-                                            val decodedBytes = android.util.Base64.decode(base64String, android.util.Base64.DEFAULT)
-                                            java.nio.ByteBuffer.wrap(decodedBytes)
-                                        } else {
-                                            item1
-                                        }
-                                        
-                                        coil.compose.AsyncImage(
-                                            model = modelData1,
-                                            contentDescription = "Room Media",
+                                        AsyncBase64Image(
+                                            itemData = item1,
                                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                                             modifier = Modifier.fillMaxSize()
                                         )
@@ -423,17 +487,8 @@ fun RoomDetailScreen(
                                                 Icon(Icons.Default.Mic, null, tint = Color.White, modifier = Modifier.size(48.dp))
                                             }
                                         } else {
-                                            val modelData2 = if (item2.toString().startsWith("data:image")) {
-                                                val base64String = item2.toString().substringAfter("base64,")
-                                                val decodedBytes = android.util.Base64.decode(base64String, android.util.Base64.DEFAULT)
-                                                java.nio.ByteBuffer.wrap(decodedBytes)
-                                            } else {
-                                                item2
-                                            }
-                                            
-                                            coil.compose.AsyncImage(
-                                                model = modelData2,
-                                                contentDescription = "Room Media",
+                                            AsyncBase64Image(
+                                                itemData = item2,
                                                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                                                 modifier = Modifier.fillMaxSize()
                                             )
@@ -449,6 +504,77 @@ fun RoomDetailScreen(
             } // End of Column (has room)
             } // End of PullToRefreshBox
         } // End of room == null else block
+
+        com.dmb.bestbefore.ui.components.MusicPlayerBottomBar(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(bottom = 16.dp)
+        )
+        
+        // All Media Grid View Overlay
+        AnimatedVisibility(
+            visible = showAllMediaGrid,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut()
+        ) {
+            androidx.activity.compose.BackHandler(enabled = showAllMediaGrid) {
+                showAllMediaGrid = false
+            }
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(horizontal = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { showAllMediaGrid = false }) {
+                        Icon(Icons.Default.Close, "Close", tint = Color.White)
+                    }
+                    Text("All Media", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.size(48.dp)) // balance layout
+                }
+                
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(currentRoomMedia.size) { index ->
+                        val item = currentRoomMedia[index]
+                        Box(
+                            modifier = Modifier
+                                .aspectRatio(1f)
+                                .background(Color.DarkGray)
+                                .clickable { viewModel.openGalleryViewer(currentRoomMedia, index) }
+                        ) {
+                            val itemStr = item.toString()
+                            if (itemStr.startsWith("NOTE:")) {
+                                Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)).padding(4.dp), contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.StickyNote2, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(32.dp))
+                                }
+                            } else if (itemStr.startsWith("data:audio")) {
+                                Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)), contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Mic, null, tint = Color.White, modifier = Modifier.size(32.dp))
+                                }
+                            } else {
+                                AsyncBase64Image(
+                                    itemData = item,
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
         
         // Image Viewer Overlay
         val isGalleryOpen by viewModel.isGalleryViewerOpen.collectAsState()
@@ -456,104 +582,82 @@ fun RoomDetailScreen(
              ProfileGalleryViewer(viewModel)
         }
         
-        // QR Code Dialog with real invite token
+        // QR Code Dialog with forwarding join link
         if (showQrCode) {
-            val invLink by viewModel.inviteLink.collectAsState()
-            val isGenerating by viewModel.isGeneratingToken.collectAsState()
-
-            // Generate token when dialog opens
-            LaunchedEffect(showQrCode) {
-                if (showQrCode && invLink == null) {
-                    viewModel.generateInviteToken()
-                }
-            }
+            val invLink = "https://bestbefore.up.railway.app/join/${room?.id}"
 
             AlertDialog(
                 onDismissRequest = {
                     showQrCode = false
-                    viewModel.clearInviteToken()
                 },
                 containerColor = Color(0xFF1C1C1E),
-                title = { Text("Room QR Code", color = Color.White) },
+                title = { Text("Room Share Link", color = Color.White) },
                 text = {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        if (isGenerating || invLink == null) {
-                            CircularProgressIndicator(
-                                color = Color(0xFF007AFF),
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("Generating invite link...", color = Color.Gray, fontSize = 12.sp)
-                        } else {
-                            val qrBitmap = remember(invLink) {
-                                invLink?.let { link ->
-                                    try {
-                                        val size = 512
-                                        val bitMatrix = com.google.zxing.qrcode.QRCodeWriter().encode(
-                                            link,
-                                            com.google.zxing.BarcodeFormat.QR_CODE,
-                                            size,
-                                            size
-                                        )
-                                        val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
-                                        for (x in 0 until size) {
-                                            for (y in 0 until size) {
-                                                bitmap.setPixel(x, y, if (bitMatrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
-                                            }
-                                        }
-                                        bitmap
-                                    } catch (e: Exception) {
-                                        null
+                        val qrBitmap = remember(invLink) {
+                            try {
+                                val size = 512
+                                val bitMatrix = com.google.zxing.qrcode.QRCodeWriter().encode(
+                                    invLink,
+                                    com.google.zxing.BarcodeFormat.QR_CODE,
+                                    size,
+                                    size
+                                )
+                                val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+                                for (x in 0 until size) {
+                                    for (y in 0 until size) {
+                                        bitmap.setPixel(x, y, if (bitMatrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
                                     }
                                 }
+                                bitmap
+                            } catch (e: Exception) {
+                                null
                             }
+                        }
 
-                            if (qrBitmap != null) {
-                                Image(
-                                    bitmap = qrBitmap.asImageBitmap(),
-                                    contentDescription = "QR Code",
-                                    modifier = Modifier
-                                        .size(200.dp)
-                                        .background(Color.White, RoundedCornerShape(12.dp))
-                                        .padding(8.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                "Scan to join room: ${room?.roomName}",
-                                color = Color.Gray,
-                                fontSize = 12.sp,
-                                textAlign = TextAlign.Center
+                        if (qrBitmap != null) {
+                            Image(
+                                bitmap = qrBitmap.asImageBitmap(),
+                                contentDescription = "QR Code",
+                                modifier = Modifier
+                                    .size(200.dp)
+                                    .background(Color.White, RoundedCornerShape(12.dp))
+                                    .padding(8.dp)
                             )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            // Share button
-                            Button(
-                                onClick = {
-                                    invLink?.let { link ->
-                                        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                            type = "text/plain"
-                                            putExtra(android.content.Intent.EXTRA_TEXT, "Join my room \"${room?.roomName}\" on BestBefore!\n$link")
-                                        }
-                                        context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Invite"))
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(Icons.Default.Share, "Share", tint = Color.White)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Share Invite Link", color = Color.White)
-                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Scan to join room: ${room?.roomName}",
+                            color = Color.Gray,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        // Share button
+                        Button(
+                            onClick = {
+                                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(android.content.Intent.EXTRA_TEXT, "Join my room \"${room?.roomName}\" on BestBefore!\n$invLink")
+                                }
+                                context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Invite"))
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Share, "Share", tint = Color.White)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Share Link", color = Color.White)
                         }
                     }
                 },
                 confirmButton = {
                     TextButton(onClick = {
                         showQrCode = false
-                        viewModel.clearInviteToken()
                     }) {
                         Text("Close", color = Color(0xFF007AFF))
                     }
@@ -734,17 +838,8 @@ fun ProfileGalleryViewer(viewModel: ProfileViewModel) {
                          Text("Tap to Play Audio", color = Color.White, fontSize = 16.sp)
                      }
                  } else {
-                     val displayModel = if (media[page].toString().startsWith("data:image")) {
-                         val base64Str = media[page].toString().substringAfter("base64,")
-                         val bytes = android.util.Base64.decode(base64Str, android.util.Base64.DEFAULT)
-                         java.nio.ByteBuffer.wrap(bytes)
-                     } else {
-                         media[page]
-                     }
-                     
-                     coil.compose.AsyncImage(
-                         model = displayModel,
-                         contentDescription = null,
+                     AsyncBase64Image(
+                         itemData = media[page],
                          contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                          modifier = Modifier
                              .fillMaxSize()
@@ -789,22 +884,22 @@ fun CountdownTimer(targetTimeMillis: Long) {
     
     val diff = targetTimeMillis - currentTime
     if (diff <= 0) {
-        Text("Unlocked!", color = Color(0xFF34C759), fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Text("Unlocked!", color = Color(0xFF34C759), fontSize = 24.sp, fontWeight = FontWeight.Bold)
     } else {
         val days = java.util.concurrent.TimeUnit.MILLISECONDS.toDays(diff)
         val hours = java.util.concurrent.TimeUnit.MILLISECONDS.toHours(diff) % 24
         val minutes = java.util.concurrent.TimeUnit.MILLISECONDS.toMinutes(diff) % 60
         val seconds = java.util.concurrent.TimeUnit.MILLISECONDS.toSeconds(diff) % 60
         
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (days > 0) {
                 TimeUnitBox(value = days, unit = "DAYS")
-                Text(":", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
+                Text(":", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 14.dp))
             }
-            TimeUnitBox(value = hours, unit = "HOURS")
-            Text(":", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
+            TimeUnitBox(value = hours, unit = "HRS")
+            Text(":", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 14.dp))
             TimeUnitBox(value = minutes, unit = "MINS")
-            Text(":", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
+            Text(":", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 14.dp))
             TimeUnitBox(value = seconds, unit = "SECS")
         }
     }
@@ -815,19 +910,19 @@ fun TimeUnitBox(value: Long, unit: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             modifier = Modifier
-                .background(Color(0xFF2C2C2E), RoundedCornerShape(12.dp))
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .background(Color(0xFF2C2C2E), RoundedCornerShape(10.dp))
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = String.format("%02d", value),
                 color = Color.White,
-                fontSize = 28.sp,
+                fontSize = 22.sp,
                 fontWeight = FontWeight.Bold
             )
         }
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(unit, color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(unit, color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 

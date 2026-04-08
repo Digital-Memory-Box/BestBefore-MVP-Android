@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 object RetrofitClient {
     // --- SERVER URL CONFIGURATION ---
     // Production Backend on Railway
-    private const val BASE_URL = "https://backend-production-efbe.up.railway.app/" 
+    internal const val BASE_URL = "https://bestbefore.up.railway.app/" 
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY // Increase logging to see payloads

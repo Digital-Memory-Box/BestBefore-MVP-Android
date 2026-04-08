@@ -57,13 +57,13 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        setContent {
-            val prefsManager = remember { com.dmb.bestbefore.data.local.PreferencesManager(this@MainActivity) }
-            val savedThemeName = prefsManager.getTheme()
-            val savedAccent = prefsManager.getAccentColor()
-            val appTheme = com.dmb.bestbefore.ui.theme.AppThemes.getThemeByName(savedThemeName)
+        com.dmb.bestbefore.ui.theme.ThemeState.init(this)
 
-            BestBeforeTheme(appTheme = appTheme, accentColor = savedAccent) {
+        setContent {
+            BestBeforeTheme(
+                appTheme = com.dmb.bestbefore.ui.theme.ThemeState.currentTheme,
+                accentColor = com.dmb.bestbefore.ui.theme.ThemeState.currentAccent
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -80,23 +80,66 @@ class MainActivity : ComponentActivity() {
     }
     
     private fun handleNotificationIntent(intent: android.content.Intent?) {
-        // Handle deep link (bestbefore://invite/{token})
         val data = intent?.data
-        if (data != null && data.scheme == "bestbefore" && data.host == "invite") {
-            val token = data.pathSegments?.firstOrNull()
-            if (token != null) {
-                pendingInviteToken = token
-                android.util.Log.d("MainActivity", "Deep link invite token: $token")
-                return
+
+        if (data != null) {
+            val scheme = data.scheme
+            val host = data.host
+            val path = data.path ?: ""
+
+            when {
+                // ── HTTPS App Links (cross-platform, opened from browser or iOS share) ─────
+                scheme == "https" && host == "bestbefore.up.railway.app" -> {
+                    when {
+                        // https://bestbefore.up.railway.app/join/{roomId}
+                        path.startsWith("/join/") -> {
+                            val roomId = path.removePrefix("/join/").trim('/')
+                            if (roomId.isNotEmpty()) {
+                                pendingQRRoomId = roomId
+                                android.util.Log.d("MainActivity", "HTTPS App Link: join room $roomId")
+                            }
+                        }
+                        // https://bestbefore.up.railway.app/invite-join/{token}
+                        path.startsWith("/invite-join/") -> {
+                            val token = path.removePrefix("/invite-join/").trim('/')
+                            if (token.isNotEmpty()) {
+                                pendingInviteToken = token
+                                android.util.Log.d("MainActivity", "HTTPS App Link: invite token $token")
+                            }
+                        }
+                    }
+                }
+
+                // ── Custom scheme: invite token (bestbefore://invite/{token}) ──────────────
+                scheme == "bestbefore" && host == "invite" -> {
+                    val token = data.pathSegments?.firstOrNull()
+                    if (!token.isNullOrEmpty()) {
+                        pendingInviteToken = token
+                        android.util.Log.d("MainActivity", "Custom scheme invite token: $token")
+                    }
+                }
+
+                // ── Custom scheme: direct room open (bestbefore://room/{roomId}) ──────────
+                scheme == "bestbefore" && host == "room" -> {
+                    val roomId = data.pathSegments?.firstOrNull()
+                    if (!roomId.isNullOrEmpty()) {
+                        pendingQRRoomId = roomId
+                        android.util.Log.d("MainActivity", "Custom scheme room: $roomId")
+                    }
+                }
             }
+            return
         }
 
-        // Handle notification intent
+        // Handle notification intent extras (FCM push-tap)
         val roomId = intent?.getStringExtra("extra_room_id")
         val roomName = intent?.getStringExtra("extra_room_name")
         val isInvite = intent?.getBooleanExtra("isInvite", false) == true
+        val navigateToNotifs = intent?.getBooleanExtra("navigate_to_notifications", false) == true
 
-        if (roomId != null && roomName != null) {
+        if (navigateToNotifs) {
+            pendingNavigateToNotifications = true
+        } else if (roomId != null && roomName != null) {
             if (isInvite) {
                 pendingInviteRoomId = roomId
                 pendingInviteRoomName = roomName
@@ -108,13 +151,17 @@ class MainActivity : ComponentActivity() {
     }
     
     companion object {
+        var pendingNavigateToNotifications: Boolean = false
         var pendingRoomId: String? = null
         var pendingRoomName: String? = null
         var pendingInviteRoomId: String? = null
         var pendingInviteRoomName: String? = null
         var pendingInviteToken: String? = null
+        /** Room ID received via QR scan or /join/{id} HTTPS App Link */
+        var pendingQRRoomId: String? = null
         
         fun clearPending() {
+            pendingNavigateToNotifications = false
             pendingRoomId = null
             pendingRoomName = null
         }
@@ -127,5 +174,9 @@ class MainActivity : ComponentActivity() {
         fun clearPendingInviteToken() {
             pendingInviteToken = null
         }
+
+        fun clearPendingQRRoomId() {
+            pendingQRRoomId = null
+        }
     }
-}
+}

@@ -23,7 +23,9 @@ data class BestBeforeColorPalette(
     val secondary: Color,      // secondary surface / card background
     val textPrimary: Color,
     val textSecondary: Color,
-    val isGlass: Boolean
+    val isGlass: Boolean,
+    val orbColor1: Color,
+    val orbColor2: Color
 )
 
 val LocalBestBeforeColors = compositionLocalOf {
@@ -35,7 +37,9 @@ val LocalBestBeforeColors = compositionLocalOf {
         secondary = Color(0xFF2C2C2E),
         textPrimary = Color.White,
         textSecondary = Color.Gray,
-        isGlass = false
+        isGlass = false,
+        orbColor1 = Color(0xFF0D59F2),
+        orbColor2 = Color(0xFF00D972)
     )
 }
 
@@ -53,7 +57,9 @@ fun BestBeforeTheme(
         secondary = appTheme.secondaryColor,
         textPrimary = appTheme.textPrimaryColor,
         textSecondary = appTheme.textSecondaryColor,
-        isGlass = appTheme.isGlass
+        isGlass = appTheme.isGlass,
+        orbColor1 = appTheme.orbColor1,
+        orbColor2 = appTheme.orbColor2
     )
 
     // Also push into MaterialTheme so Material3 components pick up colors automatically

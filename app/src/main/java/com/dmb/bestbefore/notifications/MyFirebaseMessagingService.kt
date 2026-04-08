@@ -34,56 +34,65 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
         val title = remoteMessage.notification?.title ?: "BestBefore"
         val body = remoteMessage.notification?.body ?: "You have a new notification"
-        
+
         val typeStr = remoteMessage.data["type"]
         val roomId = remoteMessage.data["roomId"]
         val roomName = remoteMessage.data["roomName"]
+        val requesterEmail = remoteMessage.data["requesterEmail"] // present for join requests
 
         if (roomId != null && roomName != null) {
             val notifType = when (typeStr) {
                 "INVITATION" -> NotificationType.INVITATION
-                "INVITE_ACCEPTED" -> NotificationType.GENERAL
-                "MEMORY_ADDED" -> NotificationType.GENERAL
+                // Owner-side join requests (from QR scan or invite link)
+                "QR_JOIN_REQUESTED", "INVITE_REQUESTED" -> NotificationType.JOIN_REQUEST
                 else -> NotificationType.GENERAL
             }
-            
-            // Save to internal app notifications
+
             val appNotification = AppNotification(
                 title = title,
                 message = body,
                 type = notifType,
                 relatedRoomId = roomId,
-                relatedRoomName = roomName
+                relatedRoomName = roomName,
+                requesterEmail = requesterEmail
             )
             val repo = NotificationRepository(applicationContext)
             repo.addNotification(appNotification)
 
-            // Show Android System Notification
+            // Show Android system notification
+            val isJoinRequest = typeStr == "QR_JOIN_REQUESTED" || typeStr == "INVITE_REQUESTED"
             val isInvite = typeStr == "INVITATION"
-            showSystemNotification(title, body, roomId, roomName, isInvite)
+            showSystemNotification(title, body, roomId, roomName, isInvite || isJoinRequest)
         }
     }
 
-    private fun showSystemNotification(title: String, body: String, roomId: String, roomName: String, isInvite: Boolean) {
+    private fun showSystemNotification(
+        title: String,
+        body: String,
+        roomId: String,
+        roomName: String,
+        navigateToNotifications: Boolean
+    ) {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "invitations_channel"
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
-                "Room Invitations",
+                "Room Invitations & Join Requests",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Notifications for Room Invitations"
+                description = "Notifications for Room Invitations and Join Requests"
             }
             notificationManager.createNotificationChannel(channel)
         }
 
+        // Navigate to notifications screen when tapping join request / invite notifications
         val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra("extra_room_id", roomId)
             putExtra("extra_room_name", roomName)
-            putExtra("isInvite", isInvite)
+            putExtra("navigate_to_notifications", navigateToNotifications)
         }
 
         val pendingIntent = PendingIntent.getActivity(
@@ -94,7 +103,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         )
 
         val notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(android.R.drawable.ic_dialog_info) // TODO: Use real app icon
+            .setSmallIcon(R.drawable.ic_notification) // Use the small app-specific icon
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

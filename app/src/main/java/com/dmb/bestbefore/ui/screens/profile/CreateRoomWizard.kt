@@ -1,4 +1,4 @@
-﻿package com.dmb.bestbefore.ui.screens.profile
+package com.dmb.bestbefore.ui.screens.profile
 
 import androidx.compose.animation.*
 import com.dmb.bestbefore.data.models.HallwayCard
@@ -162,22 +162,24 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
             // â”€â”€â”€ Music â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             Text("Music", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Spacer(modifier = Modifier.height(8.dp))
-            Column(
-                modifier = Modifier.fillMaxWidth().background(Color(0xFF1C1C1E), RoundedCornerShape(12.dp)).padding(8.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF1C1C1E), RoundedCornerShape(12.dp))
+                    .clickable { viewModel.goToStep(ProfileStep.ROOM_ATMOSPHERE) }
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                val musicOpts = listOf("None", "Loft Beats", "Nature Ambience", "Lo-Fi", "Cinematic")
-                musicOpts.forEach { m ->
-                    val sel = music == m
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable { viewModel.updateSelectedMusic(m) }.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (sel) Icon(Icons.Default.CheckCircle, null, tint = AccentBlue, modifier = Modifier.size(18.dp))
-                        else Spacer(modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(m, color = if (sel) Color.White else Color.Gray, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
-                    }
-                }
+                Icon(Icons.Default.MusicNote, null, tint = AccentBlue, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = if (music.isBlank() || music == "None") "No music selected" else music,
+                    color = if (music.isBlank() || music == "None") Color.Gray else Color.White,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 15.sp
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Icon(Icons.Default.ChevronRight, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
             }
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -251,7 +253,7 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
                 modifier = Modifier.fillMaxWidth().height(90.dp)
                     .background(Color(0xFF1C1C1E), RoundedCornerShape(10.dp)).padding(12.dp),
                 decorationBox = { inner ->
-                    if (description.isEmpty()) Text("Add a descriptionâ€¦", color = Color.Gray, fontSize = 14.sp)
+                    if (description.isEmpty()) Text("Add a description...", color = Color.Gray, fontSize = 14.sp)
                     inner()
                 }
             )
@@ -273,7 +275,7 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
                     singleLine = true,
                     modifier = Modifier.weight(1f),
                     decorationBox = { inner ->
-                        if (tagInput.isEmpty()) Text("Add tagâ€¦", color = Color.Gray, fontSize = 14.sp)
+                        if (tagInput.isEmpty()) Text("Add tag...", color = Color.Gray, fontSize = 14.sp)
                         inner()
                     }
                 )
@@ -938,7 +940,7 @@ fun CreateRoomStep2(viewModel: ProfileViewModel) {
                             }
                         }
                     } else {
-                        // â”€â”€ Specific Date inline calendar â”€â”€
+                        // ——— Specific Date inline calendar ———
                         InlineCalendar(
                             selectedMillis = targetTime,
                             hour = targetHour,
@@ -1026,7 +1028,7 @@ fun DurationStepper(
                     .background(Color(0xFF3A3A3C), androidx.compose.foundation.shape.CircleShape)
                     .clickable { onDecrement() },
                 contentAlignment = Alignment.Center
-            ) { Text("âˆ’", color = Color.White, fontSize = 18.sp, textAlign = TextAlign.Center) }
+            ) { Text("-", color = Color.White, fontSize = 18.sp, textAlign = TextAlign.Center) }
             Text(value.toString(), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Box(
                 modifier = Modifier
@@ -1200,7 +1202,7 @@ fun InlineCalendar(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // â”€â”€â”€ Hour drum â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                    // ——— Hour drum ————————————————————
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.width(72.dp)
@@ -1231,7 +1233,7 @@ fun InlineCalendar(
                         )
                     }
 
-                    // â”€â”€â”€ Colon separator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                    // ——— Colon separator ——————————————
                     Text(
                         text = ":",
                         color = Color.White,
@@ -1240,7 +1242,7 @@ fun InlineCalendar(
                         modifier = Modifier.padding(horizontal = 8.dp).padding(bottom = 20.dp)
                     )
 
-                    // â”€â”€â”€ Minute drum â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                    // ——— Minute drum ——————————————————
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.width(72.dp)
@@ -1276,15 +1278,15 @@ fun InlineCalendar(
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-//  STEP 3 â€” Atmosphere (Room Theme + Background Music)
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————————————————————————————————————————————————————————————————————
+//  STEP 3 — Atmosphere (Room Theme + Background Music)
+// ————————————————————————————————————————————————————————————————————————————————
 @Composable
 fun CreateRoomStep3Atmosphere(viewModel: ProfileViewModel) {
     val selectedTheme by viewModel.roomAtmosphereTheme.collectAsState()
     val selectedMusic by viewModel.selectedMusic.collectAsState()
 
-    // Theme data: name â†’ background color
+    // Theme data: name → background color
     val themes = listOf(
         "Default"   to Color(0xFF1A7AF8),
         "Ocean"     to Color(0xFF00C6A2),
@@ -1293,14 +1295,21 @@ fun CreateRoomStep3Atmosphere(viewModel: ProfileViewModel) {
         "Cyberpunk" to Color(0xFFAA3FD6)
     )
 
-    // Music options: icon emoji + label
-    data class MusicOption(val icon: androidx.compose.ui.graphics.vector.ImageVector, val label: String)
-    val musicOptions = listOf(
-        MusicOption(Icons.AutoMirrored.Filled.VolumeOff,   "None"),
-        MusicOption(Icons.Default.MusicNote,   "Lofi Beats"),
-        MusicOption(Icons.Default.Star,        "Nature Ambience"),
-        MusicOption(Icons.Default.Favorite,    "Minimal Piano")
-    )
+    // SoundCloud playlist tracks loaded from backend
+    val musicViewModel: com.dmb.bestbefore.ui.components.MusicViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val tracks by musicViewModel.tracks.collectAsState()
+    val isLoadingTracks by musicViewModel.isLoading.collectAsState()
+    val currentTrack by com.dmb.bestbefore.notifications.MusicPlayerManager.currentTrack.collectAsState()
+    val isPlaying by com.dmb.bestbefore.notifications.MusicPlayerManager.isPlaying.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Load playlist on first compose
+    LaunchedEffect(Unit) {
+        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        user?.getIdToken(false)?.addOnSuccessListener { result ->
+            result.token?.let { token -> musicViewModel.loadPlaylist(token) }
+        }
+    }
 
     CreateRoomChrome(
         step = 3,
@@ -1359,48 +1368,90 @@ fun CreateRoomStep3Atmosphere(viewModel: ProfileViewModel) {
         Text("Background Music", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(12.dp))
 
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            musicOptions.forEach { option ->
-                val isSelected = selectedMusic == option.label
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            if (isSelected) Color(0xFF0D2B5E) else CardDarkBg,
-                            RoundedCornerShape(14.dp)
-                        )
-                        .then(
-                            if (isSelected)
-                                Modifier.border(1.5.dp, AccentBlue, RoundedCornerShape(14.dp))
-                            else Modifier
-                        )
-                        .clickable { viewModel.updateSelectedMusic(option.label) }
-                        .padding(horizontal = 16.dp, vertical = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+        // "None" option
+        val isNoneSelected = selectedMusic == "None"
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    if (isNoneSelected) Color(0xFF0D2B5E) else CardDarkBg,
+                    RoundedCornerShape(14.dp)
+                )
+                .then(
+                    if (isNoneSelected) Modifier.border(1.5.dp, AccentBlue, RoundedCornerShape(14.dp))
+                    else Modifier
+                )
+                .clickable {
+                    viewModel.updateSelectedMusic("None")
+                    com.dmb.bestbefore.notifications.MusicPlayerManager.stop(context)
+                }
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.AutoMirrored.Filled.VolumeOff, "None", tint = if (isNoneSelected) AccentBlue else Color(0xFF8E8E93), modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.width(14.dp))
+            Text("None", color = if (isNoneSelected) Color.White else Color(0xFF8E8E93), fontSize = 15.sp, fontWeight = if (isNoneSelected) FontWeight.Bold else FontWeight.Normal)
+            Spacer(modifier = Modifier.weight(1f))
+            if (isNoneSelected) Icon(Icons.Default.CheckCircle, null, tint = AccentBlue, modifier = Modifier.size(20.dp))
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // SoundCloud tracks
+        if (isLoadingTracks) {
+            Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = AccentBlue, modifier = Modifier.size(24.dp))
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                tracks.forEach { track ->
+                    val isSelected = selectedMusic == track.title
+                    val isThisPlaying = currentTrack?.id == track.id && isPlaying
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                if (isSelected) Color(0xFF0D2B5E) else CardDarkBg,
+                                RoundedCornerShape(14.dp)
+                            )
+                            .then(
+                                if (isSelected) Modifier.border(1.5.dp, AccentBlue, RoundedCornerShape(14.dp))
+                                else Modifier
+                            )
+                            .clickable {
+                                viewModel.updateSelectedMusic(track.title)
+                                musicViewModel.playTrack(context, track)
+                            }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(
-                            imageVector = option.icon,
-                            contentDescription = option.label,
+                            imageVector = if (isThisPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = track.title,
                             tint = if (isSelected) AccentBlue else Color(0xFF8E8E93),
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(14.dp))
-                        Text(
-                            text = option.label,
-                            color = if (isSelected) Color.White else Color(0xFF8E8E93),
-                            fontSize = 15.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                        )
-                    }
-                    if (isSelected) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = AccentBlue,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = track.title,
+                                color = if (isSelected) Color.White else Color(0xFFCCCCCC),
+                                fontSize = 14.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = track.artist,
+                                color = Color(0xFF8E8E93),
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                        if (isSelected) {
+                            Icon(Icons.Default.CheckCircle, null, tint = AccentBlue, modifier = Modifier.size(20.dp))
+                        }
                     }
                 }
             }

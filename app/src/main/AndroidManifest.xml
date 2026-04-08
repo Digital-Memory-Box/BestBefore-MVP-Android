@@ -17,6 +17,9 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
 
     <application
@@ -41,7 +44,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Deep link for QR code invitations -->
+            <!-- Deep link: custom scheme for invite tokens (backward compat) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -50,12 +53,53 @@
                     android:scheme="bestbefore"
                     android:host="invite" />
             </intent-filter>
+            <!-- Deep link: custom scheme for direct room open -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="bestbefore"
+                    android:host="room" />
+            </intent-filter>
+            <!-- App Link: HTTPS room join — works from any browser/camera on iOS & Android -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="bestbefore.up.railway.app"
+                    android:pathPrefix="/join/" />
+            </intent-filter>
+            <!-- App Link: HTTPS invite-token join -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="bestbefore.up.railway.app"
+                    android:pathPrefix="/invite-join/" />
+            </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ui.screens.profile.QrScannerActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.NoActionBar" />
 
         <receiver
             android:name=".notifications.RoomUnlockReceiver"
             android:enabled="true"
             android:exported="false" />
+
+        <service
+            android:name=".notifications.MusicPlayerService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

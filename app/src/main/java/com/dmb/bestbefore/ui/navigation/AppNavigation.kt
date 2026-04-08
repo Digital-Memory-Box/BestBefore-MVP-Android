@@ -2,6 +2,8 @@ package com.dmb.bestbefore.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -11,6 +13,12 @@ import com.dmb.bestbefore.ui.screens.opening.OpeningScreen
 import com.dmb.bestbefore.ui.screens.profile.ProfileScreen
 import com.dmb.bestbefore.ui.screens.room.RoomScreen
 import com.dmb.bestbefore.ui.screens.signup.SignupScreen
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.dmb.bestbefore.ui.screens.profile.RoomDetailScreen
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 
 object Routes {
     const val OPENING = "opening"
@@ -114,8 +122,62 @@ fun AppNavigation() {
             com.dmb.bestbefore.ui.screens.notifications.NotificationScreen(
                 onNavigateBack = {
                     navController.popBackStack()
+                },
+                onNavigateToRoom = { roomId ->
+                    navController.navigate("room_detail/$roomId")
                 }
             )
+        }
+
+        composable("room_detail/{roomId}") { backStackEntry ->
+            val roomId = backStackEntry.arguments?.getString("roomId") ?: ""
+            val profileViewModel: com.dmb.bestbefore.ui.screens.profile.ProfileViewModel = viewModel()
+            val context = androidx.compose.ui.platform.LocalContext.current
+            
+            val multiplePhotoPickerLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.PickMultipleVisualMedia()
+            ) { uris ->
+                if (uris.isNotEmpty()) {
+                    profileViewModel.updateSelectedMedia(uris)
+                    profileViewModel.uploadMedia(context)
+                }
+            }
+
+            val filePickerLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.OpenDocument()
+            ) { uri ->
+                uri?.let {
+                    profileViewModel.updateSelectedMedia(listOf(it))
+                    profileViewModel.uploadMedia(context)
+                }
+            }
+
+            LaunchedEffect(roomId) {
+                profileViewModel.handleDeepLink(roomId)
+            }
+            
+            Box(Modifier.fillMaxSize()) {
+                RoomDetailScreen(
+                    viewModel = profileViewModel,
+                    multiplePhotoPickerLauncher = multiplePhotoPickerLauncher,
+                    filePickerLauncher = filePickerLauncher
+                )
+                
+                // Override the internal goBack from ProfileViewModel to pop back stack directly
+                val room by profileViewModel.selectedRoom.collectAsState()
+                androidx.activity.compose.BackHandler(enabled = true) {
+                    navController.popBackStack()
+                }
+                
+                // Also listen to profileViewModel closing its own overlay
+                LaunchedEffect(room) {
+                    // if room becomes null after it was set, it means viewModel.goBack() was called
+                    // or room was deleted
+                    if (room == null && profileViewModel.isRefreshing.value == false) {
+                        navController.popBackStack()
+                    }
+                }
+            }
         }
 
         composable(Routes.ROOM) { backStackEntry ->

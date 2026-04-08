@@ -244,6 +244,30 @@ class ProfileViewModel : ViewModel() {
     private val _galleryViewerIndex = MutableStateFlow(0)
     val galleryViewerIndex: StateFlow<Int> = _galleryViewerIndex.asStateFlow()
     
+    // Profile Music state
+    private val _profileMusic = MutableStateFlow<String?>("None")
+    val profileMusic: StateFlow<String?> = _profileMusic.asStateFlow()
+
+    fun updateProfileMusic(music: String?) {
+        _profileMusic.value = music ?: "None"
+    }
+
+    fun saveProfileMusic(context: Context, trackName: String?) {
+        viewModelScope.launch {
+            val updateMusic = if (trackName == "None") null else trackName
+            val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
+            val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
+            val result = authRepo.updateMe(com.dmb.bestbefore.data.api.models.UpdateMeRequest(profileMusic = updateMusic))
+            if (result.isSuccess) {
+                _profileMusic.value = trackName ?: "None"
+                sessionManager.saveProfileMusic(updateMusic)
+                android.widget.Toast.makeText(context, "Profile music updated", android.widget.Toast.LENGTH_SHORT).show()
+            } else {
+                android.widget.Toast.makeText(context, "Failed to update profile music", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     // Room unlock dialog state
     private val _showUnlockDialog = MutableStateFlow(false)
     val showUnlockDialog: StateFlow<Boolean> = _showUnlockDialog.asStateFlow()
@@ -321,7 +345,9 @@ class ProfileViewModel : ViewModel() {
     fun initDatabase(context: Context) {
         val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
         val savedName = sessionManager.getUserName()
+        val savedMusic = sessionManager.getProfileMusic()
         _userName.value = if (!savedName.isNullOrEmpty()) savedName else "User"
+        _profileMusic.value = if (!savedMusic.isNullOrEmpty()) savedMusic else "None"
 
         // RoomRepository now fetches its own fresh Firebase token per request.
         // Just launch the load — no token management needed here.
@@ -830,6 +856,49 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
+    /** Join a room via QR scan or /join/{roomId} HTTPS App Link — works cross-platform with iOS */
+    fun joinRoomViaQR(context: Context, roomId: String) {
+        viewModelScope.launch {
+            try {
+                val result = roomRepository.joinViaQR(roomId)
+                result.onSuccess { data ->
+                    val roomName = data["roomName"] as? String ?: "Room"
+                    val alreadyMember = data["alreadyMember"] as? Boolean ?: false
+                    if (alreadyMember) {
+                        Toast.makeText(context, "You're already in \"$roomName\"", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Join request sent for \"$roomName\"!", Toast.LENGTH_SHORT).show()
+                    }
+                    initDatabase(context)
+                }
+                result.onFailure { e ->
+                    Toast.makeText(context, "Failed to join room: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Log.e("ProfileViewModel", "joinRoomViaQR exception", e)
+                Toast.makeText(context, "Failed to join room", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun sendHandshakeInvite(context: Context, email: String) {
+        val roomId = _selectedRoom.value?.id ?: return
+        viewModelScope.launch {
+            try {
+                val result = roomRepository.createHandshakeInvite(roomId, email)
+                result.onSuccess {
+                    Toast.makeText(context, "Invite sent to $email!", Toast.LENGTH_SHORT).show()
+                }
+                result.onFailure { e ->
+                    Toast.makeText(context, "Failed to send invite: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Log.e("ProfileViewModel", "sendHandshakeInvite exception", e)
+                Toast.makeText(context, "Failed to send invite", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     fun clearInviteToken() {
         _inviteToken.value = null
         _inviteLink.value = null
@@ -956,7 +1025,7 @@ class ProfileViewModel : ViewModel() {
                 true
             }
             ProfileStep.ROOM_DETAIL -> {
-                goToStep(ProfileStep.PROFILE_MENU)
+                closeOverlay()
                 true
             }
             else -> {
@@ -1314,27 +1383,19 @@ class ProfileViewModel : ViewModel() {
     // ========== THEME & CUSTOMIZATION FUNCTIONS ==========
     
     fun loadThemePreferences(context: Context) {
-        if (preferencesManager == null) {
-            preferencesManager = PreferencesManager(context)
-        }
-        _selectedTheme.value = AppThemes.getThemeByName(preferencesManager!!.getTheme())
-        _accentColor.value = preferencesManager!!.getAccentColor()
+        com.dmb.bestbefore.ui.theme.ThemeState.init(context)
+        _selectedTheme.value = com.dmb.bestbefore.ui.theme.ThemeState.currentTheme
+        _accentColor.value = com.dmb.bestbefore.ui.theme.ThemeState.currentAccent
     }
     
     fun selectTheme(context: Context, theme: AppTheme) {
-        if (preferencesManager == null) {
-            preferencesManager = PreferencesManager(context)
-        }
+        com.dmb.bestbefore.ui.theme.ThemeState.selectTheme(theme)
         _selectedTheme.value = theme
-        preferencesManager!!.saveTheme(theme.name)
     }
     
     fun selectAccentColor(context: Context, color: Color) {
-        if (preferencesManager == null) {
-            preferencesManager = PreferencesManager(context)
-        }
+        com.dmb.bestbefore.ui.theme.ThemeState.selectAccent(color)
         _accentColor.value = color
-        preferencesManager!!.saveAccentColor(color)
     }
     
     // ========== CREDENTIAL UPDATE FUNCTIONS ==========
@@ -1471,6 +1532,10 @@ class ProfileViewModel : ViewModel() {
         _profileImageUri.value = null
     }
 
+    suspend fun getAuthToken(context: Context): String? {
+        val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
+        return authRepo.getFirebaseIdToken(false)
+    }
 }
 
 

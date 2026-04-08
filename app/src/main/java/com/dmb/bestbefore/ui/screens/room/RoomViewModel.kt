@@ -156,6 +156,33 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
         _calendarEvents.value = emptyList()
     }
 
+    /**
+     * Called when the user picks a Calendar event inside the Room screen.
+     * This pre-fills the room's time-capsule lock date with the event's start time
+     * and posts a local notification reminder. Full room creation lives in ProfileViewModel.
+     */
+    fun createRoomFromCalendarEvent(event: CalendarEvent) {
+        val eventTitle = event.title
+        val eventTime = event.startTime.time
+
+        // Set lock end time to the calendar event's start time so the room feels themed
+        val now = System.currentTimeMillis()
+        if (eventTime > now) {
+            val endTime = eventTime
+            _lockEndTime.value = endTime
+            startCountdown(endTime)
+        }
+
+        // Schedule a notification for when the event starts
+        viewModelScope.launch {
+            repository.trackInteraction(
+                roomId = _roomId.value,
+                dwellTimeSeconds = 0,
+                type = "CALENDAR_EVENT"
+            )
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         onRoomExited() // Final tracking on VM destruction

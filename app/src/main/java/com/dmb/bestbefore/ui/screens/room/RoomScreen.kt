@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import com.dmb.bestbefore.data.models.CalendarEvent
 import java.text.SimpleDateFormat
 import java.util.*
@@ -75,10 +76,16 @@ fun RoomScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { viewModel.toggleTimeCapsuleDialog() }) {
-                Icon(imageVector = Icons.Default.DateRange, contentDescription = "Time Capsule", tint = Color.White)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onNavigateBack) {
+                    Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+                }
+                IconButton(onClick = { viewModel.toggleTimeCapsuleDialog() }) {
+                    Icon(imageVector = Icons.Default.DateRange, contentDescription = "Time Capsule", tint = Color.White)
+                }
             }
 
             IconButton(onClick = { viewModel.toggleProfileMenu() }) {
@@ -127,7 +134,7 @@ fun RoomScreen(
                     ) {
                         Text("Time Capsule", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(countdownText, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                        Text(countdownText, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

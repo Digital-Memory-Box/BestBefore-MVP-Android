@@ -22,14 +22,14 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Floating orb menu component that appears on the right edge of the screen.
- * Features a large profile icon in the center with three smaller action buttons
- * arranged in an orbital pattern around it.
+ * Gradient colors follow the current app theme (primaryColor → secondaryColor).
  */
-
 @Composable
 fun OrbMenu(
     modifier: Modifier = Modifier,
     size: Dp = 200.dp,
+    primaryColor: Color = Color(0xFF0D59F2),
+    secondaryColor: Color = Color(0xFF00D972),
     onSearchClick: () -> Unit = {},
     onChatClick: () -> Unit = {},
     onAddClick: () -> Unit = {},
@@ -42,27 +42,24 @@ fun OrbMenu(
             .clip(RoundedCornerShape(topStart = size / 2, bottomStart = size / 2))
             .background(
                 brush = Brush.horizontalGradient(
-                    colors = listOf(
-                        Color(0xFF0D59F2),
-                        Color(0xFF00D972)
-                    )
+                    colors = listOf(primaryColor, secondaryColor)
                 )
             )
     ) {
-        // Inner lighter blue half circle for depth
+        // Inner lighter half-circle for depth
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(12.dp) // Inset from outer edge
+                .padding(12.dp)
                 .clip(RoundedCornerShape(topStart = (size / 2) - 12.dp, bottomStart = (size / 2) - 12.dp))
-                .background(Color(0xff7794c9).copy(alpha = 0.3f)) // Lighter blue with transparency
+                .background(Color.White.copy(alpha = 0.10f))
         )
-        
+
         // Large centered profile button
         Box(
             modifier = Modifier
                 .align(Alignment.Center)
-                .offset(x = (-25).dp, y = 0.dp)
+                .offset(x = (-25).dp)
         ) {
             OrbButton(
                 icon = Icons.Default.Person,
@@ -73,7 +70,7 @@ fun OrbMenu(
             )
         }
 
-        // Message button - Top of the orbital arc
+        // Message button — top of the arc
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -88,11 +85,11 @@ fun OrbMenu(
             )
         }
 
-        // Add button - Middle of the orbital arc
+        // Add button — middle of the arc
         Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .offset(x = 5.dp, y = 0.dp)
+                .offset(x = 5.dp)
         ) {
             OrbButton(
                 icon = Icons.Default.Add,
@@ -103,7 +100,7 @@ fun OrbMenu(
             )
         }
 
-        // Search button - Bottom of the orbital arc
+        // Search button — bottom of the arc
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -119,8 +116,6 @@ fun OrbMenu(
         }
     }
 }
-
-
 
 @Composable
 private fun OrbButton(

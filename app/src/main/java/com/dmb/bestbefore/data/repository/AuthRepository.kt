@@ -102,6 +102,7 @@ class AuthRepository(context: Context) {
             putString("user_id", user.id)
             putString("user_name", user.name)
             putString("user_email", user.email)
+            putString("profile_music", user.profileMusic)
         }
     }
 }

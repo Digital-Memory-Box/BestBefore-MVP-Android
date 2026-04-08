@@ -137,6 +137,28 @@ class RoomRepository {
         }
     }
 
+    suspend fun approveJoinRequest(roomId: String, requesterEmail: String): Result<Unit> {
+        return try {
+            val body = mapOf<String, Any>("requesterEmail" to requesterEmail)
+            val response = api.approveJoinRequest(freshBearer(), roomId, body)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("Failed to approve join request: ${response.code()}"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun denyJoinRequest(roomId: String, requesterEmail: String): Result<Unit> {
+        return try {
+            val body = mapOf<String, Any>("requesterEmail" to requesterEmail)
+            val response = api.denyJoinRequest(freshBearer(), roomId, body)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("Failed to deny join request: ${response.code()}"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // ── Memories ──────────────────────────────────────────────────────────────
 
     suspend fun getMemoriesByRoom(roomId: String): Result<List<Map<String, Any>>> {
@@ -232,4 +254,43 @@ class RoomRepository {
             Result.failure(e)
         }
     }
+
+    // ── QR Code Join ─────────────────────────────────────────────────────────
+    suspend fun joinViaQR(roomId: String): Result<Map<String, Any>> {
+        return try {
+            val response = api.joinViaQR(freshBearer(), roomId)
+            if (response.isSuccessful && response.body() != null) Result.success(response.body()!!)
+            else Result.failure(Exception("QR join failed: ${response.code()}"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getRoomQRCode(roomId: String): Result<String> {
+        return try {
+            val response = api.getRoomQRCode(freshBearer(), roomId)
+            if (response.isSuccessful && response.body() != null) {
+                val qrCode = response.body()!!["qrCode"] as? String
+                    ?: return Result.failure(Exception("No qrCode in response"))
+                Result.success(qrCode)
+            } else {
+                Result.failure(Exception("Failed to get QR: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // ── Handshake (Email) Invites ─────────────────────────────────────────────
+    suspend fun createHandshakeInvite(roomId: String, inviteeEmail: String): Result<Map<String, Any>> {
+        return try {
+            val body = mapOf<String, Any>("inviteeEmail" to inviteeEmail)
+            val response = api.createHandshakeInvite(freshBearer(), roomId, body)
+            if (response.isSuccessful && response.body() != null) Result.success(response.body()!!)
+            else Result.failure(Exception("Failed to create handshake invite: ${response.code()}"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }
+

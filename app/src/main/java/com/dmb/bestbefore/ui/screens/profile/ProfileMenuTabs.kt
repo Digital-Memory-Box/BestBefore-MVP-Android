@@ -1,4 +1,4 @@
-﻿package com.dmb.bestbefore.ui.screens.profile
+package com.dmb.bestbefore.ui.screens.profile
 
 import androidx.compose.animation.*
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
@@ -51,6 +51,7 @@ import com.dmb.bestbefore.ui.theme.LocalBestBeforeColors
 @Composable
 fun ProfileMenuScreen(
     viewModel: ProfileViewModel,
+    musicViewModel: com.dmb.bestbefore.ui.components.MusicViewModel,
     createdRooms: List<TimeCapsuleRoom>,
     onLogout: () -> Unit
 ) {
@@ -134,7 +135,7 @@ fun ProfileMenuScreen(
             Box(modifier = Modifier.weight(1f)) {
                 when (selectedTab) {
                     0 -> DashboardTab(viewModel, createdRooms)
-                    1 -> CustomizationTab(viewModel)
+                    1 -> CustomizationTab(viewModel, musicViewModel)
                     2 -> SettingsTab(viewModel, onLogout)
                 }
             }
@@ -385,10 +386,23 @@ fun ActivityItem(icon: androidx.compose.ui.graphics.vector.ImageVector, title: S
 
 // --- TAB 2: CUSTOMIZATION ---
 @Composable
-fun CustomizationTab(viewModel: ProfileViewModel) {
+fun CustomizationTab(
+    viewModel: ProfileViewModel,
+    musicViewModel: com.dmb.bestbefore.ui.components.MusicViewModel
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val selectedTheme by viewModel.selectedTheme.collectAsState()
     val accentColor by viewModel.accentColor.collectAsState()
+    
+    // Load tracks when tab is active
+    var authToken by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        authToken = viewModel.getAuthToken(context)
+    }
+    
+    LaunchedEffect(authToken) {
+        authToken?.let { musicViewModel.loadPlaylist(it) }
+    }
     
     Column(
         modifier = Modifier
@@ -479,35 +493,68 @@ fun CustomizationTab(viewModel: ProfileViewModel) {
         // Profile Music
         Text(text = "Profile Music", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
+        
+        val selectedMusic by viewModel.profileMusic.collectAsState()
+        val musicTracks by musicViewModel.tracks.collectAsState()
+        val isMusicLoading by musicViewModel.isLoading.collectAsState()
+        
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Color(0xFF1C1C1E), RoundedCornerShape(12.dp))
-                .padding(vertical = 8.dp) // Inner padding
         ) {
-             // None
+             // None option
+             val isNone = selectedMusic == "None" || selectedMusic == null
              Row(
-                 modifier = Modifier.fillMaxWidth().clickable {}.border(1.dp, Color(0xFF007AFF), RoundedCornerShape(12.dp)).padding(16.dp),
+                 modifier = Modifier
+                     .fillMaxWidth()
+                     .clickable { 
+                         viewModel.saveProfileMusic(context, "None")
+                     }
+                     .padding(16.dp),
                  verticalAlignment = Alignment.CenterVertically
              ) {
-                 Icon(Icons.AutoMirrored.Filled.VolumeOff, null, tint = Color.White)
+                 Icon(Icons.AutoMirrored.Filled.VolumeOff, null, tint = if(isNone) accentColor else Color.Gray)
                  Spacer(modifier = Modifier.width(16.dp))
-                 Text("None", color = Color.White, fontWeight = FontWeight.Bold)
+                 Text("None", color = if(isNone) Color.White else Color.Gray, fontWeight = FontWeight.Bold)
                  Spacer(modifier = Modifier.weight(1f))
-                 Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF007AFF)) 
+                 if(isNone) Icon(Icons.Default.CheckCircle, null, tint = accentColor) 
              }
-             // Options
-             listOf("Dreamy Synth", "Chill Cafe").forEach { music ->
-                 Row(
-                     modifier = Modifier.fillMaxWidth().clickable {}.padding(16.dp),
-                     verticalAlignment = Alignment.CenterVertically
-                 ) {
-                     Icon(if(music=="Dreamy Synth") Icons.Default.AutoAwesome else Icons.Default.Coffee, null, tint = Color.Gray)
-                     Spacer(modifier = Modifier.width(16.dp))
-                     Text(music, color = Color.Gray, fontWeight = FontWeight.Bold)
+             
+             if (isMusicLoading) {
+                 Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                     CircularProgressIndicator(color = accentColor, modifier = Modifier.size(24.dp))
+                 }
+             } else {
+                 musicTracks.forEach { track ->
+                     val isSelected = selectedMusic == track.title
+                     Row(
+                         modifier = Modifier
+                             .fillMaxWidth()
+                             .clickable {
+                                 viewModel.saveProfileMusic(context, track.title)
+                                 // Optional: Play track to preview
+                                 musicViewModel.playTrack(context, track)
+                             }
+                             .padding(16.dp),
+                         verticalAlignment = Alignment.CenterVertically
+                     ) {
+                         coil.compose.AsyncImage(
+                             model = track.artworkUrl,
+                             contentDescription = null,
+                             modifier = Modifier.size(32.dp).clip(CircleShape).background(Color.DarkGray)
+                         )
+                         Spacer(modifier = Modifier.width(16.dp))
+                         Column(modifier = Modifier.weight(1f)) {
+                             Text(track.title, color = if(isSelected) Color.White else Color.Gray, fontWeight = FontWeight.Bold, maxLines = 1)
+                             Text(track.artist, color = Color.Gray, fontSize = 12.sp, maxLines = 1)
+                         }
+                         if(isSelected) Icon(Icons.Default.CheckCircle, null, tint = accentColor)
+                     }
                  }
              }
         }
+        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
@@ -659,21 +706,7 @@ fun SettingsTab(viewModel: ProfileViewModel, onLogout: () -> Unit) {
         }
         
         Spacer(modifier = Modifier.height(24.dp))
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        Text("App Preferences", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("High Fidelity Mode", color = Color.White, fontSize = 16.sp)
-            Switch(checked = true, onCheckedChange = {})
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("Spatial Audio", color = Color.White, fontSize = 16.sp)
-            Switch(checked = true, onCheckedChange = {})
-        }
-        
+
         Spacer(modifier = Modifier.height(48.dp))
         Button(
             onClick = onLogout,

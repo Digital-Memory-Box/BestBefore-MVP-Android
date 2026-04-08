@@ -78,6 +78,22 @@ interface ApiService {
         @Path("id") roomId: String
     ): Response<Unit>
 
+    // Owner approves a pending join request (QR/link)
+    @POST("rooms/{id}/approve-join")
+    suspend fun approveJoinRequest(
+        @Header("Authorization") token: String,
+        @Path("id") roomId: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<Unit>
+
+    // Owner denies a pending join request (QR/link)
+    @POST("rooms/{id}/deny-join")
+    suspend fun denyJoinRequest(
+        @Header("Authorization") token: String,
+        @Path("id") roomId: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<Unit>
+
     // ── Memories ──────────────────────────────────────────────────────────────
     @GET("rooms/{roomId}/memories")
     suspend fun getMemoriesByRoom(
@@ -148,4 +164,45 @@ interface ApiService {
         @Header("Authorization") authToken: String,
         @Path("token") inviteToken: String
     ): Response<Map<String, @JvmSuppressWildcards Any>>
+
+    // ── QR Code Room Join ─────────────────────────────────────────────────────
+    // GET /rooms/{id}/qr — Returns base64 QR image for the room
+    @GET("rooms/{id}/qr")
+    suspend fun getRoomQRCode(
+        @Header("Authorization") token: String,
+        @Path("id") roomId: String
+    ): Response<Map<String, @JvmSuppressWildcards Any>>
+
+    // POST /rooms/{id}/join-via-qr — Join room after scanning its QR
+    @POST("rooms/{id}/join-via-qr")
+    suspend fun joinViaQR(
+        @Header("Authorization") token: String,
+        @Path("id") roomId: String
+    ): Response<Map<String, @JvmSuppressWildcards Any>>
+
+    // ── Handshake (Email) Invites ─────────────────────────────────────────────
+    @POST("rooms/{id}/handshake-invites")
+    suspend fun createHandshakeInvite(
+        @Header("Authorization") token: String,
+        @Path("id") roomId: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<Map<String, @JvmSuppressWildcards Any>>
+
+    @GET("me/handshake-invites")
+    suspend fun getMyHandshakeInvites(
+        @Header("Authorization") token: String
+    ): Response<Map<String, @JvmSuppressWildcards Any>>
+
+    @POST("handshake-invites/{inviteId}/accept")
+    suspend fun acceptHandshakeInvite(
+        @Header("Authorization") token: String,
+        @Path("inviteId") inviteId: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<Map<String, @JvmSuppressWildcards Any>>
+
+    // ── SoundCloud ────────────────────────────────────────────────────────────
+    @GET("api/soundcloud/playlist")
+    suspend fun getSoundCloudPlaylist(
+        @Header("Authorization") token: String
+    ): Response<SoundCloudPlaylistResponse>
 }

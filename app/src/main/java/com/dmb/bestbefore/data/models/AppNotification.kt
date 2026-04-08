@@ -7,12 +7,15 @@ data class AppNotification(
     val timestamp: Long = System.currentTimeMillis(),
     val type: NotificationType = NotificationType.GENERAL,
     val relatedRoomId: String? = null,
-    val relatedRoomName: String? = null
+    val relatedRoomName: String? = null,
+    // For JOIN_REQUEST notifications: the email of the person who wants to join
+    val requesterEmail: String? = null
 )
 
 enum class NotificationType {
     ROOM_CREATED,
     ROOM_UNLOCKED,
     GENERAL,
-    INVITATION
+    INVITATION,
+    JOIN_REQUEST  // Owner receives this when someone requests to join via QR/link
 }

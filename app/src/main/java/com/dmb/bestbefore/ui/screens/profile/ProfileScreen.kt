@@ -1,4 +1,4 @@
-﻿package com.dmb.bestbefore.ui.screens.profile
+package com.dmb.bestbefore.ui.screens.profile
 
 import androidx.compose.animation.*
 import com.dmb.bestbefore.data.models.HallwayCard
@@ -54,7 +54,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.statusBars
-
+import com.dmb.bestbefore.ui.theme.LocalBestBeforeColors
 
 @Composable
 fun ProfileScreen(
@@ -70,6 +70,21 @@ fun ProfileScreen(
 
     val isAllMediaVisible by viewModel.isAllMediaVisible.collectAsState()
 
+    var showMusicSelector by remember { mutableStateOf(false) }
+    var authToken by remember { mutableStateOf<String?>(null) }
+    val musicViewModel: com.dmb.bestbefore.ui.components.MusicViewModel = viewModel()
+
+    LaunchedEffect(Unit) {
+        authToken = viewModel.getAuthToken(context)
+    }
+
+    if (showMusicSelector && authToken != null) {
+        com.dmb.bestbefore.ui.components.MusicSelectorBottomSheet(
+            viewModel = musicViewModel,
+            token = authToken!!,
+            onDismissRequest = { showMusicSelector = false }
+        )
+    }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -97,6 +112,50 @@ fun ProfileScreen(
     ) { granted ->
         if (!granted) {
             android.widget.Toast.makeText(context, "Camera permission required to take photos", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+    
+    // QR code scanner launcher for joining rooms
+    val qrScanLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val scannedValue = result.data?.getStringExtra("SCAN_RESULT") ?: ""
+            // Handle both HTTPS format and legacy custom-scheme format
+            val roomId = when {
+                // https://bestbefore.up.railway.app/join/{roomId}
+                scannedValue.startsWith("https://bestbefore.up.railway.app/join/") ->
+                    scannedValue.removePrefix("https://bestbefore.up.railway.app/join/").trim('/')
+                // legacy: bestbefore:room:{roomId}
+                scannedValue.startsWith("bestbefore:room:") ->
+                    scannedValue.removePrefix("bestbefore:room:")
+                // bestbefore://room/{roomId}
+                scannedValue.startsWith("bestbefore://room/") ->
+                    scannedValue.removePrefix("bestbefore://room/")
+                else -> null
+            }
+            if (roomId != null) {
+                viewModel.joinRoomViaQR(context, roomId)
+            } else if (scannedValue.startsWith("https://bestbefore.up.railway.app/invite-join/")) {
+                val token = scannedValue.removePrefix("https://bestbefore.up.railway.app/invite-join/").trim('/')
+                viewModel.joinRoomViaToken(context, token)
+            } else if (scannedValue.startsWith("bestbefore://invite/")) {
+                val token = scannedValue.removePrefix("bestbefore://invite/")
+                viewModel.joinRoomViaToken(context, token)
+            } else {
+                android.widget.Toast.makeText(context, "Invalid QR code", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val qrCameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            val intent = android.content.Intent(context, com.dmb.bestbefore.ui.screens.profile.QrScannerActivity::class.java)
+            qrScanLauncher.launch(intent)
+        } else {
+            android.widget.Toast.makeText(context, "Camera permission required to scan QR codes", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
     
@@ -210,11 +269,18 @@ fun ProfileScreen(
             com.dmb.bestbefore.MainActivity.clearPendingInvite()
         }
 
-        // Handle QR code deep link invite token
+        // Handle invite token deep link (bestbefore://invite/{token} or /invite-join/{token} HTTPS)
         val pendingToken = com.dmb.bestbefore.MainActivity.pendingInviteToken
         if (pendingToken != null) {
             viewModel.joinRoomViaToken(context, pendingToken)
             com.dmb.bestbefore.MainActivity.clearPendingInviteToken()
+        }
+
+        // Handle QR room join — /join/{roomId} HTTPS App Link or bestbefore://room/{roomId}
+        val pendingQRRoom = com.dmb.bestbefore.MainActivity.pendingQRRoomId
+        if (pendingQRRoom != null) {
+            viewModel.joinRoomViaQR(context, pendingQRRoom)
+            com.dmb.bestbefore.MainActivity.clearPendingQRRoomId()
         }
     }
 
@@ -303,33 +369,72 @@ fun ProfileScreen(
                             color = Color.White
                         )
                     }
-                    Box(
-                        modifier = Modifier.clickable {
-                            notifRepo.markAllRead()
-                            onNavigateToNotifications()
-                        }
+                    // Right-side icons: QR scanner (Rooming only) + Notifications bell
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Notifications,
-                            contentDescription = "Notifications",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        if (unreadCount > 0) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .offset(x = 6.dp, y = (-4).dp)
-                                    .size(16.dp)
-                                    .background(Color.Red, CircleShape),
-                                contentAlignment = Alignment.Center
+                        // QR scanner button — only visible on Rooming tab
+                        if (currentTab == BottomTab.ROOMING) {
+                            IconButton(
+                                onClick = {
+                                    val hasCam = androidx.core.content.ContextCompat.checkSelfPermission(
+                                        context, android.Manifest.permission.CAMERA
+                                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                                    if (hasCam) {
+                                        val intent = android.content.Intent(context, com.dmb.bestbefore.ui.screens.profile.QrScannerActivity::class.java)
+                                        qrScanLauncher.launch(intent)
+                                    } else {
+                                        qrCameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                                    }
+                                }
                             ) {
-                                Text(
-                                    text = if (unreadCount > 9) "9+" else unreadCount.toString(),
-                                    color = Color.White,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold
+                                Icon(
+                                    imageVector = Icons.Default.QrCodeScanner,
+                                    contentDescription = "Scan QR to join room",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
                                 )
+                            }
+                        }
+                        // Music selector button
+                        IconButton(onClick = { showMusicSelector = true }) {
+                            Icon(
+                                imageVector = Icons.Default.MusicNote,
+                                contentDescription = "Select Music",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        // Notification bell
+                        Box(
+                            modifier = Modifier.clickable {
+                                notifRepo.markAllRead()
+                                onNavigateToNotifications()
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = "Notifications",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            if (unreadCount > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .offset(x = 6.dp, y = (-4).dp)
+                                        .size(16.dp)
+                                        .background(Color.Red, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (unreadCount > 9) "9+" else unreadCount.toString(),
+                                        color = Color.White,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
                     }
@@ -513,25 +618,33 @@ fun ProfileScreen(
                     }
                 }
 
-                // Bottom navigation
-                BottomNavigation(
-                    currentTab = currentTab,
-                    onTabSelected = { 
-                        if (it == BottomTab.EVERYONE) {
-                            viewModel.closeOverlay()
-                        }
-                        hallwayViewModel.selectTab(it)
-                    },
-                    onProfileClick = { viewModel.openProfileMenu() },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .windowInsetsPadding(WindowInsets.navigationBars) // Added safe area padding
-                        .padding(bottom = 16.dp) // Extra spacing to be "a little bit upper"
-                )
+                Column(
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                ) {
+                    com.dmb.bestbefore.ui.components.MusicPlayerBottomBar(modifier = Modifier.padding(bottom = 8.dp))
+                    
+                    // Bottom navigation
+                    BottomNavigation(
+                        currentTab = currentTab,
+                        onTabSelected = { 
+                            if (it == BottomTab.EVERYONE) {
+                                viewModel.closeOverlay()
+                            }
+                            hallwayViewModel.selectTab(it)
+                        },
+                        onProfileClick = { viewModel.openProfileMenu() },
+                        modifier = Modifier
+                            .windowInsetsPadding(WindowInsets.navigationBars) // Added safe area padding
+                            .padding(bottom = 16.dp) // Extra spacing to be "a little bit upper"
+                    )
+                }
 
-                // Orb menu (Side bar) - New orbital layout
+                // Orb menu (Side bar) — uses active theme colors
+                val themeColors = LocalBestBeforeColors.current
                 OrbMenu(
                     modifier = Modifier.align(Alignment.CenterEnd),
+                    primaryColor = themeColors.primary,
+                    secondaryColor = themeColors.secondary,
                     onAddClick = { viewModel.startCreateRoom(RoomCreationSource.HALLWAY) },
                     onProfileClick = { viewModel.openProfileMenu() },
                     onSearchClick = { /* Search is empty for now */ },
@@ -604,7 +717,7 @@ fun ProfileScreen(
                     .background(Color.Black.copy(alpha = 0.95f))
             ) {
                 when (currentStep) {
-                    ProfileStep.PROFILE_MENU -> ProfileMenuScreen(viewModel, createdRooms, onLogout)
+                    ProfileStep.PROFILE_MENU -> ProfileMenuScreen(viewModel, musicViewModel, createdRooms, onLogout)
                     ProfileStep.ROOM_NAME         -> CreateRoomStep1(viewModel)
                     ProfileStep.ROOM_TIME_CAPSULE -> CreateRoomStep2(viewModel)
                     ProfileStep.ROOM_ATMOSPHERE   -> CreateRoomStep3Atmosphere(viewModel)
