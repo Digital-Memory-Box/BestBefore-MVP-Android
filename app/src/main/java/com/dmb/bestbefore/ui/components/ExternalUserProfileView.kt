@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -394,7 +395,7 @@ fun ExternalUserProfileViewPreview() {
             ownerEmail = null,
             description = null,
             tags = emptyList(),
-            themeColor = Color(0xFFFF5252) // Red accent
+            theme = "sunset"
         ),
         email = "maya@example.com", // Will trigger private account logic
         onDismiss = {}

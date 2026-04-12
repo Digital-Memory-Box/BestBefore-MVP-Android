@@ -438,13 +438,13 @@ fun CreateRoomChrome(
     onNext: () -> Unit,
     nextLabel: String = "Next",
     nextEnabled: Boolean = true,
-    themeColor: Color? = null,
+    themeName: String = "default",
     content: @Composable ColumnScope.() -> Unit
 ) {
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
-        com.dmb.bestbefore.ui.components.AnimatedBackgroundView(baseColor = themeColor)
+        com.dmb.bestbefore.ui.components.AnimatedBackgroundView(theme = themeName.lowercase())
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -585,7 +585,7 @@ fun CreateRoomStep1(viewModel: ProfileViewModel) {
             if (roomName.isNotBlank()) viewModel.goToStep(ProfileStep.ROOM_TIME_CAPSULE)
         },
         nextEnabled = roomName.isNotBlank(),
-        themeColor = getRoomThemeColor(themeName)
+        themeName = themeName
     ) {
         Text(
             text = "What's the name?",
@@ -829,7 +829,7 @@ fun CreateRoomStep2(viewModel: ProfileViewModel) {
         onDismiss = { viewModel.closeOverlay() },
         onBack = { viewModel.goToStep(ProfileStep.ROOM_NAME) },
         onNext = { viewModel.goToStep(ProfileStep.ROOM_ATMOSPHERE) },
-        themeColor = getRoomThemeColor(themeName)
+        themeName = themeName
     ) {
         androidx.compose.foundation.rememberScrollState().let { scroll ->
             Column(modifier = Modifier
@@ -1316,7 +1316,7 @@ fun CreateRoomStep3Atmosphere(viewModel: ProfileViewModel) {
         onDismiss = { viewModel.closeOverlay() },
         onBack = { viewModel.goToStep(ProfileStep.ROOM_TIME_CAPSULE) },
         onNext = { viewModel.goToStep(ProfileStep.ROOM_MEMORY_RULES) },
-        themeColor = getRoomThemeColor(selectedTheme)
+        themeName = selectedTheme
     ) {
         Text("Atmosphere", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(4.dp))

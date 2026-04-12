@@ -146,7 +146,7 @@ fun RoomDetailScreen(
     
     Box(modifier = Modifier.fillMaxSize()) {
         com.dmb.bestbefore.ui.components.AnimatedBackgroundView(
-            baseColor = getRoomThemeColor(room?.theme ?: "Default")
+            theme = room?.theme?.lowercase() ?: "default"
         )
         if (room == null) {
             Text("Room not found", color = Color.White, modifier = Modifier.align(Alignment.Center))

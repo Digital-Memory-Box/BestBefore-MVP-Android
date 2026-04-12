@@ -13,7 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Email
-import উদ্যোগে androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
@@ -89,7 +89,7 @@ fun OrbMenuPremium(
                             )
                             .then(
                                 if (selectedTheme == "Midnight") Modifier.border(2.dp, accentColor, CircleShape)
-                                else if (selectedTheme == "Glass") Modifier.border(1.5f, Color.White.copy(0.7f), CircleShape)
+                                else if (selectedTheme == "Glass") Modifier.border(1.5.dp, Color.White.copy(0.7f), CircleShape)
                                 else Modifier
                             )
                     )
@@ -155,7 +155,7 @@ fun OrbMenuPremium(
                             )
                             .then(
                                 if (selectedTheme == "Midnight") Modifier.border(2.dp, accentColor, CircleShape)
-                                else if (selectedTheme == "Glass") Modifier.border(1.5f, Color.White.copy(0.7f), CircleShape)
+                                else if (selectedTheme == "Glass") Modifier.border(1.5.dp, Color.White.copy(0.7f), CircleShape)
                                 else Modifier
                             )
                             .clickable { isExpanded = true }

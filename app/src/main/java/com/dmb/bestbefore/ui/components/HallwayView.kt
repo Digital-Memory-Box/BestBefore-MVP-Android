@@ -206,7 +206,7 @@ fun HallwayView(
                         .fillMaxWidth()
                         .padding(top = 10.dp)
                         .zIndex(2f),
-                    contentAlignment = Alignment.TopTrailing
+                    contentAlignment = Alignment.TopEnd
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Text(
@@ -236,7 +236,7 @@ fun HallwayView(
                     // CD Button
                     Box(
                         modifier = Modifier
-                            .padding(trailing = 20.dp, top = 4.dp)
+                            .padding(end = 20.dp, top = 4.dp)
                             .size(44.dp)
                             .background(Color.White.copy(alpha = 0.12f), CircleShape)
                             .clip(CircleShape)

@@ -79,8 +79,9 @@ fun SignupView(
                 }
             }
 
-            if (errorMessage != null) {
-                Text(errorMessage, color = Color.Red, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+            val msg = errorMessage
+            if (msg != null) {
+                Text(msg, color = Color.Red, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
             }
             
             Spacer(modifier = Modifier.weight(1f))

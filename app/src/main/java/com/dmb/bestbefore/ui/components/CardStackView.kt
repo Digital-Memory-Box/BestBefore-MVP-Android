@@ -219,8 +219,8 @@ fun CardStackViewPreview() {
     Box(modifier = Modifier.background(Color.Black).fillMaxSize()) {
         CardStackView(
             rooms = listOf(
-                RoomObject(name = "Test", themeColor = Color.Magenta, tags = listOf("A", "B", "C")),
-                RoomObject(name = "Test2", themeColor = Color.Cyan)
+                RoomObject(name = "Test", theme = "cyberpunk", tags = listOf("A", "B", "C")),
+                RoomObject(name = "Test2", theme = "ocean")
             ),
             initialSelectedIndex = 0,
             isMenuHidden = false

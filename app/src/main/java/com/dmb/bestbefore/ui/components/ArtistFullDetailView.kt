@@ -178,7 +178,7 @@ fun ArtistFullDetailView(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 60.dp, trailing = 20.dp),
+                    .padding(top = 60.dp, end = 20.dp),
                 horizontalArrangement = Arrangement.End
             ) {
                 Box(
@@ -202,7 +202,7 @@ fun ArtistFullDetailViewPreviewUpdated() {
     ArtistFullDetailView(
         room = RoomObject(
             name = "Starlight", 
-            themeColor = Color.Magenta, 
+            theme = "cyberpunk", 
             description = "This is a detailed description spanning multiple lines describing the music elements inside.",
             tags = listOf("music", "vcl")
         ),

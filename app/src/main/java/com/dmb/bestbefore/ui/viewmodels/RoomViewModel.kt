@@ -62,9 +62,28 @@ class RoomViewModel(private val repository: RoomRepository) : ViewModel() {
             _isLoading.value = true
             _errorMessage.value = null
             try {
-                val roomId = repository.createRoom(request)
-                fetchRooms() // Refresh the list
-                onSuccess(roomId)
+                val result = repository.createRoom(
+                    name = request.name,
+                    days = request.capsuleDurationDays,
+                    hours = request.capsuleDurationHours,
+                    minutes = request.capsuleDurationMinutes,
+                    isPublic = !request.isPrivate,
+                    isTimeCapsule = request.isTimeCapsule,
+                    theme = request.theme ?: "default",
+                    collaborators = request.collaborators ?: emptyList(),
+                    scheduledClosureIso = request.expirationDate,
+                    unlockDateIso = request.unlockDate,
+                    rollingExpiryDays = request.rollingExpiryDays ?: 0,
+                    description = request.description,
+                    tags = request.tags ?: emptyList(),
+                    music = request.backgroundMusic ?: "None"
+                )
+                if (result.isSuccess) {
+                    fetchRooms() // Refresh the list
+                    onSuccess(result.getOrNull() ?: "")
+                } else {
+                    _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to create room"
+                }
             } catch (e: Exception) {
                 _errorMessage.value = e.message ?: "Failed to create room"
             }
@@ -77,7 +96,7 @@ class RoomViewModelFactory(private val context: Context) : ViewModelProvider.Fac
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(RoomViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return RoomViewModel(RoomRepository(context)) as T
+            return RoomViewModel(RoomRepository()) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
