@@ -47,6 +47,31 @@ class AuthRepository(context: Context) {
     }
 
     /**
+     * Creating a new user via Firebase, then syncing with Backend.
+     */
+    suspend fun signup(email: String, password: String, name: String? = null): Result<UserDto> {
+        return try {
+            val authResult = firebaseAuth.createUserWithEmailAndPassword(email, password).await()
+            val firebaseUser = authResult.user
+                ?: return Result.failure(Exception("Firebase signup returned no user"))
+
+            val idToken = firebaseUser.getIdToken(false).await()?.token
+                ?: return Result.failure(Exception("Failed to retrieve Firebase ID token"))
+
+            // Optional: you can wait until the sync sets up the document, then issue a PATCH /me to set the name.
+            // Currently, the backend sync creates the document.
+            val syncResult = syncWithBackend(idToken)
+            if (syncResult.isSuccess && name != null) {
+                updateMe(UpdateMeRequest(name = name))
+            } else {
+                syncResult
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Call POST /auth/sync with the given Firebase ID token.
      * The backend will find or create the MongoDB user and return its profile.
      */
@@ -77,6 +102,25 @@ class AuthRepository(context: Context) {
                 Result.success(user)
             } else {
                 Result.failure(Exception("Update failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Fetch the user's latest data from the backend via GET /auth/me
+     */
+    suspend fun getMe(): Result<UserDto> {
+        return try {
+            val token = getFirebaseIdToken() ?: return Result.failure(Exception("Not signed in"))
+            val response = api.getMe("Bearer $token")
+            if (response.isSuccessful && response.body() != null) {
+                val user = response.body()!!.user
+                saveUser(user)
+                Result.success(user)
+            } else {
+                Result.failure(Exception("Failed to fetch user data: ${response.code()}"))
             }
         } catch (e: Exception) {
             Result.failure(e)

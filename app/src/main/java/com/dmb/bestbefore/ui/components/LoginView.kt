@@ -29,6 +29,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -41,6 +42,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -48,6 +50,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dmb.bestbefore.ui.viewmodels.AuthViewModel
+import com.dmb.bestbefore.ui.viewmodels.AuthViewModelFactory
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -61,12 +66,13 @@ enum class Direction {
 
 @Composable
 fun LoginView(
+    viewModel: AuthViewModel = viewModel(factory = AuthViewModelFactory(LocalContext.current)),
     onLoginSuccess: () -> Unit = {}
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    val isLoading by remember { mutableStateOf(false) } // Static mock state
-    val errorMessage by remember { mutableStateOf<String?>(null) } // Static mock state
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
     
     var loginMode by remember { mutableStateOf(LoginMode.EVERYONE) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
@@ -157,7 +163,11 @@ fun LoginView(
                             .fillMaxWidth()
                             .height(56.dp)
                             .background(Color.White, RoundedCornerShape(28.dp))
-                            .clickable { /* performLogin mock */ onLoginSuccess() },
+                            .clickable {
+                                if (email.isNotEmpty() && password.isNotEmpty()) {
+                                    viewModel.login(email.trim(), password.trim(), onLoginSuccess)
+                                }
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(

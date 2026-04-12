@@ -33,6 +33,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -51,12 +53,18 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dmb.bestbefore.ui.viewmodels.RoomViewModel
+import com.dmb.bestbefore.ui.viewmodels.RoomViewModelFactory
 
 // We reuse the standard local RoomObject data structure for compiling
 // (Assumed imported from the same package as previously created comps)
 
 @Composable
-fun HallwayView() {
+fun HallwayView(
+    viewModel: RoomViewModel = viewModel(factory = RoomViewModelFactory(LocalContext.current))
+) {
     var selectedTab by remember { mutableIntStateOf(1) } // 0: Roaming, 1: Hallway, 2: Artists
     var searchText by remember { mutableStateOf("") }
     var selectedFilterTag by remember { mutableStateOf<String?>(null) }
@@ -67,16 +75,15 @@ fun HallwayView() {
     val selectedTheme by remember { mutableStateOf("Default") }
     val applyAccentToAll by remember { mutableStateOf(false) }
     
-    // Mock Data to recreate the design natively
-    val mockRooms = remember {
-        listOf(
-            RoomObject(name = "Room 1", ownerEmail = "dj@test.com", description = "Morning vibes.", tags = listOf("trip", "music"), themeColor = Color(0xFFE91E63)),
-            RoomObject(name = "Room 2", ownerEmail = "artist@test.com", description = "Deep focus.", tags = listOf("science"), themeColor = Color(0xFF2196F3))
-        )
+    // Call API on init
+    LaunchedEffect(Unit) {
+        viewModel.fetchRooms()
     }
     
+    val mockRooms by viewModel.rooms.collectAsState()
+    
     var selectedIndex by remember { mutableIntStateOf(0) }
-    val currentRoom = mockRooms.getOrElse(selectedIndex) { mockRooms.first() }
+    val currentRoom = mockRooms.getOrNull(selectedIndex) ?: RoomObject(name = "Loading...")
     val accentColor = currentRoom.themeColor
     val iconColor = if (applyAccentToAll) accentColor else Color.White
     
@@ -214,12 +221,15 @@ fun HallwayView() {
                         )
                         
                         Box(modifier = Modifier.height(320.dp).padding(top = 6.dp)) {
-                            // Render previously requested CardStackView Component
-                            CardStackView(
-                                rooms = mockRooms,
-                                initialSelectedIndex = selectedIndex,
-                                isMenuHidden = false
-                            )
+                            if (mockRooms.isEmpty()) {
+                                Text("No rooms around.", color = Color.Gray, modifier = Modifier.align(Alignment.Center))
+                            } else {
+                                CardStackView(
+                                    rooms = mockRooms,
+                                    initialSelectedIndex = selectedIndex,
+                                    isMenuHidden = false
+                                )
+                            }
                         }
                     }
 

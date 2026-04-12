@@ -23,6 +23,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dmb.bestbefore.data.api.models.CreateRoomRequest
+import com.dmb.bestbefore.ui.viewmodels.RoomViewModel
+import com.dmb.bestbefore.ui.viewmodels.RoomViewModelFactory
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -30,9 +35,17 @@ import androidx.compose.ui.unit.sp
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
-fun CreateRoomFlowView(onDismiss: () -> Unit = {}) {
+fun CreateRoomFlowView(
+    viewModel: RoomViewModel = viewModel(factory = RoomViewModelFactory(LocalContext.current)),
+    onDismiss: () -> Unit = {}
+) {
     var step by remember { mutableStateOf(1) }
     var roomName by remember { mutableStateOf("") }
+    var isPrivate by remember { mutableStateOf(false) }
+    var timeCapsuleEnabled by remember { mutableStateOf(true) }
+    var durationDays by remember { mutableStateOf(21) }
+    var selectedTheme by remember { mutableStateOf("default") }
+    val isLoading by viewModel.isLoading.collectAsState()
     
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -67,9 +80,17 @@ fun CreateRoomFlowView(onDismiss: () -> Unit = {}) {
             Box(modifier = Modifier.weight(1f)) {
                 AnimatedContent(targetState = step, label = "StepTransition") { currentStep ->
                     when (currentStep) {
-                        1 -> StepOneContent(roomName = roomName, onRoomNameChange = { roomName = it })
-                        2 -> StepTwoContent()
-                        3 -> StepThreeContent()
+                        1 -> StepOneContent(
+                                 roomName = roomName, onRoomNameChange = { roomName = it },
+                                 isPrivate = isPrivate, onPrivacyChange = { isPrivate = it }
+                             )
+                        2 -> StepTwoContent(
+                                 timeCapsuleEnabled = timeCapsuleEnabled, onTimeCapsuleChange = { timeCapsuleEnabled = it },
+                                 durationDays = durationDays, onDurationChange = { durationDays = it }
+                             )
+                        3 -> StepThreeContent(
+                                 selectedTheme = selectedTheme, onThemeChange = { selectedTheme = it }
+                             )
                         4 -> StepFourContent()
                         5 -> StepFiveContent()
                     }
@@ -98,8 +119,21 @@ fun CreateRoomFlowView(onDismiss: () -> Unit = {}) {
                     modifier = Modifier
                         .weight(1f)
                         .background(if (step == 1 && roomName.isEmpty()) Color.Gray else Color.Blue, RoundedCornerShape(12.dp))
-                        .clickable(enabled = !(step == 1 && roomName.isEmpty())) {
-                            if (step < 5) step += 1 else onDismiss()
+                        .clickable(enabled = !(step == 1 && roomName.isEmpty()) && !isLoading) {
+                            if (step < 5) {
+                                step += 1
+                            } else {
+                                val request = CreateRoomRequest(
+                                    name = roomName,
+                                    isPrivate = isPrivate,
+                                    isTimeCapsule = timeCapsuleEnabled,
+                                    capsuleDurationDays = durationDays,
+                                    capsuleDurationHours = 0,
+                                    capsuleDurationMinutes = 0,
+                                    theme = selectedTheme
+                                )
+                                viewModel.createRoom(request, onSuccess = { onDismiss() })
+                            }
                         }
                         .padding(16.dp),
                     contentAlignment = Alignment.Center
@@ -116,9 +150,12 @@ fun CreateRoomFlowView(onDismiss: () -> Unit = {}) {
 // ----------------------------------------------------
 
 @Composable
-fun StepOneContent(roomName: String, onRoomNameChange: (String) -> Unit) {
-    var isPrivate by remember { mutableStateOf(false) }
-    
+fun StepOneContent(
+    roomName: String, 
+    onRoomNameChange: (String) -> Unit,
+    isPrivate: Boolean,
+    onPrivacyChange: (Boolean) -> Unit
+) {
     Column(modifier = Modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("What's the name?", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -157,18 +194,20 @@ fun StepOneContent(roomName: String, onRoomNameChange: (String) -> Unit) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("Privacy Status", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                PrivacyOption("Public", "Anyone can see.", Icons.Default.List, !isPrivate, Color.Blue, { isPrivate = false }, modifier = Modifier.weight(1f))
-                PrivacyOption("Private", "Invite only.", Icons.Default.Lock, isPrivate, Color.Blue, { isPrivate = true }, modifier = Modifier.weight(1f))
+                PrivacyOption("Public", "Anyone can see.", Icons.Default.List, !isPrivate, Color.Blue, { onPrivacyChange(false) }, modifier = Modifier.weight(1f))
+                PrivacyOption("Private", "Invite only.", Icons.Default.Lock, isPrivate, Color.Blue, { onPrivacyChange(true) }, modifier = Modifier.weight(1f))
             }
         }
     }
 }
 
 @Composable
-fun StepTwoContent() {
-    var timeCapsuleEnabled by remember { mutableStateOf(true) }
-    var durationDays by remember { mutableStateOf(21) }
-    
+fun StepTwoContent(
+    timeCapsuleEnabled: Boolean,
+    onTimeCapsuleChange: (Boolean) -> Unit,
+    durationDays: Int,
+    onDurationChange: (Int) -> Unit
+) {
     Column(modifier = Modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Time Capsule?", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -184,7 +223,7 @@ fun StepTwoContent() {
                 Text("Enable Time Capsule", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 Text("Content will be hidden until the timer ends.", fontSize = 12.sp, color = Color.Gray)
             }
-            Switch(checked = timeCapsuleEnabled, onCheckedChange = { timeCapsuleEnabled = it }, colors = SwitchDefaults.colors(checkedThumbColor = Color.Blue))
+            Switch(checked = timeCapsuleEnabled, onCheckedChange = onTimeCapsuleChange, colors = SwitchDefaults.colors(checkedThumbColor = Color.Blue))
         }
         
         if (timeCapsuleEnabled) {
@@ -192,9 +231,9 @@ fun StepTwoContent() {
                 Text("Unlock Method", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 // Duration Mock
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    DurationButton("7 Days", 7, durationDays, Color.Blue, { durationDays = it }, modifier = Modifier.weight(1f))
-                    DurationButton("21 Days", 21, durationDays, Color.Blue, { durationDays = it }, modifier = Modifier.weight(1f))
-                    DurationButton("60 Days", 60, durationDays, Color.Blue, { durationDays = it }, modifier = Modifier.weight(1f))
+                    DurationButton("7 Days", 7, durationDays, Color.Blue, onDurationChange, modifier = Modifier.weight(1f))
+                    DurationButton("21 Days", 21, durationDays, Color.Blue, onDurationChange, modifier = Modifier.weight(1f))
+                    DurationButton("60 Days", 60, durationDays, Color.Blue, onDurationChange, modifier = Modifier.weight(1f))
                 }
             }
         }
@@ -202,9 +241,10 @@ fun StepTwoContent() {
 }
 
 @Composable
-fun StepThreeContent() {
-    var selectedTheme by remember { mutableStateOf("default") }
-    
+fun StepThreeContent(
+    selectedTheme: String,
+    onThemeChange: (String) -> Unit
+) {
     Column(modifier = Modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Atmosphere", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -215,9 +255,9 @@ fun StepThreeContent() {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Room Theme", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ThemeOption("Default", Color.Blue, selectedTheme == "default") { selectedTheme = "default" }
-                ThemeOption("Cyberpunk", Color.Magenta, selectedTheme == "cyberpunk") { selectedTheme = "cyberpunk" }
-                ThemeOption("Ocean", Color.Cyan, selectedTheme == "ocean") { selectedTheme = "ocean" }
+                ThemeOption("Default", Color.Blue, selectedTheme == "default") { onThemeChange("default") }
+                ThemeOption("Cyberpunk", Color.Magenta, selectedTheme == "cyberpunk") { onThemeChange("cyberpunk") }
+                ThemeOption("Ocean", Color.Cyan, selectedTheme == "ocean") { onThemeChange("ocean") }
             }
         }
         

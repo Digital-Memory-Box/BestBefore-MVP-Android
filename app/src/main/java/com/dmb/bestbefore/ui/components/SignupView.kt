@@ -11,18 +11,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dmb.bestbefore.ui.viewmodels.AuthViewModel
+import com.dmb.bestbefore.ui.viewmodels.AuthViewModelFactory
 
 @Composable
-fun SignupView(onDismiss: () -> Unit = {}) {
+fun SignupView(
+    viewModel: AuthViewModel = viewModel(factory = AuthViewModelFactory(LocalContext.current)),
+    onDismiss: () -> Unit = {}
+) {
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    val isLoading = false
-    val errorMessage: String? = null
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
 
     Box(modifier = Modifier.fillMaxSize()) {
         AnimatedBackgroundView()
@@ -60,7 +67,11 @@ fun SignupView(onDismiss: () -> Unit = {}) {
                             .fillMaxWidth()
                             .height(56.dp)
                             .background(Color.White, RoundedCornerShape(28.dp))
-                            .clickable { /* performSignup placeholder */ },
+                            .clickable {
+                                if (email.isNotEmpty() && password.isNotEmpty() && name.isNotEmpty()) {
+                                    viewModel.signup(email.trim(), password.trim(), name.trim(), onSuccess = onDismiss)
+                                }
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         Text("Sign Up", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black)

@@ -13,7 +13,8 @@ data class UserDto(
     val email: String,
     val theme: String = "Default",
     val accentColor: String = "#007AFF",
-    val profileMusic: String? = null
+    val profileMusic: String? = null,
+    val createdAt: String? = null
 )
 
 data class UpdateMeRequest(
