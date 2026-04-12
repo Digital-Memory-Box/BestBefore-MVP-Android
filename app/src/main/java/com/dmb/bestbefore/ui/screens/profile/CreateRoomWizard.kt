@@ -1476,7 +1476,7 @@ fun CreateRoomStep4(viewModel: ProfileViewModel) {
         onDismiss = { viewModel.closeOverlay() },
         onBack = { viewModel.goToStep(ProfileStep.ROOM_ATMOSPHERE) },
         onNext = { viewModel.goToStep(ProfileStep.ROOM_INVITE) },
-        themeColor = getRoomThemeColor(themeName)
+        themeName = themeName
     ) {
         androidx.compose.foundation.rememberScrollState().let { scroll ->
             Column(modifier = Modifier.fillMaxWidth().verticalScroll(scroll)) {
@@ -1588,9 +1588,7 @@ fun CreateRoomStep4(viewModel: ProfileViewModel) {
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-//  STEP 5 â€” Invite Friends
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//  STEP 5 Invite Friends
 @Composable
 fun CreateRoomStep5(viewModel: ProfileViewModel) {
     val emails by viewModel.inviteEmails.collectAsState()
@@ -1605,7 +1603,7 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
         onBack = { viewModel.goToStep(ProfileStep.ROOM_MEMORY_RULES) },
         onNext = { viewModel.finalizeRoom(context) },
         nextLabel = "Create Room",
-        themeColor = getRoomThemeColor(themeName)
+        themeName = themeName
     ) {
         Text("Invite Friends", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(4.dp))
