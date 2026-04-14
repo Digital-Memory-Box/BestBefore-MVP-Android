@@ -1,28 +1,26 @@
 package com.dmb.bestbefore.ui.screens.signup
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dmb.bestbefore.ui.components.AnimatedBackgroundView
+import com.dmb.bestbefore.ui.screens.login.BBOutlinedInput
 
+// ═══════════════════════════════════════════════════════════════════════════
+// BB-UI-03: Signup Screen — iOS-matching design
+// ═══════════════════════════════════════════════════════════════════════════
 @Composable
 fun SignupScreen(
     onNavigateBack: (String?) -> Unit,
@@ -34,122 +32,136 @@ fun SignupScreen(
     val password by viewModel.password.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    val focusManager = LocalFocusManager.current
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        com.dmb.bestbefore.ui.components.AnimatedBackgroundView()
+    Box(modifier = Modifier.fillMaxSize()) {
+        // ── Animated Background (default theme — simple orbs) ───────
+        AnimatedBackgroundView()
+
         Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.SpaceBetween,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = "Create Account",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
+            Spacer(modifier = Modifier.weight(1f))
 
-            // Name Field
-            IOSStyleTextFieldS(
-                value = name,
-                onValueChange = { viewModel.updateName(it) },
-                placeholder = "Name (optional)",
-                keyboardType = KeyboardType.Text,
-                imeAction = ImeAction.Next
-            )
-
-            // Email Field
-            IOSStyleTextFieldS(
-                value = email,
-                onValueChange = { viewModel.updateEmail(it) },
-                placeholder = "Email",
-                keyboardType = KeyboardType.Email,
-                imeAction = ImeAction.Next
-            )
-
-            // Password Field
-            IOSStyleTextFieldS(
-                value = password,
-                onValueChange = { viewModel.updatePassword(it) },
-                placeholder = "Password (min 6 chars)",
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done,
-                isPassword = true,
-                onDone = {
-                    focusManager.clearFocus()
-                    viewModel.attemptSignup()
-                }
-            )
-
-            Button(
-                onClick = { viewModel.attemptSignup() },
-                enabled = !isLoading,
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF007AFF) // iOS systemBlue
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
+            // ── Title + Form ────────────────────────────────────────
+            Column(
+                verticalArrangement = Arrangement.spacedBy(60.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        color = Color.White,
-                        modifier = Modifier.size(24.dp)
+                // Title
+                Text(
+                    text = "Create Account",
+                    fontSize = 36.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    textAlign = TextAlign.Center
+                )
+
+                // Form Fields
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(20.dp),
+                    modifier = Modifier.padding(horizontal = 40.dp)
+                ) {
+                    BBOutlinedInput(
+                        placeholder = "name",
+                        text = name,
+                        onValueChange = { viewModel.updateName(it) }
                     )
-                } else {
-                    Text(
-                        "Create Account",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
+                    BBOutlinedInput(
+                        placeholder = "email",
+                        text = email,
+                        onValueChange = { viewModel.updateEmail(it) }
                     )
+                    BBOutlinedInput(
+                        placeholder = "password",
+                        text = password,
+                        onValueChange = { viewModel.updatePassword(it) },
+                        isSecure = true
+                    )
+
+                    // Sign Up Button
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 20.dp)
+                            .fillMaxWidth()
+                            .height(56.dp)
+                            .background(Color.White, RoundedCornerShape(28.dp))
+                            .clickable {
+                                if (email.isNotEmpty() && password.isNotEmpty() && name.isNotEmpty()) {
+                                    viewModel.attemptSignup()
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Sign Up",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
+                    }
                 }
             }
 
-            TextButton(
-                onClick = { onNavigateBack(null) },
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            ) {
+            // Error message
+            val msg = errorMessage
+            if (msg != null) {
                 Text(
-                    "Already have an account? Log in",
-                    color = Color.LightGray,
-                    fontSize = 14.sp
+                    text = msg,
+                    color = Color.Red,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // ── Bottom Link ─────────────────────────────────────────
+            Text(
+                text = "already have an account? login",
+                color = Color.White,
+                fontSize = 16.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .padding(bottom = 60.dp)
+                    .clickable { onNavigateBack(null) }
+            )
         }
 
-        if (errorMessage != null) {
-            Snackbar(
+        // ── Loading Overlay ─────────────────────────────────────────
+        if (isLoading) {
+            Box(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(16.dp),
-             containerColor = Color(0xFF333333), // Dark gray
-             contentColor = Color.White
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.4f)),
+                contentAlignment = Alignment.Center
             ) {
-                Text(errorMessage ?: "")
+                CircularProgressIndicator(
+                    color = Color.White,
+                    strokeWidth = 3.dp,
+                    modifier = Modifier.scale(1.5f)
+                )
             }
         }
     }
 
+    // ── Signup Success Flow ─────────────────────────────────────────
     LaunchedEffect(Unit) {
         viewModel.signupSuccess.collect { email ->
             onSignupSuccess(email)
         }
     }
-    
+
+    // ── Email Verification Dialog ───────────────────────────────────
     val isVerificationSent by viewModel.isVerificationSent.collectAsState()
     if (isVerificationSent) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.9f))
-                .clickable(enabled = false) {}, // Block interaction
+                .clickable(enabled = false) {},
             contentAlignment = Alignment.Center
         ) {
             Column(
@@ -172,81 +184,35 @@ fun SignupScreen(
                     color = Color.LightGray,
                     textAlign = TextAlign.Center
                 )
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
-                
+
                 Button(
                     onClick = { viewModel.checkVerificationStatus() },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF)),
-                    modifier = Modifier.fillMaxWidth()
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(28.dp),
+                    modifier = Modifier.fillMaxWidth().height(50.dp)
                 ) {
                     if (isLoading) {
-                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp))
+                        CircularProgressIndicator(
+                            color = Color.Black,
+                            modifier = Modifier.size(20.dp)
+                        )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Checking...")
+                        Text("Checking...", color = Color.Black)
                     } else {
-                         Text("I have verified my email")
+                        Text(
+                            "I have verified my email",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
-                
+
                 TextButton(onClick = { /* Could add resend logic here */ }) {
                     Text("Resend Email", color = Color.Gray)
                 }
             }
-            }
-    }
-}
-
-// Duplicated from LoginScreen.kt to avoid package issues without refactoring
-@Composable
-fun IOSStyleTextFieldS(
-    value: String,
-    onValueChange: (String) -> Unit,
-    placeholder: String,
-    keyboardType: KeyboardType = KeyboardType.Text,
-    imeAction: ImeAction = ImeAction.Default,
-    isPassword: Boolean = false,
-    onDone: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
-) {
-    androidx.compose.foundation.text.BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
-        textStyle = androidx.compose.ui.text.TextStyle(
-            color = Color.White,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Normal
-        ),
-        keyboardOptions = KeyboardOptions(
-            keyboardType = keyboardType,
-            imeAction = imeAction
-        ),
-        keyboardActions = KeyboardActions(
-            onDone = { onDone?.invoke() }
-        ),
-        visualTransformation = if (isPassword) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-        singleLine = true,
-        cursorBrush = SolidColor(Color.White),
-        modifier = modifier,
-        decorationBox = { innerTextField ->
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-                    .border(width = 1.dp, color = Color.White, shape = RoundedCornerShape(10.dp))
-                    .background(Color.Black, shape = RoundedCornerShape(10.dp))
-                    .padding(horizontal = 16.dp),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                if (value.isEmpty()) {
-                    Text(
-                        text = placeholder,
-                        color = Color.LightGray,
-                        fontSize = 16.sp
-                    )
-                }
-                innerTextField()
-            }
         }
-    )
+    }
 }

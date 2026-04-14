@@ -18,6 +18,12 @@ object ThemeState {
     var currentAccent by mutableStateOf(Color(0xFF007AFF))
         private set
 
+    var applyAccentToAll by mutableStateOf(false)
+        private set
+
+    var syncAccentWithRoom by mutableStateOf(false)
+        private set
+
     private var prefsManager: PreferencesManager? = null
 
     fun init(context: Context) {
@@ -36,5 +42,22 @@ object ThemeState {
     fun selectAccent(color: Color) {
         currentAccent = color
         prefsManager?.saveAccentColor(color)
+    }
+
+    fun updateApplyAccentToAll(enabled: Boolean) {
+        applyAccentToAll = enabled
+    }
+
+    fun updateSyncAccentWithRoom(enabled: Boolean) {
+        syncAccentWithRoom = enabled
+        if (!enabled) {
+            currentAccent = prefsManager?.getAccentColor() ?: currentAccent
+        }
+    }
+
+    fun syncAccent(color: Color) {
+        if (syncAccentWithRoom) {
+            currentAccent = color
+        }
     }
 }

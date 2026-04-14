@@ -68,25 +68,25 @@ fun HallwayView(
     var selectedTab by remember { mutableIntStateOf(1) } // 0: Roaming, 1: Hallway, 2: Artists
     var searchText by remember { mutableStateOf("") }
     var selectedFilterTag by remember { mutableStateOf<String?>(null) }
-    
+
     var showingSoundCloudModal by remember { mutableStateOf(false) }
     var isDescriptionExpanded by remember { mutableStateOf(false) }
-    
+
     val selectedTheme by remember { mutableStateOf("Default") }
     val applyAccentToAll by remember { mutableStateOf(false) }
-    
+
     // Call API on init
     LaunchedEffect(Unit) {
         viewModel.fetchRooms()
     }
-    
+
     val mockRooms by viewModel.rooms.collectAsState()
-    
+
     var selectedIndex by remember { mutableIntStateOf(0) }
     val currentRoom = mockRooms.getOrNull(selectedIndex) ?: RoomObject(name = "Loading...")
     val accentColor = currentRoom.themeColor
     val iconColor = if (applyAccentToAll) accentColor else Color.White
-    
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -111,7 +111,7 @@ fun HallwayView(
                         fontWeight = FontWeight.Bold,
                         color = if (applyAccentToAll && selectedTheme != "Default") accentColor else Color.White
                     )
-                    
+
                     Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                         Icon(
                             imageVector = Icons.Default.List, // music.note.list fallback
@@ -127,7 +127,7 @@ fun HallwayView(
                         )
                     }
                 }
-                
+
                 // --- Search Bar ---
                 Row(
                     modifier = Modifier
@@ -149,7 +149,7 @@ fun HallwayView(
                         color = if (applyAccentToAll && selectedTheme != "Default") accentColor else Color.White.copy(alpha = 0.6f)
                     )
                 }
-                
+
                 // --- Tag Filter Bar ---
                 val presetTags = listOf("trip", "music", "science", "party", "family")
                 Row(
@@ -198,7 +198,7 @@ fun HallwayView(
                         }
                     }
                 }
-                
+
                 // --- Horizontal Carousel Area ---
                 // Title + Card Stack + CD Button
                 Box(
@@ -219,7 +219,7 @@ fun HallwayView(
                                 .fillMaxWidth()
                                 .padding(top = 4.dp)
                         )
-                        
+
                         Box(modifier = Modifier.height(320.dp).padding(top = 6.dp)) {
                             if (mockRooms.isEmpty()) {
                                 Text("No rooms around.", color = Color.Gray, modifier = Modifier.align(Alignment.Center))
@@ -251,7 +251,7 @@ fun HallwayView(
                         )
                     }
                 }
-                
+
                 // --- Artist Detail Section ---
                 Column(
                     modifier = Modifier
@@ -284,7 +284,7 @@ fun HallwayView(
                                 color = if (applyAccentToAll && selectedTheme != "Default") accentColor else Color.White
                             )
                         }
-                        
+
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             currentRoom.tags.take(2).forEach { tag ->
                                 Box(
@@ -316,7 +316,7 @@ fun HallwayView(
                             }
                         }
                     }
-                    
+
                     Text(
                         text = currentRoom.description ?: "No description provided.",
                         fontSize = 14.sp,
@@ -324,7 +324,7 @@ fun HallwayView(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    
+
                     Text(
                         text = "See All",
                         fontSize = 13.sp,
@@ -339,9 +339,9 @@ fun HallwayView(
                     Text("Roaming View Content", color = Color.White)
                 }
             }
-            
+
             Spacer(modifier = Modifier.weight(1f))
-            
+
             // Bottom Nav
             HallwayBottomNav(
                 selectedTab = selectedTab,
@@ -350,7 +350,7 @@ fun HallwayView(
                 onTabSelected = { selectedTab = it }
             )
         }
-        
+
         // --- SoundCloud Player Modal Overlay ---
         AnimatedVisibility(
             visible = showingSoundCloudModal,
@@ -363,7 +363,7 @@ fun HallwayView(
                 onDismiss = { showingSoundCloudModal = false }
             )
         }
-        
+
         // --- Expanded Description Full Screen ---
         AnimatedVisibility(
             visible = isDescriptionExpanded,
@@ -441,7 +441,7 @@ fun SoundCloudPlayerModal(
                 .background(Color.Black.copy(alpha = 0.85f))
                 .clickable { onDismiss() }
         )
-        
+
         // Modal Sheet
         Column(
             modifier = Modifier.align(Alignment.BottomCenter)
@@ -470,7 +470,7 @@ fun SoundCloudPlayerModal(
                             .size(width = 40.dp, height = 4.dp)
                             .background(Color.White.copy(alpha = 0.3f), CircleShape)
                     )
-                    
+
                     Column(
                         verticalArrangement = Arrangement.spacedBy(35.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -499,7 +499,7 @@ fun SoundCloudPlayerModal(
                                 )
                             }
                         }
-                        
+
                         // Metadata Section
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -514,14 +514,14 @@ fun SoundCloudPlayerModal(
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.padding(horizontal = 30.dp)
                             )
-                            
+
                             Text(
                                 text = "jergkoppf",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color.White.copy(alpha = 0.5f)
                             )
-                            
+
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),

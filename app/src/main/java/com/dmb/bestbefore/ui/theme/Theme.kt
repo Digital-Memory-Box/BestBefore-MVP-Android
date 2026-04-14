@@ -47,16 +47,19 @@ val LocalBestBeforeColors = compositionLocalOf {
 fun BestBeforeTheme(
     appTheme: AppTheme = AppThemes.Default,
     accentColor: Color = Color(0xFF007AFF),
+    applyAccentToAll: Boolean = false,
     content: @Composable () -> Unit
 ) {
+    val useAccentForText = applyAccentToAll && appTheme.name != AppThemes.Default.name
+
     // Build palette from the selected AppTheme, overriding primary with the user's accent color
     val palette = BestBeforeColorPalette(
         background = appTheme.backgroundColor,
         surface = appTheme.surfaceColor,
         primary = accentColor,
         secondary = appTheme.secondaryColor,
-        textPrimary = appTheme.textPrimaryColor,
-        textSecondary = appTheme.textSecondaryColor,
+        textPrimary = if (useAccentForText) accentColor else appTheme.textPrimaryColor,
+        textSecondary = if (useAccentForText) accentColor else appTheme.textSecondaryColor,
         isGlass = appTheme.isGlass,
         orbColor1 = appTheme.orbColor1,
         orbColor2 = appTheme.orbColor2
@@ -66,14 +69,14 @@ fun BestBeforeTheme(
     val colorScheme = darkColorScheme(
         primary = accentColor,
         secondary = appTheme.secondaryColor,
-        tertiary = appTheme.textSecondaryColor,
+        tertiary = if (useAccentForText) accentColor else appTheme.textSecondaryColor,
         background = appTheme.backgroundColor,
         surface = appTheme.surfaceColor,
         onPrimary = Color.White,
         onSecondary = Color.White,
         onTertiary = Color.White,
-        onBackground = appTheme.textPrimaryColor,
-        onSurface = appTheme.textPrimaryColor,
+        onBackground = if (useAccentForText) accentColor else appTheme.textPrimaryColor,
+        onSurface = if (useAccentForText) accentColor else appTheme.textPrimaryColor,
     )
 
     val view = LocalView.current

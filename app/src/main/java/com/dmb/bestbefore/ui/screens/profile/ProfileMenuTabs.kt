@@ -164,48 +164,17 @@ fun DashboardTab(
         ) {
         // Stats Cards
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                // My Rooms Card
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(140.dp)
-                        .background(Color(0xFF1C1C1E), RoundedCornerShape(16.dp))
-                        .padding(16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxHeight(),
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-                         Icon(Icons.Default.Home, null, tint = Color(0xFF007AFF), modifier = Modifier.size(32.dp))
-                         Column {
-                             val totalRooms by viewModel.totalRooms.collectAsState()
-                             Text(totalRooms.toString(), color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                             Text("My Rooms", color = Color.Gray, fontSize = 14.sp)
-                         }
-                    }
-                }
-                 // Memories Card
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(140.dp)
-                        .background(Color(0xFF1C1C1E), RoundedCornerShape(16.dp))
-                        .padding(16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxHeight(),
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-                         Icon(Icons.Default.Image, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(32.dp))
-                         Column {
-                             val totalMemories by viewModel.totalMemories.collectAsState()
-                             Text(totalMemories.toString(), color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                             Text("Memories", color = Color.Gray, fontSize = 14.sp)
-                         }
-                    }
-                }
-            }
+            val userName by viewModel.userName.collectAsState()
+            val accentColor by viewModel.accentColor.collectAsState()
+            
+            com.dmb.bestbefore.ui.components.SharedUserCard(
+                name = userName,
+                biography = "Digital artist focusing on surreal landscapes and vibrant color theory.", // Mock bio
+                roomingCount = "0",
+                roomersCount = "0",
+                accentColor = accentColor,
+                privacyStatus = com.dmb.bestbefore.ui.components.UserPrivacyStatus.NONE
+            )
             Spacer(modifier = Modifier.height(24.dp))
         }
 
@@ -393,7 +362,10 @@ fun CustomizationTab(
     val context = androidx.compose.ui.platform.LocalContext.current
     val selectedTheme by viewModel.selectedTheme.collectAsState()
     val accentColor by viewModel.accentColor.collectAsState()
-    
+    val applyAccentToAll by viewModel.applyAccentToAll.collectAsState(initial = false)
+    val syncAccent by viewModel.syncAccentWithRoom.collectAsState(initial = false)
+    val colors = LocalBestBeforeColors.current
+
     // Load tracks when tab is active
     var authToken by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
@@ -410,38 +382,72 @@ fun CustomizationTab(
             .padding(horizontal = 16.dp)
             .verticalScroll(androidx.compose.foundation.rememberScrollState())
     ) {
-        // Public Name
+        // BB-UI-14: Public Name
         Text(text = "Public Name", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
         val userName by viewModel.userName.collectAsState()
-        Row(
+        BasicTextField(
+            value = userName,
+            onValueChange = { viewModel.updateUserName(it) },
+            textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFF1C1C1E), RoundedCornerShape(10.dp))
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            BasicTextField(
-                value = userName,
-                onValueChange = { viewModel.updateUserName(it) },
-                textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
-                modifier = Modifier.weight(1f),
-                decorationBox = { innerTextField ->
-                    if (userName.isEmpty()) Text("Enter name", color = Color.Gray)
-                    innerTextField()
-                }
-            )
-            androidx.compose.material3.TextButton(
-                onClick = { viewModel.savePublicName(context) },
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                .background(colors.surface, RoundedCornerShape(12.dp))
+                .padding(16.dp),
+            decorationBox = { innerTextField ->
+                if (userName.isEmpty()) Text("Enter name", color = Color.Gray)
+                innerTextField()
+            }
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // BB-UI-14: Biography
+        Text(text = "Biography", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        var bioText by remember { mutableStateOf("Digital artist focusing on surreal landscapes and vibrant color theory.") }
+        BasicTextField(
+            value = bioText,
+            onValueChange = { bioText = it },
+            textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(colors.surface, RoundedCornerShape(12.dp))
+                .padding(16.dp)
+                .heightIn(min = 90.dp),
+            decorationBox = { innerTextField ->
+                if (bioText.isEmpty()) Text("Enter biography", color = Color.Gray)
+                innerTextField()
+            }
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // BB-UI-14: Profile Photo
+        Text(text = "Profile Photo", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(84.dp)
+                    .background(colors.secondary, CircleShape)
+                    .border(2.dp, accentColor, CircleShape)
+                    .clip(CircleShape),
+                contentAlignment = Alignment.Center
             ) {
-                Text("Save", color = accentColor, fontWeight = FontWeight.Bold)
+                 Icon(Icons.Default.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Box(
+                modifier = Modifier
+                    .background(accentColor, RoundedCornerShape(10.dp))
+                    .clickable { /* Local Photo Picker Action */ }
+                    .padding(horizontal = 18.dp, vertical = 12.dp)
+            ) {
+                Text("Update Photo", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
         }
-        
         Spacer(modifier = Modifier.height(24.dp))
-        
-        // Interface Theme
+
+        // BB-UI-15: Interface Theme
         Text(text = "Interface Theme", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
         Row(
@@ -450,129 +456,179 @@ fun CustomizationTab(
         ) {
             com.dmb.bestbefore.ui.theme.AppThemes.getAllThemes().forEach { theme ->
                val isSelected = theme.name == selectedTheme.name
+               val forceWhiteSelectedText = applyAccentToAll && (theme.name == "Glass" || theme.name == "Midnight")
                Box(
                    modifier = Modifier
                        .weight(1f)
-                       .height(36.dp)
+                       .height(38.dp)
                        .background(
-                           if (isSelected) accentColor else Color(0xFF1C1C1E),
+                           if (isSelected) accentColor else colors.surface,
+                           RoundedCornerShape(18.dp)
+                       )
+                       .border(
+                           1.dp,
+                           if (isSelected) accentColor else Color.White.copy(alpha = 0.08f),
                            RoundedCornerShape(18.dp)
                        )
                        .clickable { viewModel.selectTheme(context, theme) },
                    contentAlignment = Alignment.Center
                ) {
-                   Text(text = theme.name, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                   Text(
+                       text = theme.name,
+                       color = if (isSelected && forceWhiteSelectedText) Color.White else if (isSelected) Color.Black else Color.White,
+                       fontSize = 12.sp,
+                       fontWeight = FontWeight.Bold
+                   )
                }
             }
         }
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        // Accent Color
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // BB-UI-15: Accent Color
         Text(text = "Accent Color", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            val colors = listOf(Color(0xFF007AFF), Color(0xFFAF52DE), Color(0xFFFF2D55), Color(0xFFFF9500), Color(0xFF34C759), Color(0xFFFF3B30))
-            colors.forEach { color ->
+            val colorsList = listOf(Color(0xFF007AFF), Color(0xFFAF52DE), Color(0xFFFF3B30), Color(0xFFFF9500), Color(0xFF34C759), Color(0xFFFF2D55))
+            colorsList.forEach { color ->
+                val swatchColor = if (syncAccent) color.copy(alpha = 0.35f) else color
                 Box(
                     modifier = Modifier
                         .size(40.dp)
-                        .background(color, CircleShape)
-                        .clickable { viewModel.selectAccentColor(context, color) }
+                        .background(swatchColor, CircleShape)
+                        .clickable(enabled = !syncAccent) { viewModel.selectAccentColor(context, color) }
                         .then(
-                            if (accentColor == color) {
+                            if (accentColor == color && !syncAccent) {
                                 Modifier.border(3.dp, Color.White, CircleShape)
                             } else Modifier
                         )
                 )
             }
         }
-        
+
         Spacer(modifier = Modifier.height(24.dp))
-        
-        // Profile Music
+
+        // Advanced Customization
+        Text(text = "Advanced Customization", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Apply Accent Toggle
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(colors.surface, RoundedCornerShape(12.dp))
+                .padding(14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Apply Accent to all UI elements", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("Converts all icons and text to the accent color, except for white exceptions in the Default theme.", color = Color.Gray, fontSize = 12.sp, lineHeight = 16.sp)
+            }
+            Switch(
+                checked = applyAccentToAll,
+                onCheckedChange = { viewModel.toggleApplyAccent(context, it) },
+                colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = accentColor)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Sync Accent Toggle
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(colors.surface, RoundedCornerShape(12.dp))
+                .padding(14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Sync accent with room themes", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("Automatically updates the global accent color based on the current room's theme color while swiping.", color = Color.Gray, fontSize = 12.sp, lineHeight = 16.sp)
+            }
+            Switch(
+                checked = syncAccent,
+                onCheckedChange = { viewModel.toggleSyncAccent(context, it) },
+                colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = accentColor)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // BB-UI-15: Profile Music
         Text(text = "Profile Music", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
-        
+
         val selectedMusic by viewModel.profileMusic.collectAsState()
         val musicTracks by musicViewModel.tracks.collectAsState()
-        val isMusicLoading by musicViewModel.isLoading.collectAsState()
-        
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFF1C1C1E), RoundedCornerShape(12.dp))
+                .background(colors.surface, RoundedCornerShape(12.dp))
         ) {
-             // None option
              val isNone = selectedMusic == "None" || selectedMusic == null
              Row(
                  modifier = Modifier
                      .fillMaxWidth()
-                     .clickable { 
-                         viewModel.saveProfileMusic(context, "None")
-                     }
+                     .border(if (isNone) 2.dp else 0.dp, if (isNone) accentColor else Color.Transparent, RoundedCornerShape(12.dp))
+                     .clickable { viewModel.saveProfileMusic(context, "None") }
                      .padding(16.dp),
                  verticalAlignment = Alignment.CenterVertically
              ) {
-                 Icon(Icons.AutoMirrored.Filled.VolumeOff, null, tint = if(isNone) accentColor else Color.Gray)
+                 Icon(Icons.AutoMirrored.Filled.VolumeOff, null, tint = if(isNone) Color.White else Color.Gray)
                  Spacer(modifier = Modifier.width(16.dp))
-                 Text("None", color = if(isNone) Color.White else Color.Gray, fontWeight = FontWeight.Bold)
+                 Text("None", color = Color.White, fontWeight = FontWeight.Bold)
                  Spacer(modifier = Modifier.weight(1f))
-                 if(isNone) Icon(Icons.Default.CheckCircle, null, tint = accentColor) 
+                 if(isNone) Icon(Icons.Default.CheckCircle, null, tint = accentColor)
              }
-             
-             if (isMusicLoading) {
-                 Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                     CircularProgressIndicator(color = accentColor, modifier = Modifier.size(24.dp))
-                 }
-             } else {
-                 musicTracks.forEach { track ->
-                     val isSelected = selectedMusic == track.title
-                     Row(
-                         modifier = Modifier
-                             .fillMaxWidth()
-                             .clickable {
-                                 viewModel.saveProfileMusic(context, track.title)
-                                 // Optional: Play track to preview
-                                 musicViewModel.playTrack(context, track)
-                             }
-                             .padding(16.dp),
-                         verticalAlignment = Alignment.CenterVertically
-                     ) {
-                         coil.compose.AsyncImage(
-                             model = track.artworkUrl,
-                             contentDescription = null,
-                             modifier = Modifier.size(32.dp).clip(CircleShape).background(Color.DarkGray)
-                         )
-                         Spacer(modifier = Modifier.width(16.dp))
-                         Column(modifier = Modifier.weight(1f)) {
-                             Text(track.title, color = if(isSelected) Color.White else Color.Gray, fontWeight = FontWeight.Bold, maxLines = 1)
-                             Text(track.artist, color = Color.Gray, fontSize = 12.sp, maxLines = 1)
-                         }
-                         if(isSelected) Icon(Icons.Default.CheckCircle, null, tint = accentColor)
-                     }
+
+             musicTracks.forEach { track ->
+                 Row(
+                     modifier = Modifier
+                         .fillMaxWidth()
+                         .clickable { viewModel.saveProfileMusic(context, track.title) }
+                         .padding(16.dp),
+                     verticalAlignment = Alignment.CenterVertically
+                 ) {
+                     Icon(Icons.Default.Done, null, tint = Color.Gray)
+                     Spacer(modifier = Modifier.width(16.dp))
+                     Text(track.title, color = Color.Gray, fontWeight = FontWeight.Bold)
                  }
              }
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // BB-UI-15: Memory Suggestions (Placeholder)
+        Text(text = "Memory Suggestions", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(100.dp)
+                .background(colors.surface, RoundedCornerShape(12.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("Suggestions feature coming soon", color = Color.Gray)
+        }
+
         Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
 // --- TAB 3: SETTINGS ---
+// BB-UI-16
 @Composable
 fun SettingsTab(viewModel: ProfileViewModel, onLogout: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    
-    // State for credential updates
-    val updateEmailError by viewModel.credentialUpdateError.collectAsState()
-    val updateEmailSuccess by viewModel.credentialUpdateSuccess.collectAsState()
-    val isUpdating by viewModel.isUpdatingCredential.collectAsState()
-    
+    val colors = LocalBestBeforeColors.current
+    val accentColor = colors.primary
+
     var newEmail by remember { mutableStateOf("") }
-    var emailCurrentPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
-    var passwordCurrentPassword by remember { mutableStateOf("") }
-    
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -581,61 +637,29 @@ fun SettingsTab(viewModel: ProfileViewModel, onLogout: () -> Unit) {
     ) {
         Text("Account Settings", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(modifier = Modifier.height(16.dp))
-        
-        // Update Email Section
-        Text("Update Email", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+
+        // Update Email
+        Text("Update Email", color = Color.Gray, fontSize = 14.sp)
         Spacer(modifier = Modifier.height(8.dp))
-        
         BasicTextField(
             value = newEmail,
             onValueChange = { newEmail = it },
             textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFF1C1C1E), RoundedCornerShape(10.dp))
+                .background(colors.surface, RoundedCornerShape(12.dp))
                 .padding(16.dp),
             decorationBox = { innerTextField ->
-                if (newEmail.isEmpty()) Text("New Email", color = Color.Gray)
+                if (newEmail.isEmpty()) Text("name@example.com", color = Color.Gray)
                 innerTextField()
             }
         )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Update Password
+        Text("Update Password", color = Color.Gray, fontSize = 14.sp)
         Spacer(modifier = Modifier.height(8.dp))
-        
-        BasicTextField(
-            value = emailCurrentPassword,
-            onValueChange = { emailCurrentPassword = it },
-            textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFF1C1C1E), RoundedCornerShape(10.dp))
-                .padding(16.dp),
-            decorationBox = { innerTextField ->
-                if (emailCurrentPassword.isEmpty()) Text("Current Password", color = Color.Gray)
-                innerTextField()
-            }
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Button(
-            onClick = {
-                if (newEmail.isNotBlank() && emailCurrentPassword.isNotBlank()) {
-                    viewModel.updateEmail(context, newEmail, emailCurrentPassword)
-                }
-            },
-            enabled = !isUpdating && newEmail.isNotBlank() && emailCurrentPassword.isNotBlank(),
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF))
-        ) {
-            Text(if (isUpdating) "Updating..." else "Update Email")
-        }
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        // Update Password Section
-        Text("Update Password", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(8.dp))
-        
         BasicTextField(
             value = newPassword,
             onValueChange = { newPassword = it },
@@ -643,79 +667,46 @@ fun SettingsTab(viewModel: ProfileViewModel, onLogout: () -> Unit) {
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFF1C1C1E), RoundedCornerShape(10.dp))
+                .background(colors.surface, RoundedCornerShape(12.dp))
                 .padding(16.dp),
             decorationBox = { innerTextField ->
                 if (newPassword.isEmpty()) Text("New Password (min 6 chars)", color = Color.Gray)
                 innerTextField()
             }
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        BasicTextField(
-            value = passwordCurrentPassword,
-            onValueChange = { passwordCurrentPassword = it },
-            textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFF1C1C1E), RoundedCornerShape(10.dp))
-                .padding(16.dp),
-            decorationBox = { innerTextField ->
-                if (passwordCurrentPassword.isEmpty()) Text("Current Password", color = Color.Gray)
-                innerTextField()
-            }
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Button(
-            onClick = {
-                if (newPassword.isNotBlank() && passwordCurrentPassword.isNotBlank()) {
-                    viewModel.updatePassword(context, newPassword, passwordCurrentPassword)
-                }
-            },
-            enabled = !isUpdating && newPassword.isNotBlank() && passwordCurrentPassword.isNotBlank(),
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF))
-        ) {
-            Text(if (isUpdating) "Updating..." else "Update Password")
-        }
-        
-        // Error/Success Messages
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        updateEmailError?.let { error ->
-            Text(text = error, color = Color.Red, fontSize = 14.sp)
-            androidx.compose.runtime.LaunchedEffect(error) {
-                kotlinx.coroutines.delay(5000)
-                viewModel.clearCredentialMessages()
-            }
-        }
-        
-        updateEmailSuccess?.let { success ->
-            Text(text = success, color = Color.Green, fontSize = 14.sp)
-            androidx.compose.runtime.LaunchedEffect(success) {
-                kotlinx.coroutines.delay(5000)
-                viewModel.clearCredentialMessages()
-                // Clear input fields
-                newEmail = ""
-                emailCurrentPassword = ""
-                newPassword = ""
-                passwordCurrentPassword = ""
-            }
-        }
-        
+
         Spacer(modifier = Modifier.height(24.dp))
 
-        Spacer(modifier = Modifier.height(48.dp))
-        Button(
-            onClick = onLogout,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E0B0B)), // Dark Red/Brown
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth().height(50.dp)
+        // Update Credentials Button
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(accentColor.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                .border(1.dp, accentColor.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                .clickable {
+                    // Logic to update both synchronously.
+                }
+                .padding(vertical = 16.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Text("Log Out", color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold)
+            Text("Update Credentials", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
         }
-         Spacer(modifier = Modifier.height(48.dp))
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Log Out Button
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF3B0D0D), RoundedCornerShape(12.dp))
+                .border(1.dp, Color(0xFFFF3B30).copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                .clickable { onLogout() }
+                .padding(vertical = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("Log Out", color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        }
+
+        Spacer(modifier = Modifier.height(48.dp))
     }
 }

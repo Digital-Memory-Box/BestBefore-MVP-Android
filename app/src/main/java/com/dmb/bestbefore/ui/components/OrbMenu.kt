@@ -1,9 +1,9 @@
 package com.dmb.bestbefore.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Email
@@ -16,9 +16,29 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.dmb.bestbefore.ui.theme.ThemeState
+import androidx.compose.ui.graphics.vector.ImageVector
+
+/**
+ * True oval shape (ellipse) to avoid the flat vertical side produced by rounded rectangles.
+ */
+private object OrbOvalShape : Shape {
+    override fun createOutline(
+        size: androidx.compose.ui.geometry.Size,
+        layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+        density: androidx.compose.ui.unit.Density
+    ): Outline = Outline.Generic(
+        Path().apply {
+            addOval(Rect(0f, 0f, size.width, size.height))
+        }
+    )
+}
 
 /**
  * Floating orb menu component that appears on the right edge of the screen.
@@ -27,7 +47,8 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun OrbMenu(
     modifier: Modifier = Modifier,
-    size: Dp = 200.dp,
+    width: Dp = 160.dp,
+    height: Dp = 220.dp,
     primaryColor: Color = Color(0xFF0D59F2),
     secondaryColor: Color = Color(0xFF00D972),
     onSearchClick: () -> Unit = {},
@@ -35,15 +56,47 @@ fun OrbMenu(
     onAddClick: () -> Unit = {},
     onProfileClick: () -> Unit = {}
 ) {
+    val appTheme = ThemeState.currentTheme
+    val accent = ThemeState.currentAccent
+    val applyAccent = ThemeState.applyAccentToAll
+    val isGlass = appTheme.name == "Glass"
+    val isMidnight = appTheme.name == "Midnight"
+
+    val iconTint = when {
+        isMidnight -> accent
+        isGlass -> if (applyAccent) Color.White else accent
+        else -> Color.White
+    }
+
+    val baseBackground = when {
+        isGlass -> Color.White.copy(alpha = 0.1f)
+        isMidnight -> Color.Black
+        else -> accent
+    }
+
     Box(
         modifier = modifier
-            .size(size)
-            .offset(x = size / 2) // Half off-screen to the right
-            .clip(RoundedCornerShape(topStart = size / 2, bottomStart = size / 2))
+            .width(width)
+            .height(height)
+            .offset(x = width * 0.55f) // Shift right so the full round edge is visible
+            .clip(OrbOvalShape)
             .background(
-                brush = Brush.horizontalGradient(
-                    colors = listOf(primaryColor, secondaryColor)
-                )
+                brush = if (isGlass) {
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.18f),
+                            accent.copy(alpha = 0.08f),
+                            primaryColor.copy(alpha = 0.05f),
+                            secondaryColor.copy(alpha = 0.03f)
+                        )
+                    )
+                } else {
+                    Brush.radialGradient(listOf(baseBackground, baseBackground))
+                }
+            )
+            .then(
+                if (isMidnight) Modifier.border(1.dp, accent, OrbOvalShape)
+                else Modifier
             )
     ) {
         // Inner lighter half-circle for depth
@@ -51,8 +104,10 @@ fun OrbMenu(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(12.dp)
-                .clip(RoundedCornerShape(topStart = (size / 2) - 12.dp, bottomStart = (size / 2) - 12.dp))
-                .background(Color.White.copy(alpha = 0.10f))
+                .clip(OrbOvalShape)
+                .background(
+                    if (isMidnight) Color.Black else Color.White.copy(alpha = 0.10f)
+                )
         )
 
         // Large centered profile button
@@ -66,7 +121,8 @@ fun OrbMenu(
                 contentDescription = "Profile",
                 onClick = onProfileClick,
                 size = 56.dp,
-                iconSize = 32.dp
+                iconSize = 32.dp,
+                tint = iconTint
             )
         }
 
@@ -81,7 +137,8 @@ fun OrbMenu(
                 contentDescription = "Messages",
                 onClick = onChatClick,
                 size = 40.dp,
-                iconSize = 20.dp
+                iconSize = 20.dp,
+                tint = iconTint
             )
         }
 
@@ -96,7 +153,8 @@ fun OrbMenu(
                 contentDescription = "Add",
                 onClick = onAddClick,
                 size = 40.dp,
-                iconSize = 20.dp
+                iconSize = 20.dp,
+                tint = iconTint
             )
         }
 
@@ -111,7 +169,8 @@ fun OrbMenu(
                 contentDescription = "Search",
                 onClick = onSearchClick,
                 size = 40.dp,
-                iconSize = 20.dp
+                iconSize = 20.dp,
+                tint = iconTint
             )
         }
     }
@@ -123,7 +182,8 @@ private fun OrbButton(
     contentDescription: String,
     onClick: () -> Unit,
     size: Dp = 40.dp,
-    iconSize: Dp = 24.dp
+    iconSize: Dp = 24.dp,
+    tint: Color = Color.White
 ) {
     Box(
         modifier = Modifier
@@ -134,7 +194,7 @@ private fun OrbButton(
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = Color.White,
+            tint = tint,
             modifier = Modifier.size(iconSize)
         )
     }

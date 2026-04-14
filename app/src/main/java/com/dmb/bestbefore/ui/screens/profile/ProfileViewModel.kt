@@ -102,6 +102,22 @@ class ProfileViewModel : ViewModel() {
     
     private val _accentColor = MutableStateFlow(Color(0xFF007AFF))
     val accentColor: StateFlow<Color> = _accentColor.asStateFlow()
+
+    private val _applyAccentToAll = MutableStateFlow(false)
+    val applyAccentToAll: StateFlow<Boolean> = _applyAccentToAll.asStateFlow()
+
+    private val _syncAccentWithRoom = MutableStateFlow(false)
+    val syncAccentWithRoom: StateFlow<Boolean> = _syncAccentWithRoom.asStateFlow()
+    
+    fun toggleApplyAccent(context: Context, enabled: Boolean) {
+        _applyAccentToAll.value = enabled
+        com.dmb.bestbefore.ui.theme.ThemeState.updateApplyAccentToAll(enabled)
+    }
+
+    fun toggleSyncAccent(context: Context, enabled: Boolean) {
+        _syncAccentWithRoom.value = enabled
+        com.dmb.bestbefore.ui.theme.ThemeState.updateSyncAccentWithRoom(enabled)
+    }
     
     // Credential Update State
     private val _isUpdatingCredential = MutableStateFlow(false)
@@ -1386,6 +1402,8 @@ class ProfileViewModel : ViewModel() {
         com.dmb.bestbefore.ui.theme.ThemeState.init(context)
         _selectedTheme.value = com.dmb.bestbefore.ui.theme.ThemeState.currentTheme
         _accentColor.value = com.dmb.bestbefore.ui.theme.ThemeState.currentAccent
+        _applyAccentToAll.value = com.dmb.bestbefore.ui.theme.ThemeState.applyAccentToAll
+        _syncAccentWithRoom.value = com.dmb.bestbefore.ui.theme.ThemeState.syncAccentWithRoom
     }
     
     fun selectTheme(context: Context, theme: AppTheme) {

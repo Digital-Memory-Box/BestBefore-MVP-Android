@@ -3,6 +3,7 @@ package com.dmb.bestbefore.ui.components
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,11 +19,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dmb.bestbefore.ui.theme.LocalBestBeforeColors
 
 enum class UserPrivacyStatus { NONE, PUBLIC_ACCOUNT, PRIVATE_ACCOUNT }
 
@@ -36,11 +37,13 @@ fun SharedUserCard(
     privacyStatus: UserPrivacyStatus = UserPrivacyStatus.NONE
 ) {
     var isBioExpanded by remember { mutableStateOf(false) }
+    val themeColors = LocalBestBeforeColors.current
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(24.dp))
+            .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(24.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(24.dp))
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -49,7 +52,7 @@ fun SharedUserCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -57,9 +60,9 @@ fun SharedUserCard(
                     val displayName = if (name.isEmpty()) "Username" else if (name.startsWith("@")) name else "@$name"
                     Text(
                         text = displayName,
-                        fontSize = 28.sp,
+                        fontSize = 26.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = themeColors.textPrimary
                     )
 
                     if (privacyStatus != UserPrivacyStatus.NONE) {
@@ -92,23 +95,24 @@ fun SharedUserCard(
 
                 Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                     Column {
-                        Text("Rooming", fontSize = 12.sp, color = Color.Gray)
-                        Text(roomingCount, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("Rooming", fontSize = 12.sp, color = themeColors.textSecondary)
+                        Text(roomingCount, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = themeColors.textPrimary)
                     }
                     Column {
-                        Text("Roomers", fontSize = 12.sp, color = Color.Gray)
-                        Text(roomersCount, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("Roomers", fontSize = 12.sp, color = themeColors.textSecondary)
+                        Text(roomersCount, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = themeColors.textPrimary)
                     }
                 }
             }
 
             Box(
                 modifier = Modifier
-                    .size(80.dp)
-                    .background(accentColor.copy(alpha = 0.2f), CircleShape),
+                    .size(84.dp)
+                    .background(accentColor.copy(alpha = 0.18f), CircleShape)
+                    .border(2.dp, accentColor, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Person, contentDescription = null, tint = accentColor, modifier = Modifier.size(32.dp))
+                Icon(Icons.Default.Person, contentDescription = null, tint = accentColor, modifier = Modifier.size(34.dp))
             }
         }
 
@@ -117,7 +121,7 @@ fun SharedUserCard(
                 Text(
                     text = biography,
                     fontSize = 14.sp,
-                    color = Color.White.copy(alpha = 0.8f),
+                    color = themeColors.textPrimary.copy(alpha = 0.82f),
                     maxLines = if (isBioExpanded) Int.MAX_VALUE else 3
                 )
 
@@ -137,6 +141,7 @@ fun SharedUserCard(
 
 @Composable
 fun UIStatsCard(title: String, value: String, color: Color) {
+    val themeColors = LocalBestBeforeColors.current
     Column(
         modifier = Modifier
             .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp))
@@ -145,14 +150,15 @@ fun UIStatsCard(title: String, value: String, color: Color) {
     ) {
         Icon(Icons.Default.Home, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            Text(title, fontSize = 12.sp, color = Color.Gray)
+            Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = themeColors.textPrimary)
+            Text(title, fontSize = 12.sp, color = themeColors.textSecondary)
         }
     }
 }
 
 @Composable
 fun TabButton(title: String, isSelected: Boolean, color: Color, onClick: () -> Unit) {
+    val themeColors = LocalBestBeforeColors.current
     Column(
         modifier = Modifier.clickable { onClick() },
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -162,7 +168,7 @@ fun TabButton(title: String, isSelected: Boolean, color: Color, onClick: () -> U
             text = title,
             fontSize = 14.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            color = if (isSelected) Color.White else Color.Gray
+            color = if (isSelected) themeColors.textPrimary else themeColors.textSecondary
         )
         Box(
             modifier = Modifier
@@ -175,6 +181,7 @@ fun TabButton(title: String, isSelected: Boolean, color: Color, onClick: () -> U
 
 @Composable
 fun MusicPresetOption(title: String, isSelected: Boolean, tintColor: Color, onClick: () -> Unit) {
+    val themeColors = LocalBestBeforeColors.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -189,7 +196,7 @@ fun MusicPresetOption(title: String, isSelected: Boolean, tintColor: Color, onCl
         Icon(
             imageVector = Icons.Default.Done, // Placeholder icon
             contentDescription = null,
-            tint = if (isSelected) Color.White else Color.Gray,
+            tint = if (isSelected) themeColors.textPrimary else themeColors.textSecondary,
             modifier = Modifier.size(20.dp)
         )
         Spacer(modifier = Modifier.width(16.dp))
@@ -197,7 +204,7 @@ fun MusicPresetOption(title: String, isSelected: Boolean, tintColor: Color, onCl
             text = title,
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
-            color = if (isSelected) Color.White else Color.Gray
+            color = if (isSelected) themeColors.textPrimary else themeColors.textSecondary
         )
         Spacer(modifier = Modifier.weight(1f))
         if (isSelected) {

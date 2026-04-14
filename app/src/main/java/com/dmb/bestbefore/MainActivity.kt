@@ -62,7 +62,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             BestBeforeTheme(
                 appTheme = com.dmb.bestbefore.ui.theme.ThemeState.currentTheme,
-                accentColor = com.dmb.bestbefore.ui.theme.ThemeState.currentAccent
+                accentColor = com.dmb.bestbefore.ui.theme.ThemeState.currentAccent,
+                applyAccentToAll = com.dmb.bestbefore.ui.theme.ThemeState.applyAccentToAll
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -179,4 +180,4 @@ class MainActivity : ComponentActivity() {
             pendingQRRoomId = null
         }
     }
-}
+}

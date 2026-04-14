@@ -1,9 +1,5 @@
 package com.dmb.bestbefore.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -12,162 +8,157 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
+/**
+ * BB-UI-05 ve BB-UI-06 kurallarına uygun, sağa kaydırarak gizlenebilen (Drag-to-hide)
+ * ve tema destekli kusursuz Cam Küre (Orb) menü.
+ */
 @Composable
 fun OrbMenuPremium(
     isHidden: Boolean,
     onIsHiddenChange: (Boolean) -> Unit,
-    accentColor: Color = Color.Blue,
+    accentColor: Color = Color(0xFF0D59F2),
     selectedTheme: String = "Default",
-    onAdd: () -> Unit = {},
-    onChat: () -> Unit = {},
-    onScan: () -> Unit = {},
-    onProfile: () -> Unit = {},
-    onSearch: () -> Unit = {}
+    applyAccentToAll: Boolean = false, // BB-UI-21 Kuralı için eklendi
+    onEventClick: () -> Unit = {},
+    onSearchClick: () -> Unit = {},
+    onAddClick: () -> Unit = {},
+    onProfileClick: () -> Unit = {}
 ) {
-    var isExpanded by remember { mutableStateOf(true) }
+    // Kaydırma miktarını tutan state
     var dragOffsetX by remember { mutableFloatStateOf(0f) }
 
-    val iconColor = if (selectedTheme == "Midnight" || selectedTheme == "Glass") accentColor else Color.White
+    val isGlass = selectedTheme == "Glass"
+    val isMidnight = selectedTheme == "Midnight"
 
-    Box(
-        modifier = Modifier
-            .width(170.dp)
-            .height(400.dp)
-            .background(Color.Transparent),
-        contentAlignment = Alignment.CenterEnd
-    ) {
-        if (!isHidden) {
+    // BB-UI-21 Kurali: Midnight temasinda ikonlar her zaman accent olur.
+    // Diger temalarda Apply Accent seciliyse ikonlar beyaz olur.
+    val iconTint = when {
+        isMidnight -> accentColor
+        applyAccentToAll -> Color.White
+        isGlass -> accentColor
+        else -> Color.White
+    }
+
+    if (!isHidden) {
+        // En dış taşıyıcı kutu: Sürükleme hareketlerini dinler
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(120.dp) // 240.dp olan dairenin sadece görünen yarısı kadar bir hit-box açıyoruz
+                .offset(x = if (dragOffsetX > 0) dragOffsetX.dp else 0.dp)
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDrag = { _, dragAmount ->
+                            // Sadece sağa kaydırmaya izin ver
+                            if (dragAmount.x > 0) {
+                                dragOffsetX += dragAmount.x
+                            }
+                        },
+                        onDragEnd = {
+                            // Eğer 50 pikselden fazla sağa çekildiyse gizle
+                            if (dragOffsetX > 50f) {
+                                onIsHiddenChange(true)
+                                dragOffsetX = 0f
+                            } else {
+                                // Yeterince çekilmediyse eski yerine geri yaylan (snap back)
+                                dragOffsetX = 0f
+                            }
+                        }
+                    )
+                },
+            contentAlignment = Alignment.CenterEnd // İçeriği ekranın sağ kenarına yaslar
+        ) {
+
+            // THE ORB (Az önce yaptığımız mükemmel görsel tasarım)
             Box(
                 modifier = Modifier
-                    .offset(x = if (dragOffsetX > 0) dragOffsetX.dp else 0.dp)
-                    .pointerInput(Unit) {
-                        detectDragGestures(
-                            onDrag = { _, dragAmount ->
-                                if (dragAmount.x > 0) {
-                                    dragOffsetX += dragAmount.x
-                                }
-                            },
-                            onDragEnd = {
-                                if (dragOffsetX > 40f) {
-                                    onIsHiddenChange(true)
-                                    dragOffsetX = 0f
-                                } else {
-                                    dragOffsetX = 0f
-                                }
-                            }
-                        )
-                    },
-                contentAlignment = Alignment.CenterEnd
+                    .offset(x = 120.dp) // Dairenin yarısını ekran dışına atar
+                    .size(240.dp)
+                    // 1. KATMAN: Zemin Rengi
+                    .background(
+                        color = if (isMidnight) Color(0xFF121212).copy(alpha = 0.95f)
+                        else if (isGlass) Color(0xFF2C2C2E).copy(alpha = 0.85f)
+                        else accentColor,
+                        shape = CircleShape
+                    )
+                    // 2. KATMAN: İç Parlama (Inner Glow)
+                    .background(
+                        brush = if (isGlass || isMidnight) {
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    accentColor.copy(alpha = if (isMidnight) 0.15f else 0.25f)
+                                )
+                            )
+                        } else {
+                            Brush.radialGradient(listOf(Color.Transparent, Color.Transparent))
+                        },
+                        shape = CircleShape
+                    )
+                    // 3. KATMAN: Keskin Çerçeve Sınırı
+                    .then(
+                        if (isMidnight || isGlass) Modifier.border(2.dp, accentColor.copy(alpha = 0.85f), CircleShape)
+                        else Modifier
+                    )
+                    .clip(CircleShape)
             ) {
-                if (isExpanded) {
-                    Box(
-                        modifier = Modifier
-                            .size(340.dp)
-                            .offset(x = 170.dp)
-                            .shadow(
-                                elevation = if (selectedTheme == "Glass") 12.dp else 15.dp,
-                                shape = CircleShape,
-                                ambientColor = accentColor,
-                                spotColor = accentColor
-                            )
-                            .background(
-                                color = if (selectedTheme == "Midnight") Color.Black else (if (selectedTheme == "Glass") accentColor.copy(0.12f) else accentColor),
-                                shape = CircleShape
-                            )
-                            .then(
-                                if (selectedTheme == "Midnight") Modifier.border(2.dp, accentColor, CircleShape)
-                                else if (selectedTheme == "Glass") Modifier.border(1.5.dp, Color.White.copy(0.7f), CircleShape)
-                                else Modifier
-                            )
-                    )
+                // --- KUSURSUZ İKON HİZALAMALARI ---
+                Box(modifier = Modifier.align(Alignment.Center).offset(x = (-63).dp, y = (-63).dp)) {
+                    OrbButton(icon = Icons.Default.Event, contentDescription = "Events", onClick = onEventClick, tint = iconTint)
+                }
 
-                    // Icons
-                    Box(
-                        modifier = Modifier.fillMaxHeight(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        // Plus Icon
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Add",
-                            tint = iconColor,
-                            modifier = Modifier
-                                .offset(x = (-135).dp)
-                                .size(22.dp)
-                                .clickable { onAdd() }
-                        )
+                Box(modifier = Modifier.align(Alignment.Center).offset(x = (-86).dp, y = (-23).dp)) {
+                    OrbButton(icon = Icons.Default.Search, contentDescription = "Search", onClick = onSearchClick, tint = iconTint)
+                }
 
-                        // Vertical Arc
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(40.dp),
-                            modifier = Modifier.offset(x = (-95).dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Email,
-                                contentDescription = "Chat",
-                                tint = iconColor,
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .clickable { onChat() }
-                            )
+                Box(modifier = Modifier.align(Alignment.Center).offset(x = (-86).dp, y = 23.dp)) {
+                    OrbButton(icon = Icons.Default.Add, contentDescription = "Add", onClick = onAddClick, tint = iconTint)
+                }
 
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = "Profile",
-                                tint = iconColor,
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clickable { onProfile() }
-                            )
-
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = "Search",
-                                tint = iconColor,
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .clickable { onSearch() }
-                            )
-                        }
-                    }
-                } else {
-                    // Collapsed State
-                    Box(
-                        modifier = Modifier
-                            .size(60.dp)
-                            .offset(x = 30.dp)
-                            .background(
-                                color = if (selectedTheme == "Midnight") Color.Black else (if (selectedTheme == "Glass") accentColor.copy(0.12f) else accentColor),
-                                shape = CircleShape
-                            )
-                            .then(
-                                if (selectedTheme == "Midnight") Modifier.border(2.dp, accentColor, CircleShape)
-                                else if (selectedTheme == "Glass") Modifier.border(1.5.dp, Color.White.copy(0.7f), CircleShape)
-                                else Modifier
-                            )
-                            .clickable { isExpanded = true }
-                    )
+                Box(modifier = Modifier.align(Alignment.Center).offset(x = (-63).dp, y = 63.dp)) {
+                    OrbButton(icon = Icons.Default.Person, contentDescription = "Profile", onClick = onProfileClick, tint = iconTint)
                 }
             }
         }
     }
 }
 
-@Preview
 @Composable
-fun OrbMenuPremiumPreview() {
-    OrbMenuPremium(isHidden = false, onIsHiddenChange = {}, accentColor = Color.Magenta)
+private fun OrbButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    size: Dp = 44.dp,
+    iconSize: Dp = 26.dp,
+    tint: Color = Color.White
+) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(iconSize)
+        )
+    }
 }
