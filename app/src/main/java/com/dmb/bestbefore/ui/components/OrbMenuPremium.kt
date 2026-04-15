@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
 
 /**
  * BB-UI-05 ve BB-UI-06 kurallarına uygun, sağa kaydırarak gizlenebilen (Drag-to-hide)
@@ -39,8 +40,15 @@ fun OrbMenuPremium(
     onAddClick: () -> Unit = {},
     onProfileClick: () -> Unit = {}
 ) {
-    // Kaydırma miktarını tutan state
+    // Kaydirma miktarini tutan state
     var dragOffsetX by remember { mutableFloatStateOf(0f) }
+
+    // Shared geometry with OrbMenu so inset and visible orb area stay consistent.
+    val orbDiameter = 240.dp
+    val hitBoxWidth = OrbMenuLayout.visibleInset(orbDiameter)
+    val orbOffsetX = OrbMenuLayout.horizontalOffset(orbDiameter)
+    val density = LocalDensity.current
+    val dragHideThresholdPx = with(density) { (hitBoxWidth * 0.42f).toPx() }
 
     val isGlass = selectedTheme == "Glass"
     val isMidnight = selectedTheme == "Midnight"
@@ -59,7 +67,7 @@ fun OrbMenuPremium(
         Box(
             modifier = Modifier
                 .fillMaxHeight()
-                .width(120.dp) // 240.dp olan dairenin sadece görünen yarısı kadar bir hit-box açıyoruz
+                .width(hitBoxWidth)
                 .offset(x = if (dragOffsetX > 0) dragOffsetX.dp else 0.dp)
                 .pointerInput(Unit) {
                     detectDragGestures(
@@ -70,8 +78,8 @@ fun OrbMenuPremium(
                             }
                         },
                         onDragEnd = {
-                            // Eğer 50 pikselden fazla sağa çekildiyse gizle
-                            if (dragOffsetX > 50f) {
+                            // Orbit geometry-scaled threshold for hide interaction
+                            if (dragOffsetX > dragHideThresholdPx) {
                                 onIsHiddenChange(true)
                                 dragOffsetX = 0f
                             } else {
@@ -87,8 +95,8 @@ fun OrbMenuPremium(
             // THE ORB (Az önce yaptığımız mükemmel görsel tasarım)
             Box(
                 modifier = Modifier
-                    .offset(x = 120.dp) // Dairenin yarısını ekran dışına atar
-                    .size(240.dp)
+                    .offset(x = orbOffsetX)
+                    .size(orbDiameter)
                     // 1. KATMAN: Zemin Rengi
                     .background(
                         color = if (isMidnight) Color(0xFF121212).copy(alpha = 0.95f)

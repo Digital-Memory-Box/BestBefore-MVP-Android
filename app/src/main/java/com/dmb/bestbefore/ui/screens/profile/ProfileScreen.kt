@@ -48,6 +48,9 @@ import com.dmb.bestbefore.ui.components.OrbMenu
 
 import com.dmb.bestbefore.ui.screens.hallway.HallwayViewModel
 import android.net.Uri
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -56,6 +59,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.statusBars
 import com.dmb.bestbefore.ui.screens.hallway.HallwayScreen
 import com.dmb.bestbefore.ui.theme.LocalBestBeforeColors
+import androidx.core.content.ContextCompat
 
 @Composable
 fun ProfileScreen(
@@ -328,6 +332,24 @@ fun ProfileScreen(
             com.dmb.bestbefore.ui.screens.hallway.HallwayScreen(
                 onNavigateToProfile = { viewModel.openProfileMenu() },
                 onNavigateToNotifications = onNavigateToNotifications,
+                onRoomingMusicClick = { showMusicSelector = true },
+                onRoomingScanClick = {
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                        qrScanLauncher.launch(Intent(context, QrScannerActivity::class.java))
+                    } else {
+                        qrCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                    }
+                },
+                onOpenRoom = { card ->
+                    viewModel.selectRoomFromHallway(
+                        cardId = card.id,
+                        cardTitle = card.title,
+                        capsuleDays = card.timeCapsuleDays
+                    )
+                },
+                onCreateRoomClick = {
+                    viewModel.startCreateRoom(RoomCreationSource.HALLWAY)
+                },
                 viewModel = hallwayViewModel
             )
         }

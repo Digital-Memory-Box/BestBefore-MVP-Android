@@ -30,9 +30,21 @@ class HallwayViewModel : ViewModel() {
     private val _selectedFilterTag = MutableStateFlow<String?>(null)
     val selectedFilterTag: StateFlow<String?> = _selectedFilterTag.asStateFlow()
 
-    val filteredCards: StateFlow<List<HallwayCard>> = combine(_cards, _selectedFilterTag) { cards, tag ->
-        if (tag.isNullOrBlank()) cards else cards.filter { card ->
-            card.tags.any { it.equals(tag, ignoreCase = true) }
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    val filteredCards: StateFlow<List<HallwayCard>> = combine(_cards, _selectedFilterTag, _searchQuery) { cards, tag, query ->
+        val normalizedQuery = query.trim()
+        cards.filter { card ->
+            val matchesTagFilter = tag.isNullOrBlank() || card.tags.any { it.equals(tag, ignoreCase = true) }
+            val matchesSearch = if (normalizedQuery.isBlank()) {
+                true
+            } else {
+                card.title.contains(normalizedQuery, ignoreCase = true) ||
+                (card.ownerEmail?.contains(normalizedQuery, ignoreCase = true) == true) ||
+                card.tags.any { it.contains(normalizedQuery, ignoreCase = true) }
+            }
+            matchesTagFilter && matchesSearch
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -132,12 +144,20 @@ class HallwayViewModel : ViewModel() {
         _selectedCardIndex.value = 0
         _activePagerPage.value = 0
         _selectedFilterTag.value = null
+        _searchQuery.value = ""
         _areCollaboratorsExpanded.value = false
         filterCards(tab)
     }
 
     fun setSelectedFilterTag(tag: String?) {
         _selectedFilterTag.value = tag
+        _selectedCardIndex.value = 0
+        _activePagerPage.value = 0
+        _areCollaboratorsExpanded.value = false
+    }
+
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
         _selectedCardIndex.value = 0
         _activePagerPage.value = 0
         _areCollaboratorsExpanded.value = false

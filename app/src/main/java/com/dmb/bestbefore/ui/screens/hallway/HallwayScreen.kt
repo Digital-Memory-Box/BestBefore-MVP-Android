@@ -21,9 +21,9 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -36,6 +36,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,10 +60,15 @@ import kotlin.math.absoluteValue
 fun HallwayScreen(
     onNavigateToProfile: () -> Unit,
     onNavigateToNotifications: () -> Unit,
+    onRoomingMusicClick: () -> Unit = {},
+    onRoomingScanClick: () -> Unit = {},
+    onOpenRoom: (HallwayCard) -> Unit = {},
+    onCreateRoomClick: () -> Unit = {},
     viewModel: HallwayViewModel = viewModel()
 ) {
     val cards by viewModel.filteredCards.collectAsState()
     val currentTab by viewModel.currentTab.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedCardIndex by viewModel.selectedCardIndex.collectAsState()
     val selectedFilterTag by viewModel.selectedFilterTag.collectAsState()
     val isOrbMenuVisible by viewModel.isOrbMenuVisible.collectAsState()
@@ -73,15 +79,7 @@ fun HallwayScreen(
     val cardImageIndices by viewModel.cardImageIndices.collectAsState()
     val orbWidth = 160.dp
     val orbHeight = 220.dp
-
-    // BB-UI-06: When orb hides, all elements shift toward center
-    val centerShiftOffset by animateDpAsState(
-        targetValue = if (isOrbMenuVisible) 0.dp else 40.dp,
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow),
-        label = "centerShift"
-    )
-
-    val colors = LocalBestBeforeColors.current
+    val contentEndInset = 0.dp
 
     Box(
         modifier = Modifier
@@ -110,6 +108,12 @@ fun HallwayScreen(
                 BottomTab.ROOMING -> {
                     RoomingContent(
                         cards = cards,
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = viewModel::setSearchQuery,
+                        contentEndInset = contentEndInset,
+                        onMusicClick = onRoomingMusicClick,
+                        onScanClick = onRoomingScanClick,
+                        onOpenRoom = onOpenRoom,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -120,19 +124,23 @@ fun HallwayScreen(
                 else -> {
                     HallwayContent(
                         cards = cards,
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = viewModel::setSearchQuery,
                         currentTab = currentTab,
                         selectedFilterTag = selectedFilterTag,
                         onFilterTagSelected = { viewModel.setSelectedFilterTag(it) },
                         onNavigateToNotifications = onNavigateToNotifications,
+                        onMusicClick = onRoomingMusicClick,
                         onShowSoundCloud = { viewModel.setSoundCloudModalVisible(true) },
                         onExpandDescription = { viewModel.setDescriptionExpanded(true) },
-                        centerShiftOffset = centerShiftOffset,
                         isOrbMenuVisible = isOrbMenuVisible,
+                        contentEndInset = contentEndInset,
                         selectedCardIndex = selectedCardIndex,
                         cardImageIndices = cardImageIndices,
                         areCollaboratorsExpanded = areCollaboratorsExpanded,
                         onToggleCollaborators = { viewModel.toggleCollaboratorsExpanded() },
                         onCollapseCollaborators = { viewModel.collapseCollaborators() },
+                        onOpenRoom = onOpenRoom,
                         onImageIndexChange = { cardId, index -> viewModel.setCardImageIndex(cardId, index) },
                         onPagerPageChanged = { viewModel.setActivePagerPage(it) },
                         modifier = Modifier.weight(1f)
@@ -165,7 +173,7 @@ fun HallwayScreen(
                 width = orbWidth,
                 height = orbHeight,
                 onProfileClick = onNavigateToProfile,
-                onAddClick = { },
+                onAddClick = onCreateRoomClick,
                 onSearchClick = { },
                 onChatClick = { }
             )
@@ -206,12 +214,20 @@ fun HallwayScreen(
 @Composable
 private fun RoomingContent(
     cards: List<HallwayCard>,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    contentEndInset: Dp,
+    onMusicClick: () -> Unit,
+    onScanClick: () -> Unit,
+    onOpenRoom: (HallwayCard) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalBestBeforeColors.current
     val cardHeight = 280.dp
     LazyColumn(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(end = contentEndInset),
         contentPadding = PaddingValues(bottom = 32.dp)
     ) {
         item {
@@ -231,25 +247,27 @@ private fun RoomingContent(
                     color = colors.textPrimary
                 )
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.List,
-                        contentDescription = "Filter",
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = "Music",
                         tint = colors.textPrimary,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clickable { onMusicClick() }
                     )
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { /* Scan action */ }
+                        modifier = Modifier.clickable { onScanClick() }
                     ) {
                         Icon(
-                            Icons.Default.Search,
+                            Icons.Default.QrCodeScanner,
                             contentDescription = "Scan",
                             tint = colors.textPrimary,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(24.dp)
                         )
                         Text(
                             "Scan",
@@ -275,9 +293,18 @@ private fun RoomingContent(
             ) {
                 Icon(Icons.Default.Search, null, tint = colors.textSecondary)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    "Search by name, owner, or tags...",
-                    color = colors.textSecondary
+                BasicTextField(
+                    value = searchQuery,
+                    onValueChange = onSearchQueryChange,
+                    singleLine = true,
+                    textStyle = TextStyle(color = colors.textPrimary),
+                    modifier = Modifier.fillMaxWidth(),
+                    decorationBox = { innerTextField ->
+                        if (searchQuery.isBlank()) {
+                            Text("Search by name, owner, or tags...", color = colors.textSecondary)
+                        }
+                        innerTextField()
+                    }
                 )
             }
         }
@@ -310,7 +337,11 @@ private fun RoomingContent(
                         .padding(horizontal = 24.dp)
                         .height(cardHeight)
                 ) {
-                    RoomingCard(card = card, height = cardHeight.value.toInt())
+                    RoomingCard(
+                        card = card,
+                        height = cardHeight.value.toInt(),
+                        onClick = { onOpenRoom(card) }
+                    )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -320,7 +351,7 @@ private fun RoomingContent(
 
 // ── BB-UI-04: Rooming Card ──────────────────────────────────────────────
 @Composable
-private fun RoomingCard(card: HallwayCard, height: Int) {
+private fun RoomingCard(card: HallwayCard, height: Int, onClick: () -> Unit) {
     val themeColor = parseThemeColor(card.themeColorHex)
     val colors = LocalBestBeforeColors.current
     val isLocked = card.timeCapsuleDays > 0
@@ -331,7 +362,7 @@ private fun RoomingCard(card: HallwayCard, height: Int) {
             .height(height.dp)
             .clip(RoundedCornerShape(24.dp))
             .background(Color.DarkGray)
-            .clickable { /* Navigate to room */ }
+            .clickable { onClick() }
     ) {
         // Gradient background
         Box(
@@ -413,33 +444,44 @@ private fun RoomingCard(card: HallwayCard, height: Int) {
 @Composable
 private fun HallwayContent(
     cards: List<HallwayCard>,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
     currentTab: BottomTab,
     selectedFilterTag: String?,
     onFilterTagSelected: (String?) -> Unit,
     onNavigateToNotifications: () -> Unit,
+    onMusicClick: () -> Unit,
     onShowSoundCloud: () -> Unit,
     onExpandDescription: () -> Unit,
-    centerShiftOffset: Dp,
     isOrbMenuVisible: Boolean,
+    contentEndInset: Dp,
     selectedCardIndex: Int,
     cardImageIndices: Map<String, Int>,
     areCollaboratorsExpanded: Boolean,
     onToggleCollaborators: () -> Unit,
     onCollapseCollaborators: () -> Unit,
+    onOpenRoom: (HallwayCard) -> Unit,
     onImageIndexChange: (String, Int) -> Unit,
     onPagerPageChanged: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalBestBeforeColors.current
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(end = contentEndInset)
+    ) {
         // ── Header ──────────────────────────────────────────────────
         HallwayHeader(
             title = if (currentTab == BottomTab.EVERYONE) "Hallway" else "Artists",
+            onMusicClick = onMusicClick,
             onNavigateToNotifications = onNavigateToNotifications
         )
 
         // ── Search + Tags ───────────────────────────────────────────
         SearchBarAndTags(
+            searchQuery = searchQuery,
+            onSearchQueryChange = onSearchQueryChange,
             selectedTag = selectedFilterTag,
             onTagSelected = onFilterTagSelected
         )
@@ -474,21 +516,14 @@ private fun HallwayContent(
                 onPagerPageChanged(pagerState.currentPage)
             }
 
-            // BB-UI-06: Animated content padding based on orb visibility
-            // When orb is visible, carousel is slightly left-shifted (default)
-            // When orb is hidden, everything shifts rightward toward center
-            val carouselPadding by animateDpAsState(
-                targetValue = if (isOrbMenuVisible) 48.dp else 24.dp,
-                animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow),
-                label = "carouselPadding"
+            // Keep carousel geometry stable but bias right inset when orb is visible.
+            val carouselPadding = PaddingValues(
+                start = 40.dp,
+                end = if (isOrbMenuVisible) 84.dp else 40.dp
             )
-
-            // BB-UI-06: CD button end padding animates with orb
-            val cdButtonEndPadding by animateDpAsState(
-                targetValue = if (isOrbMenuVisible) 60.dp else 16.dp,
-                animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow),
-                label = "cdButtonEnd"
-            )
+            val cardHeight = 350.dp
+            val cardWidthFraction = 0.9f
+            val cdButtonEndPadding = if (isOrbMenuVisible) 68.dp else 60.dp
 
             Box(
                 modifier = Modifier
@@ -497,11 +532,9 @@ private fun HallwayContent(
             ) {
                 Column {
                     // ── Room Name + Location ────────────────────────
-                    // BB-UI-06: Room name shifts with centerShiftOffset
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .offset(x = centerShiftOffset)
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -535,15 +568,13 @@ private fun HallwayContent(
                     }
 
                     // ── Carousel ────────────────────────────────────
-                    // BB-UI-06: Carousel shifts with centerShiftOffset
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(320.dp)
-                            .offset(x = centerShiftOffset),
-                        contentPadding = PaddingValues(horizontal = carouselPadding),
-                        pageSpacing = 16.dp
+                            .height(cardHeight),
+                        contentPadding = carouselPadding,
+                        pageSpacing = 8.dp
                     ) { page ->
                         val card = cards[page]
                         val pageOffset = ((pagerState.currentPage - page) +
@@ -553,13 +584,21 @@ private fun HallwayContent(
                         // BB-UI-05: Glow dims as card moves off-center
                         val glowAlpha = 1f - (pageOffset * 1.5f).coerceIn(0f, 1f)
 
-                        HallwayActiveCard(
-                            card = card,
-                            glowAlpha = glowAlpha,
-                            themeColor = parsedColor,
-                            currentImageIndex = cardImageIndices[card.id] ?: 0,
-                            onImageIndexChange = { newIndex -> onImageIndexChange(card.id, newIndex) }
-                        )
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            HallwayActiveCard(
+                                card = card,
+                                glowAlpha = glowAlpha,
+                                themeColor = parsedColor,
+                                currentImageIndex = cardImageIndices[card.id] ?: 0,
+                                onImageIndexChange = { newIndex -> onImageIndexChange(card.id, newIndex) },
+                                onOpenRoom = { onOpenRoom(card) },
+                                cardHeight = cardHeight,
+                                widthFraction = cardWidthFraction
+                            )
+                        }
                     }
 
                     // ── Card Details ────────────────────────────────
@@ -577,12 +616,10 @@ private fun HallwayContent(
                 }
 
                 // ── CD Button ───────────────────────────────────────
-                // BB-UI-06: CD button animates with orb visibility
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(end = cdButtonEndPadding, top = 50.dp)
-                        .offset(x = centerShiftOffset)
                         .width(64.dp)
                         .height(34.dp)
                         .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(999.dp))
@@ -606,7 +643,10 @@ fun HallwayActiveCard(
     glowAlpha: Float,
     themeColor: Color,
     currentImageIndex: Int,
-    onImageIndexChange: (Int) -> Unit
+    onImageIndexChange: (Int) -> Unit,
+    onOpenRoom: () -> Unit,
+    cardHeight: Dp = 350.dp,
+    widthFraction: Float = 0.9f
 ) {
     val imagesList = card.photos.ifEmpty { listOf("mock_bg") }
     val maxImages = imagesList.size.coerceAtMost(5)
@@ -644,8 +684,9 @@ fun HallwayActiveCard(
 
     Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .height(320.dp)
+            .fillMaxWidth(widthFraction)
+            .height(cardHeight)
+            .clickable { onOpenRoom() }
             .scale(animatedScale)
             .pointerInput(card.id) {
                 detectVerticalDragGestures(
@@ -1010,7 +1051,11 @@ fun TagChip(label: String, color: Color) {
 
 // ── Header ──────────────────────────────────────────────────────────────
 @Composable
-fun HallwayHeader(title: String, onNavigateToNotifications: () -> Unit) {
+fun HallwayHeader(
+    title: String,
+    onMusicClick: () -> Unit,
+    onNavigateToNotifications: () -> Unit
+) {
     val colors = LocalBestBeforeColors.current
     Row(
         modifier = Modifier
@@ -1022,7 +1067,12 @@ fun HallwayHeader(title: String, onNavigateToNotifications: () -> Unit) {
     ) {
         Text(title, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            Icon(Icons.AutoMirrored.Filled.List, null, tint = colors.textPrimary)
+            Icon(
+                Icons.Default.MusicNote,
+                contentDescription = "Music",
+                tint = colors.textPrimary,
+                modifier = Modifier.clickable { onMusicClick() }
+            )
             Icon(
                 Icons.Default.Notifications, null, tint = colors.textPrimary,
                 modifier = Modifier.clickable { onNavigateToNotifications() }
@@ -1033,7 +1083,12 @@ fun HallwayHeader(title: String, onNavigateToNotifications: () -> Unit) {
 
 // ── Search Bar + Filter Tags ────────────────────────────────────────────
 @Composable
-fun SearchBarAndTags(selectedTag: String?, onTagSelected: (String?) -> Unit) {
+fun SearchBarAndTags(
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    selectedTag: String?,
+    onTagSelected: (String?) -> Unit
+) {
     val colors = LocalBestBeforeColors.current
     Column {
         Row(
@@ -1047,7 +1102,19 @@ fun SearchBarAndTags(selectedTag: String?, onTagSelected: (String?) -> Unit) {
         ) {
             Icon(Icons.Default.Search, null, tint = colors.textSecondary)
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Search...", color = colors.textSecondary)
+            BasicTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                singleLine = true,
+                textStyle = TextStyle(color = colors.textPrimary),
+                modifier = Modifier.fillMaxWidth(),
+                decorationBox = { innerTextField ->
+                    if (searchQuery.isBlank()) {
+                        Text("Search by name, owner, or tags...", color = colors.textSecondary)
+                    }
+                    innerTextField()
+                }
+            )
         }
 
         val tags = listOf("trip", "music", "science", "party", "family")

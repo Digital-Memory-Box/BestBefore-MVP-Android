@@ -1,5 +1,7 @@
 package com.dmb.bestbefore.ui.screens.profile
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.foundation.background
@@ -23,6 +25,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -40,11 +43,10 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.Image
-
-
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import com.dmb.bestbefore.ui.theme.LocalBestBeforeColors
+import coil.compose.AsyncImage
 
 // --- REFACTORED PROFILE MENU (iOS Tab Style) ---
 
@@ -166,15 +168,40 @@ fun DashboardTab(
         item {
             val userName by viewModel.userName.collectAsState()
             val accentColor by viewModel.accentColor.collectAsState()
-            
+            val totalRooms by viewModel.totalRooms.collectAsState()
+            val totalMemories by viewModel.totalMemories.collectAsState()
+            val profileImageUri by viewModel.profileImageUri.collectAsState()
+
             com.dmb.bestbefore.ui.components.SharedUserCard(
                 name = userName,
                 biography = "Digital artist focusing on surreal landscapes and vibrant color theory.", // Mock bio
-                roomingCount = "0",
-                roomersCount = "0",
+                roomingCount = totalRooms.toString(),
+                roomersCount = totalMemories.toString(),
                 accentColor = accentColor,
-                privacyStatus = com.dmb.bestbefore.ui.components.UserPrivacyStatus.NONE
+                privacyStatus = com.dmb.bestbefore.ui.components.UserPrivacyStatus.NONE,
+                profileImageUri = profileImageUri
             )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                com.dmb.bestbefore.ui.components.UIStatsCard(
+                    title = "My Rooms",
+                    value = totalRooms.toString(),
+                    color = Color(0xFF00CFE8),
+                    icon = Icons.Default.Home,
+                    modifier = Modifier.weight(1f)
+                )
+                com.dmb.bestbefore.ui.components.UIStatsCard(
+                    title = "Memories",
+                    value = totalMemories.toString(),
+                    color = Color(0xFFDB5BFF),
+                    icon = Icons.Default.Collections,
+                    modifier = Modifier.weight(1f)
+                )
+            }
             Spacer(modifier = Modifier.height(24.dp))
         }
 
@@ -191,7 +218,7 @@ fun DashboardTab(
                          Text("No rooms yet", color = Color.Gray, fontSize = 14.sp)
                      }
                  } else {
-                     items(createdRooms) { room ->
+                     items(createdRooms, key = { it.id }) { room ->
                          val context = androidx.compose.ui.platform.LocalContext.current
                          var showMenu by remember { mutableStateOf(false) }
                          var showRoomDetails by remember { mutableStateOf(false) }
@@ -364,7 +391,14 @@ fun CustomizationTab(
     val accentColor by viewModel.accentColor.collectAsState()
     val applyAccentToAll by viewModel.applyAccentToAll.collectAsState(initial = false)
     val syncAccent by viewModel.syncAccentWithRoom.collectAsState(initial = false)
+    val profileImageUri by viewModel.profileImageUri.collectAsState()
     val colors = LocalBestBeforeColors.current
+
+    val updatePhotoLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { viewModel.updateProfileImage(it, context) }
+    }
 
     // Load tracks when tab is active
     var authToken by remember { mutableStateOf<String?>(null) }
@@ -433,13 +467,22 @@ fun CustomizationTab(
                     .clip(CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                 Icon(Icons.Default.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
+                if (profileImageUri != null) {
+                    AsyncImage(
+                        model = profileImageUri,
+                        contentDescription = "Profile photo",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(Icons.Default.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
+                }
             }
             Spacer(modifier = Modifier.width(16.dp))
             Box(
                 modifier = Modifier
                     .background(accentColor, RoundedCornerShape(10.dp))
-                    .clickable { /* Local Photo Picker Action */ }
+                    .clickable { updatePhotoLauncher.launch("image/*") }
                     .padding(horizontal = 18.dp, vertical = 12.dp)
             ) {
                 Text("Update Photo", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)

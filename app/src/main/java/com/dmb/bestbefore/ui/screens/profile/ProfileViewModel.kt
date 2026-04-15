@@ -15,6 +15,7 @@ import android.net.Uri
 import android.content.Context
 import android.widget.Toast
 import android.util.Log
+import java.io.File
 
 import com.dmb.bestbefore.data.models.CalendarEvent
 import com.dmb.bestbefore.ui.theme.AppTheme
@@ -83,6 +84,7 @@ class ProfileViewModel : ViewModel() {
     val recentActivities: StateFlow<List<RecentActivity>> = _recentActivities.asStateFlow()
 
     private val _profileImageUri = MutableStateFlow<Uri?>(null)
+    val profileImageUri: StateFlow<Uri?> = _profileImageUri.asStateFlow()
 
     
     private val _userName = MutableStateFlow("User") 
@@ -362,8 +364,10 @@ class ProfileViewModel : ViewModel() {
         val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
         val savedName = sessionManager.getUserName()
         val savedMusic = sessionManager.getProfileMusic()
+        val savedProfilePhotoUri = sessionManager.getProfilePhotoUri()
         _userName.value = if (!savedName.isNullOrEmpty()) savedName else "User"
         _profileMusic.value = if (!savedMusic.isNullOrEmpty()) savedMusic else "None"
+        _profileImageUri.value = savedProfilePhotoUri?.let { Uri.parse(it) }
 
         // RoomRepository now fetches its own fresh Firebase token per request.
         // Just launch the load — no token management needed here.
@@ -1228,9 +1232,37 @@ class ProfileViewModel : ViewModel() {
     }
     
     fun updateProfileImage(uri: Uri, context: Context) {
-        _profileImageUri.value = uri
-        // Persist permissions?
-        context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val localUri = copyPickedImageToAppStorage(context, uri)
+        if (localUri != null) {
+            _profileImageUri.value = localUri
+            val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
+            sessionManager.saveProfilePhotoUri(localUri.toString())
+            Toast.makeText(context, "Profile photo updated", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "Photo could not be updated", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun copyPickedImageToAppStorage(context: Context, sourceUri: Uri): Uri? {
+        return try {
+            val input = context.contentResolver.openInputStream(sourceUri) ?: return null
+            input.use { stream ->
+                val mimeType = context.contentResolver.getType(sourceUri)
+                val extension = when (mimeType) {
+                    "image/png" -> "png"
+                    "image/webp" -> "webp"
+                    else -> "jpg"
+                }
+                val targetFile = File(context.filesDir, "profile_photo.$extension")
+                targetFile.outputStream().use { output ->
+                    stream.copyTo(output)
+                }
+                Uri.fromFile(targetFile)
+            }
+        } catch (e: Exception) {
+            Log.e("ProfileViewModel", "Failed to copy selected profile image", e)
+            null
+        }
     }
     
     // Permission request helpers

@@ -41,6 +41,18 @@ private object OrbOvalShape : Shape {
 }
 
 /**
+ * Shared geometry contract for OrbMenu placement.
+ * `visibleInset(width)` returns the horizontal space the orb occupies inside the screen.
+ */
+object OrbMenuLayout {
+    private const val REVEAL_FRACTION = 0.55f
+
+    fun horizontalOffset(width: Dp): Dp = width * REVEAL_FRACTION
+
+    fun visibleInset(width: Dp): Dp = width - horizontalOffset(width)
+}
+
+/**
  * Floating orb menu component that appears on the right edge of the screen.
  * Gradient colors follow the current app theme (primaryColor → secondaryColor).
  */
@@ -78,7 +90,7 @@ fun OrbMenu(
         modifier = modifier
             .width(width)
             .height(height)
-            .offset(x = width * 0.55f) // Shift right so the full round edge is visible
+            .offset(x = OrbMenuLayout.horizontalOffset(width))
             .clip(OrbOvalShape)
             .background(
                 brush = if (isGlass) {

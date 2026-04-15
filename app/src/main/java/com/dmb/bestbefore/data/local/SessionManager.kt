@@ -15,6 +15,7 @@ class SessionManager(context: Context) {
         private const val KEY_USER_NAME = "user_name"
         private const val KEY_USER_EMAIL = "user_email"
         private const val KEY_PROFILE_MUSIC = "profile_music"
+        private const val KEY_PROFILE_PHOTO_URI = "profile_photo_uri"
     }
 
     fun saveAuthToken(token: String) {
@@ -36,9 +37,14 @@ class SessionManager(context: Context) {
     fun getUserName(): String? = prefs.getString(KEY_USER_NAME, null)
     fun getUserEmail(): String? = prefs.getString(KEY_USER_EMAIL, null)
     fun getProfileMusic(): String? = prefs.getString(KEY_PROFILE_MUSIC, null)
+    fun getProfilePhotoUri(): String? = prefs.getString(KEY_PROFILE_PHOTO_URI, null)
 
     fun saveProfileMusic(music: String?) {
         prefs.edit { putString(KEY_PROFILE_MUSIC, music) }
+    }
+
+    fun saveProfilePhotoUri(uri: String?) {
+        prefs.edit { putString(KEY_PROFILE_PHOTO_URI, uri) }
     }
 
     fun saveUserEmail(email: String) {
