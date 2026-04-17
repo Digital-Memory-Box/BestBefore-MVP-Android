@@ -601,15 +601,15 @@ private fun HallwayContent(
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(end = cdButtonEndPadding, top = 50.dp)
-                        .width(64.dp)
-                        .height(34.dp)
-                        .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(999.dp))
-                        .clip(RoundedCornerShape(999.dp))
+                        .padding(end = cdButtonEndPadding, top = 46.dp)
+                        .size(44.dp)
+                        .background(Color.Black.copy(alpha = 0.34f), CircleShape)
+                        .border(1.dp, themeColor.copy(alpha = 0.45f), CircleShape)
+                        .clip(CircleShape)
                         .clickable { onShowSoundCloud() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.PlayArrow, "Play Music", tint = themeColor)
+                    CdGlyph(size = 24.dp)
                 }
             }
         }
@@ -1162,71 +1162,116 @@ private fun ExpandedDescriptionOverlay(
     onDismiss: () -> Unit
 ) {
     val colors = LocalBestBeforeColors.current
+    val overlayBase = Color(0xFF090B12)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(themeColor)
+            .background(overlayBase)
             .zIndex(100f)
     ) {
+        // Layered tint so overlay keeps the room theme without becoming a flat full-screen color.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black,
+                            overlayBase,
+                            Color.Black
+                        )
+                    )
+                )
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.62f)
+                .align(Alignment.TopCenter)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            themeColor.copy(alpha = 0.34f),
+                            themeColor.copy(alpha = 0.16f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp)
+                .padding(horizontal = 24.dp, vertical = 22.dp)
         ) {
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // ── Title + CD Button Row ───────────────────────────────
+            // Header + CD action
             Box(modifier = Modifier.fillMaxWidth()) {
-                // Room name centered
                 Text(
                     text = card.title,
-                    fontSize = 28.sp,
+                    fontSize = 30.sp,
                     fontWeight = FontWeight.Bold,
                     color = colors.textPrimary,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(end = 56.dp) // Space for CD button
+                        .padding(end = 62.dp)
                 )
 
-                // CD button (top right) — BB-UI-10
                 Box(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .size(48.dp)
-                        .background(Color.White.copy(alpha = 0.2f), CircleShape)
+                        .size(52.dp)
                         .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.36f))
+                        .border(1.dp, themeColor.copy(alpha = 0.55f), CircleShape)
                         .clickable { onShowSoundCloud() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.PlayArrow, null, tint = Color.White)
+                    CdGlyph(size = 28.dp)
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // ── Card Placeholder (shows room image area) ────────────
+            // Hero area
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(350.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(Color.White.copy(alpha = 0.1f)),
+                    .height(352.dp)
+                    .clip(RoundedCornerShape(30.dp))
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                themeColor.copy(alpha = 0.28f),
+                                Color(0xFF161A2A),
+                                Color(0xFF0F111C)
+                            )
+                        )
+                    )
+                    .border(1.dp, themeColor.copy(alpha = 0.45f), RoundedCornerShape(30.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                // Placeholder for actual room image (AsyncImage would go here)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(18.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color.Black.copy(alpha = 0.30f))
+                )
                 Text(
                     text = card.title,
-                    color = colors.textSecondary.copy(alpha = 0.6f),
-                    fontSize = 20.sp,
+                    color = colors.textSecondary.copy(alpha = 0.82f),
+                    fontSize = 30.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(22.dp))
 
-            // ── Avatar + Username ────────────────────────────────────
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -1234,73 +1279,130 @@ private fun ExpandedDescriptionOverlay(
                 Box(
                     modifier = Modifier
                         .size(48.dp)
-                        .background(themeColor.copy(alpha = 0.8f), CircleShape)
-                        .border(2.dp, Color.White.copy(alpha = 0.3f), CircleShape),
+                        .background(themeColor.copy(alpha = 0.85f), CircleShape)
+                        .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         Icons.Default.Person,
                         contentDescription = null,
                         tint = Color.Black,
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(26.dp)
                     )
                 }
                 Text(
                     text = "@${card.ownerEmail?.substringBefore("@") ?: "artist"}",
                     color = colors.textPrimary,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
+                    fontSize = 19.sp
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
-            // ── Full Description ─────────────────────────────────────
             Text(
                 text = if (card.description.isNotBlank()) card.description
                 else "No description provided.",
-                color = colors.textPrimary,
+                color = colors.textPrimary.copy(alpha = 0.92f),
                 fontSize = 16.sp,
                 lineHeight = 24.sp
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
-            // ── See Less ─────────────────────────────────────────────
             Text(
                 text = "See Less",
-                color = colors.primary,
-                fontSize = 16.sp,
+                color = themeColor,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.clickable { onDismiss() }
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // ── TAGS Section ─────────────────────────────────────────
-            // BB-UI-10: All tags fully displayed at the bottom
             if (card.tags.isNotEmpty()) {
                 Text(
                     "TAGS",
-                    color = colors.textSecondary,
+                    color = colors.textSecondary.copy(alpha = 0.9f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                // Wrap tags in a flow-like row
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(card.tags) { tag ->
-                        TagChip("#$tag", colors.textPrimary)
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(Color.White.copy(alpha = 0.08f))
+                                .border(1.dp, themeColor.copy(alpha = 0.30f), RoundedCornerShape(11.dp))
+                                .padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Text(
+                                text = "#$tag",
+                                color = colors.textPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(40.dp))
         }
+    }
+}
+
+@Composable
+private fun CdGlyph(
+    modifier: Modifier = Modifier,
+    size: Dp = 24.dp
+) {
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF596171),
+                        Color(0xFF434B59),
+                        Color(0xFF2F3642),
+                        Color(0xFF171C25)
+                    )
+                )
+            )
+            .border(1.dp, Color.White.copy(alpha = 0.22f), CircleShape)
+    ) {
+        // Matte inner ring for a darker graphite disk finish.
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(size * 0.62f)
+                .clip(CircleShape)
+                .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                .background(Color.Black.copy(alpha = 0.32f))
+        )
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(size * 0.20f)
+                .clip(CircleShape)
+                .background(Color(0xFF0A0D13))
+                .border(1.dp, Color.White.copy(alpha = 0.22f), CircleShape)
+        )
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = size * 0.18f, top = size * 0.14f)
+                .size(size * 0.10f)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.34f))
+        )
     }
 }
 

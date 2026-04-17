@@ -210,7 +210,7 @@ fun LoginScreen(
                 Text(
                     text = if (loginMode == LoginMode.EVERYONE)
                         "swipe for Artists" else "swipe for Everyone",
-                    fontSize = 16.sp,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.White
                 )
@@ -255,12 +255,12 @@ fun LoginScreen(
                     ) {
                         Row {
                             Text(
-                                "Artists",
+                                "Artist",
                                 color = Color.White,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            //Spacer(modifier = Modifier.width(1.dp))
                         }
                     }
 
