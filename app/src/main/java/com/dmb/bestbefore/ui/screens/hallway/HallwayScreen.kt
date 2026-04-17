@@ -350,8 +350,8 @@ private fun RoomingContent(
 // ── BB-UI-04: Rooming Card ──────────────────────────────────────────────
 @Composable
 private fun RoomingCard(card: HallwayCard, height: Int, onClick: () -> Unit) {
-    val themeColor = parseThemeColor(card.themeColorHex)
     val colors = LocalBestBeforeColors.current
+    val themeColor = parseThemeColor(card.themeColorHex, fallback = colors.primary)
     val isLocked = card.timeCapsuleDays > 0
 
     Box(
@@ -573,6 +573,7 @@ private fun HallwayContent(
                                 card = card,
                                 glowAlpha = glowAlpha,
                                 themeColor = parsedColor,
+                                accentColor = colors.primary,
                                 currentImageIndex = cardImageIndices[card.id] ?: 0,
                                 onImageIndexChange = { newIndex -> onImageIndexChange(card.id, newIndex) },
                                 onOpenRoom = { onOpenRoom(card) },
@@ -623,6 +624,7 @@ fun HallwayActiveCard(
     card: HallwayCard,
     glowAlpha: Float,
     themeColor: Color,
+    accentColor: Color,
     currentImageIndex: Int,
     onImageIndexChange: (Int) -> Unit,
     onOpenRoom: () -> Unit,
@@ -737,7 +739,7 @@ fun HallwayActiveCard(
                     brush = Brush.linearGradient(
                         colors = listOf(
                             Color.White.copy(alpha = 0.92f),
-                            themeColor.copy(alpha = 0.95f),
+                            accentColor.copy(alpha = 0.95f),
                             Color.White.copy(alpha = 0.55f)
                         )
                     ),
@@ -751,7 +753,7 @@ fun HallwayActiveCard(
             .fillMaxSize()
             .border(
                 2.dp,
-                themeColor.copy(alpha = dynamicGlowAlpha * 0.86f),
+                accentColor.copy(alpha = dynamicGlowAlpha * 0.86f),
                 RoundedCornerShape(32.dp)
             )
             .clip(RoundedCornerShape(32.dp))
@@ -1344,12 +1346,12 @@ private fun BottomNavItem(text: String, isSelected: Boolean, onClick: () -> Unit
 }
 
 // ── Helper: Parse theme color from hex string ───────────────────────────
-private fun parseThemeColor(hex: String?): Color {
+private fun parseThemeColor(hex: String?, fallback: Color = Color(0xFF007AFF)): Color {
     return hex?.let {
         try {
             Color(it.toColorInt())
         } catch (_: Exception) {
-            Color(0xFF007AFF)
+            fallback
         }
-    } ?: Color(0xFF007AFF)
+    } ?: fallback
 }
