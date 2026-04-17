@@ -210,7 +210,7 @@ fun LoginScreen(
                 Text(
                     text = if (loginMode == LoginMode.EVERYONE)
                         "swipe for Artists" else "swipe for Everyone",
-                    fontSize = 22.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.White
                 )
