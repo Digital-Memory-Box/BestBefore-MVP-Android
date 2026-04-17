@@ -40,9 +40,7 @@ class HallwayViewModel : ViewModel() {
             val matchesSearch = if (normalizedQuery.isBlank()) {
                 true
             } else {
-                card.title.contains(normalizedQuery, ignoreCase = true) ||
-                (card.ownerEmail?.contains(normalizedQuery, ignoreCase = true) == true) ||
-                card.tags.any { it.contains(normalizedQuery, ignoreCase = true) }
+                card.title.contains(normalizedQuery, ignoreCase = true)
             }
             matchesTagFilter && matchesSearch
         }

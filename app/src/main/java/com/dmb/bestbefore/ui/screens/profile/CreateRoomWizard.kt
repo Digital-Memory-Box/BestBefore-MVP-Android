@@ -44,6 +44,98 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.Image
 
+private val AccentBlue = Color(0xFF1A7AF8)
+private val CardDarkBg = Color(0xFF1C1C1E)
+
+@Composable
+private fun CreateRoomChrome(
+    step: Int,
+    onDismiss: () -> Unit,
+    onBack: (() -> Unit)?,
+    onNext: () -> Unit,
+    nextLabel: String = "Next",
+    nextEnabled: Boolean = true,
+    themeName: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val themeColor = getRoomThemeColor(themeName)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp, bottom = 20.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+                    if (onBack != null) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White,
+                            modifier = Modifier.clickable { onBack() }
+                        )
+                    }
+                }
+                Text(
+                    text = "Step $step/5",
+                    color = Color(0xFF8E8E93),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(Color(0xFF2C2C2E), CircleShape)
+                        .clickable { onDismiss() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                content = content
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = onNext,
+                enabled = nextEnabled,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = themeColor,
+                    disabledContainerColor = Color(0xFF2C2C2E),
+                    contentColor = Color.White,
+                    disabledContentColor = Color(0xFF8E8E93)
+                )
+            ) {
+                Text(nextLabel, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+        }
+    }
+}
+
 // --- EDIT ROOM SCREEN ---
 @Composable
 fun EditRoomScreen(viewModel: ProfileViewModel) {
@@ -124,7 +216,7 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // â”€â”€â”€ Time Capsule â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // â”€â”€â”€ Time Capsule â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             Row(
                 modifier = Modifier.fillMaxWidth().background(Color(0xFF1C1C1E), RoundedCornerShape(12.dp)).padding(16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -644,7 +736,7 @@ fun PrivacyCard(
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CreateRoomStep2(viewModel: ProfileViewModel) {
@@ -1319,7 +1411,7 @@ fun CreateRoomStep3Atmosphere(viewModel: ProfileViewModel) {
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @Composable
 fun CreateRoomStep4(viewModel: ProfileViewModel) {
     val rolling  by viewModel.rollingExpiration.collectAsState()
@@ -1532,7 +1624,7 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @Composable
 fun RoomNameStep(viewModel: ProfileViewModel) {
     CreateRoomStep1(viewModel)
