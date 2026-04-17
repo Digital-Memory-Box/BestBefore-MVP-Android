@@ -373,23 +373,6 @@ private fun RoomingCard(card: HallwayCard, height: Int, onClick: () -> Unit) {
                 )
         )
 
-        // Settings icon (top-right)
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(16.dp)
-                .size(40.dp)
-                .background(Color.White.copy(alpha = 0.12f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                Icons.Default.Settings,
-                contentDescription = "Settings",
-                tint = Color.White.copy(alpha = 0.7f),
-                modifier = Modifier.size(20.dp)
-            )
-        }
-
         // Bottom info
         Column(
             modifier = Modifier
