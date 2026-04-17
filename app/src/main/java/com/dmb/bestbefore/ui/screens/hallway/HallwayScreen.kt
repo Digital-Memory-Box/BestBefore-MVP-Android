@@ -78,7 +78,6 @@ fun HallwayScreen(
     val areCollaboratorsExpanded by viewModel.areCollaboratorsExpanded.collectAsState()
     val cardImageIndices by viewModel.cardImageIndices.collectAsState()
     val orbWidth = 160.dp
-    val orbHeight = 220.dp
     val contentEndInset = 0.dp
 
     Box(
@@ -171,7 +170,6 @@ fun HallwayScreen(
         ) {
             OrbMenu(
                 width = orbWidth,
-                height = orbHeight,
                 onProfileClick = onNavigateToProfile,
                 onAddClick = onCreateRoomClick,
                 onSearchClick = { },

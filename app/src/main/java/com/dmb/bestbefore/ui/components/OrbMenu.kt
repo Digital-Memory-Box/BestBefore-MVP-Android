@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.dmb.bestbefore.ui.theme.ThemeState
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 
 /**
  * True oval shape (ellipse) to avoid the flat vertical side produced by rounded rectangles.
@@ -46,10 +47,17 @@ private object OrbOvalShape : Shape {
  */
 object OrbMenuLayout {
     private const val REVEAL_FRACTION = 0.55f
+    private const val HEIGHT_RATIO = 0.38f     // Ekranın %38'i kadar yükseklik
+    private const val MIN_HEIGHT = 200f
+    private const val MAX_HEIGHT = 380f
 
     fun horizontalOffset(width: Dp): Dp = width * REVEAL_FRACTION
-
     fun visibleInset(width: Dp): Dp = width - horizontalOffset(width)
+
+    fun computeHeight(screenHeightDp: Float): Dp {
+        val raw = screenHeightDp * HEIGHT_RATIO
+        return raw.coerceIn(MIN_HEIGHT, MAX_HEIGHT).dp
+    }
 }
 
 /**
@@ -60,7 +68,9 @@ object OrbMenuLayout {
 fun OrbMenu(
     modifier: Modifier = Modifier,
     width: Dp = 160.dp,
-    height: Dp = 220.dp,
+    height: Dp = OrbMenuLayout.computeHeight(
+        LocalConfiguration.current.screenHeightDp.toFloat()
+    ),
     primaryColor: Color = Color(0xFF0D59F2),
     secondaryColor: Color = Color(0xFF00D972),
     onSearchClick: () -> Unit = {},
