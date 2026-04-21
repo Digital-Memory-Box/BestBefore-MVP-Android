@@ -99,7 +99,9 @@ fun AsyncBase64Image(
 fun RoomDetailScreen(
     viewModel: ProfileViewModel,
     multiplePhotoPickerLauncher: androidx.activity.result.ActivityResultLauncher<String>,
-    filePickerLauncher: androidx.activity.result.ActivityResultLauncher<Array<String>>
+    filePickerLauncher: androidx.activity.result.ActivityResultLauncher<Array<String>>,
+    onAddToRooming: (() -> Unit)? = null,
+    onIgnoreRoom: (() -> Unit)? = null
 ) {
     val room by viewModel.selectedRoom.collectAsState()
     val roomMedia by viewModel.roomMedia.collectAsState() // Persisted room media
@@ -124,6 +126,8 @@ fun RoomDetailScreen(
     var showWriteNoteDialog by remember { mutableStateOf(false) }
     var noteContent by remember { mutableStateOf("") }
     var showAllMediaGrid by remember { mutableStateOf(false) }
+    var isAddedToRooming by remember { mutableStateOf(false) }
+    var isIgnored by remember { mutableStateOf(false) }
     
     var showMusicSelector by remember { mutableStateOf(false) }
     var authToken by remember { mutableStateOf<String?>(null) }
@@ -235,6 +239,33 @@ fun RoomDetailScreen(
                                          room?.let { viewModel.selectRoomForEditing(it) }
                                      }
                                  )
+                                 // Add to Rooming (only shown when callback is provided = from Hallway/Artists)
+                                 if (onAddToRooming != null) {
+                                     DropdownMenuItem(
+                                         text = {
+                                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                                 Icon(
+                                                     Icons.Default.Bookmark,
+                                                     null,
+                                                     tint = if (isAddedToRooming) Color(0xFF007AFF) else Color.White,
+                                                     modifier = Modifier.size(18.dp)
+                                                 )
+                                                 Spacer(modifier = Modifier.width(10.dp))
+                                                 Text(
+                                                     if (isAddedToRooming) "Added to Rooming ✓" else "Add to Rooming",
+                                                     color = if (isAddedToRooming) Color(0xFF007AFF) else Color.White
+                                                 )
+                                             }
+                                         },
+                                         onClick = {
+                                             if (!isAddedToRooming) {
+                                                 onAddToRooming()
+                                                 isAddedToRooming = true
+                                             }
+                                             show3DotMenu = false
+                                         }
+                                     )
+                                 }
                                  DropdownMenuItem(
                                      text = { Text("Delete Room", color = Color.Red) },
                                      onClick = {
@@ -242,6 +273,35 @@ fun RoomDetailScreen(
                                          room?.let { viewModel.deleteRoom(context, it, fromInsideRoom = true) }
                                      }
                                  )
+                                 // Ignore This Room (only from Hallway/Artists, red)
+                                 if (onIgnoreRoom != null) {
+                                     HorizontalDivider(color = Color.White.copy(alpha = 0.08f), thickness = 0.5.dp)
+                                     DropdownMenuItem(
+                                         text = {
+                                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                                 Icon(
+                                                     Icons.Default.Block,
+                                                     null,
+                                                     tint = if (isIgnored) Color.Gray else Color(0xFFFF3B30),
+                                                     modifier = Modifier.size(18.dp)
+                                                 )
+                                                 Spacer(modifier = Modifier.width(10.dp))
+                                                 Text(
+                                                     if (isIgnored) "Room Ignored ✓" else "Ignore This Room",
+                                                     color = if (isIgnored) Color.Gray else Color(0xFFFF3B30),
+                                                     fontWeight = FontWeight.SemiBold
+                                                 )
+                                             }
+                                         },
+                                         onClick = {
+                                             if (!isIgnored) {
+                                                 onIgnoreRoom()
+                                                 isIgnored = true
+                                             }
+                                             show3DotMenu = false
+                                         }
+                                     )
+                                 }
                              }
                          }
                      }

@@ -348,14 +348,18 @@ fun ProfileScreen(
                     viewModel.startCreateRoom(RoomCreationSource.HALLWAY)
                 },
                 onCameraClick = {
-                    val file = java.io.File.createTempFile("camera_image_", ".jpg", context.cacheDir)
-                    val uri = androidx.core.content.FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        file
-                    )
-                    cameraImageUri = uri
-                    cameraLauncher.launch(uri)
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                        val file = java.io.File.createTempFile("camera_image_", ".jpg", context.cacheDir)
+                        val uri = androidx.core.content.FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            file
+                        )
+                        cameraImageUri = uri
+                        cameraLauncher.launch(uri)
+                    } else {
+                        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                    }
                 },
                 viewModel = hallwayViewModel
             )
@@ -435,7 +439,42 @@ fun ProfileScreen(
                     ProfileStep.ROOM_DETAIL -> RoomDetailScreen(
                         viewModel = viewModel,
                         multiplePhotoPickerLauncher = multiplePhotoPickerLauncher,
-                        filePickerLauncher = filePickerLauncher
+                        filePickerLauncher = filePickerLauncher,
+                        onAddToRooming = {
+                            val room = viewModel.selectedRoom.value
+                            if (room != null) {
+                                hallwayViewModel.saveRoomToRooming(
+                                    com.dmb.bestbefore.data.models.HallwayCard(
+                                        id = room.id,
+                                        title = room.roomName,
+                                        timeCapsuleDays = room.capsuleDays,
+                                        description = room.description ?: "",
+                                        photos = room.photos,
+                                        themeColorHex = room.theme,
+                                        tags = room.tags,
+                                        backgroundMusic = room.music
+                                    )
+                                )
+                            }
+                        },
+                        onIgnoreRoom = {
+                            val room = viewModel.selectedRoom.value
+                            if (room != null) {
+                                hallwayViewModel.ignoreRoom(
+                                    com.dmb.bestbefore.data.models.HallwayCard(
+                                        id = room.id,
+                                        title = room.roomName,
+                                        timeCapsuleDays = room.capsuleDays,
+                                        description = room.description ?: "",
+                                        photos = room.photos,
+                                        themeColorHex = room.theme,
+                                        tags = room.tags,
+                                        backgroundMusic = room.music
+                                    )
+                                )
+                                viewModel.goBack()
+                            }
+                        }
                     )
                     ProfileStep.EDIT_ROOM -> EditRoomScreen(viewModel)
                     ProfileStep.CAMERA_ACTION -> CameraActionSheet(viewModel, context)

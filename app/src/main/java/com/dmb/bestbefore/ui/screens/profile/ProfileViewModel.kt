@@ -99,6 +99,21 @@ class ProfileViewModel : ViewModel() {
     private val _bio = MutableStateFlow("Digital artist focusing on surreal landscapes and vibrant color theory.")
     val bio: StateFlow<String> = _bio.asStateFlow()
 
+    // ── Profile Tags ─────────────────────────────────────────────────
+    private val _profileTags = MutableStateFlow<List<String>>(emptyList())
+    val profileTags: StateFlow<List<String>> = _profileTags.asStateFlow()
+
+    fun addProfileTag(tag: String) {
+        val trimmed = tag.trim().lowercase()
+        if (trimmed.isNotEmpty() && _profileTags.value.none { it.equals(trimmed, ignoreCase = true) }) {
+            _profileTags.value = _profileTags.value + trimmed
+        }
+    }
+
+    fun removeProfileTag(tag: String) {
+        _profileTags.value = _profileTags.value.filter { !it.equals(tag, ignoreCase = true) }
+    }
+
     private val _showOnlySaved = MutableStateFlow(false)
     val showOnlySaved: StateFlow<Boolean> = _showOnlySaved.asStateFlow()
 

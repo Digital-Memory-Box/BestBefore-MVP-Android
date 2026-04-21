@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
@@ -55,7 +56,8 @@ fun ProfileMenuScreen(
     viewModel: ProfileViewModel,
     musicViewModel: com.dmb.bestbefore.ui.components.MusicViewModel,
     createdRooms: List<TimeCapsuleRoom>,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    hallwayViewModel: com.dmb.bestbefore.ui.screens.hallway.HallwayViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     
@@ -141,7 +143,7 @@ fun ProfileMenuScreen(
                 when (selectedTab) {
                     0 -> DashboardTab(viewModel, createdRooms)
                     1 -> CustomizationTab(viewModel, musicViewModel)
-                    2 -> SettingsTab(viewModel, onLogout)
+                    2 -> SettingsTab(viewModel, hallwayViewModel, onLogout)
                 }
             }
         }
@@ -177,6 +179,7 @@ fun DashboardTab(
             val roomingCount by viewModel.roomingCount.collectAsState()
             val roomersCount by viewModel.roomersCount.collectAsState()
             val profileImageUri by viewModel.profileImageUri.collectAsState()
+            val profileTags by viewModel.profileTags.collectAsState()
 
             com.dmb.bestbefore.ui.components.SharedUserCard(
                 name = if (userName.startsWith("@")) userName else "@$userName",
@@ -185,7 +188,8 @@ fun DashboardTab(
                 roomersCount = roomersCount.toString(),
                 accentColor = accentColor,
                 privacyStatus = com.dmb.bestbefore.ui.components.UserPrivacyStatus.NONE,
-                profileImageUri = profileImageUri
+                profileImageUri = profileImageUri,
+                tags = profileTags
             )
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -461,6 +465,128 @@ fun CustomizationTab(
         )
         Spacer(modifier = Modifier.height(20.dp))
 
+        // ── Profile Tags ──────────────────────────────────────────────
+        val profileTags by viewModel.profileTags.collectAsState()
+        var tagInput by remember { mutableStateOf("") }
+        val accentColorTags by viewModel.accentColor.collectAsState()
+
+        Text(
+            text = "Profile Tags",
+            color = Color.Gray,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Tag chips display (scrollable)
+        if (profileTags.isNotEmpty()) {
+            androidx.compose.foundation.lazy.LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp)
+            ) {
+                items(profileTags) { tag ->
+                    Row(
+                        modifier = Modifier
+                            .background(
+                                accentColorTags.copy(alpha = 0.15f),
+                                RoundedCornerShape(50.dp)
+                            )
+                            .border(1.dp, accentColorTags.copy(alpha = 0.4f), RoundedCornerShape(50.dp))
+                            .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Tag,
+                            contentDescription = null,
+                            tint = accentColorTags,
+                            modifier = Modifier.size(11.dp)
+                        )
+                        Text(
+                            text = tag,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = accentColorTags
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(16.dp)
+                                .background(Color.White.copy(alpha = 0.15f), CircleShape)
+                                .clickable { viewModel.removeProfileTag(tag) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "×",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                lineHeight = 11.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Tag input row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .background(colors.surface, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.Tag,
+                    contentDescription = null,
+                    tint = Color.Gray,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                BasicTextField(
+                    value = tagInput,
+                    onValueChange = { if (it.length <= 20) tagInput = it },
+                    textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                    decorationBox = { inner ->
+                        if (tagInput.isEmpty()) Text("Add a tag (e.g. artist, music)", color = Color.Gray, fontSize = 14.sp)
+                        inner()
+                    }
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .height(44.dp)
+                    .background(accentColorTags, RoundedCornerShape(12.dp))
+                    .clickable {
+                        if (tagInput.isNotBlank()) {
+                            viewModel.addProfileTag(tagInput)
+                            tagInput = ""
+                        }
+                    }
+                    .padding(horizontal = 18.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Add", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            "Tags appear on your profile card and help others discover you.",
+            color = Color.Gray,
+            fontSize = 11.sp
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+
         // BB-UI-14: Profile Photo
         Text(text = "Profile Photo", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
@@ -670,14 +796,200 @@ fun CustomizationTab(
 // --- TAB 3: SETTINGS ---
 // BB-UI-16
 @Composable
-fun SettingsTab(viewModel: ProfileViewModel, onLogout: () -> Unit) {
+fun SettingsTab(
+    viewModel: ProfileViewModel,
+    hallwayViewModel: com.dmb.bestbefore.ui.screens.hallway.HallwayViewModel,
+    onLogout: () -> Unit
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val colors = LocalBestBeforeColors.current
     val accentColor = colors.primary
 
     var newEmail by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
+    var showIgnoredRooms by remember { mutableStateOf(false) }
+    val ignoredRoomCards by hallwayViewModel.ignoredRoomCards.collectAsState()
 
+    // ── Ignored Rooms Full-Screen Overlay ─────────────────────────────────────
+    if (showIgnoredRooms) {
+        androidx.activity.compose.BackHandler { showIgnoredRooms = false }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF0A0A0A))
+                .windowInsetsPadding(WindowInsets.statusBars)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Header
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(Color.White.copy(alpha = 0.08f), CircleShape)
+                            .clickable { showIgnoredRooms = false },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            "Back",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            "Ignored Rooms",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            "${ignoredRoomCards.size} room${if (ignoredRoomCards.size != 1) "s" else ""} hidden",
+                            fontSize = 12.sp,
+                            color = Color.Gray
+                        )
+                    }
+                }
+
+                if (ignoredRoomCards.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Block,
+                                null,
+                                tint = Color.Gray.copy(alpha = 0.4f),
+                                modifier = Modifier.size(56.dp)
+                            )
+                            Text(
+                                "No ignored rooms",
+                                color = Color.Gray,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                "Rooms you ignore from Hallway appear here.",
+                                color = Color.Gray.copy(alpha = 0.6f),
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(ignoredRoomCards) { card ->
+                            val themeColor = try {
+                                card.themeColorHex?.let {
+                                    android.graphics.Color.parseColor(if (it.startsWith("#")) it else "#$it")
+                                        .let { raw -> Color(raw) }
+                                } ?: Color(0xFF1C1C1E)
+                            } catch (e: Exception) { Color(0xFF1C1C1E) }
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(220.dp)
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(Color.DarkGray)
+                            ) {
+                                // Gradient bg
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            Brush.verticalGradient(
+                                                listOf(
+                                                    themeColor.copy(alpha = 0.25f),
+                                                    Color.Black.copy(alpha = 0.92f)
+                                                )
+                                            )
+                                        )
+                                )
+
+                                // Ignored badge
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(14.dp)
+                                        .background(Color(0xFFFF3B30).copy(alpha = 0.85f), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(Icons.Default.Block, null, tint = Color.White, modifier = Modifier.size(10.dp))
+                                        Text("Ignored", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
+                                }
+
+                                // Room info + Unignore button
+                                Column(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomStart)
+                                        .padding(16.dp)
+                                        .fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        card.title,
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                    if (card.description.isNotEmpty()) {
+                                        Text(
+                                            card.description,
+                                            fontSize = 12.sp,
+                                            color = Color.White.copy(alpha = 0.6f),
+                                            maxLines = 2,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    // Unignore button
+                                    Box(
+                                        modifier = Modifier
+                                            .background(
+                                                Color.White.copy(alpha = 0.13f),
+                                                RoundedCornerShape(10.dp)
+                                            )
+                                            .border(1.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+                                            .clickable { hallwayViewModel.unignoreRoom(card.id) }
+                                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                                    ) {
+                                        Text(
+                                            "Remove from Ignored",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        item { Spacer(modifier = Modifier.height(32.dp)) }
+                    }
+                }
+            }
+        }
+        return
+    }
+
+    // ── Normal Settings Content ───────────────────────────────────────────────
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -686,6 +998,56 @@ fun SettingsTab(viewModel: ProfileViewModel, onLogout: () -> Unit) {
     ) {
         Text("Account Settings", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(modifier = Modifier.height(16.dp))
+
+        // Ignored Rooms entry row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(colors.surface, RoundedCornerShape(12.dp))
+                .clickable { showIgnoredRooms = true }
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(Color(0xFFFF3B30).copy(alpha = 0.15f), RoundedCornerShape(8.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Block, null, tint = Color(0xFFFF3B30), modifier = Modifier.size(18.dp))
+                }
+                Column {
+                    Text("Ignored Rooms", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    Text(
+                        if (ignoredRoomCards.isEmpty()) "No rooms ignored"
+                        else "${ignoredRoomCards.size} room${if (ignoredRoomCards.size != 1) "s" else ""} hidden",
+                        color = Color.Gray,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (ignoredRoomCards.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .background(Color(0xFFFF3B30).copy(alpha = 0.2f), CircleShape)
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            ignoredRoomCards.size.toString(),
+                            color = Color(0xFFFF3B30),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                Icon(Icons.Default.ChevronRight, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
 
         // Update Email
         Text("Update Email", color = Color.Gray, fontSize = 14.sp)
@@ -732,9 +1094,7 @@ fun SettingsTab(viewModel: ProfileViewModel, onLogout: () -> Unit) {
                 .fillMaxWidth()
                 .background(accentColor.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
                 .border(1.dp, accentColor.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-                .clickable {
-                    // Logic to update both synchronously.
-                }
+                .clickable { }
                 .padding(vertical = 16.dp),
             contentAlignment = Alignment.Center
         ) {

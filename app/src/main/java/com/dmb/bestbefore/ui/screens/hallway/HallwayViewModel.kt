@@ -69,6 +69,46 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
     private val _availableTags = MutableStateFlow<List<String>>(emptyList())
     val availableTags: StateFlow<List<String>> = _availableTags.asStateFlow()
 
+    // ── Saved Rooms (Added to Rooming via "Add to Rooming" button) ─────────
+    private val _savedRoomCards = MutableStateFlow<List<HallwayCard>>(emptyList())
+    val savedRoomCards: StateFlow<List<HallwayCard>> = _savedRoomCards.asStateFlow()
+
+    fun saveRoomToRooming(card: HallwayCard) {
+        if (_savedRoomCards.value.none { it.id == card.id }) {
+            _savedRoomCards.value = _savedRoomCards.value + card
+        }
+    }
+
+    fun removeSavedRoom(cardId: String) {
+        _savedRoomCards.value = _savedRoomCards.value.filter { it.id != cardId }
+    }
+
+    fun isRoomSaved(cardId: String): Boolean {
+        return _savedRoomCards.value.any { it.id == cardId }
+    }
+
+    // ── Ignored Rooms (hidden from Hallway & Artists) ────────────────────
+    private val _ignoredRoomIds = MutableStateFlow<Set<String>>(emptySet())
+    private val _ignoredRoomCards = MutableStateFlow<List<HallwayCard>>(emptyList())
+    val ignoredRoomCards: StateFlow<List<HallwayCard>> = _ignoredRoomCards.asStateFlow()
+
+    fun ignoreRoom(card: HallwayCard) {
+        if (!_ignoredRoomIds.value.contains(card.id)) {
+            _ignoredRoomIds.value = _ignoredRoomIds.value + card.id
+            _ignoredRoomCards.value = _ignoredRoomCards.value + card
+            // Re-filter current tab to remove it instantly
+            filterCards(_currentTab.value)
+        }
+    }
+
+    fun unignoreRoom(cardId: String) {
+        _ignoredRoomIds.value = _ignoredRoomIds.value - cardId
+        _ignoredRoomCards.value = _ignoredRoomCards.value.filter { it.id != cardId }
+        filterCards(_currentTab.value)
+    }
+
+    fun isRoomIgnored(cardId: String): Boolean = _ignoredRoomIds.value.contains(cardId)
+
     private var myRoomsList: List<com.dmb.bestbefore.data.api.models.RoomDto> = emptyList()
     private var discoverRoomsList: List<com.dmb.bestbefore.data.api.models.RoomDto> = emptyList()
 
@@ -175,14 +215,15 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
             BottomTab.EVERYONE -> {
-                // Show ALL public rooms in the Hallway tab
-                allAvailableRooms.filter { isRoomPublic(it) }
+                // Show ALL public rooms in the Hallway tab, excluding ignored
+                allAvailableRooms.filter { isRoomPublic(it) && !_ignoredRoomIds.value.contains(it.id) }
             }
             BottomTab.ARTISTS -> {
-                // Show public rooms where owner is explicitly an artist
-                // Rooms with ownerUserType = "artist" appear here (and also in EVERYONE above)
+                // Show public artist rooms, excluding ignored
                 allAvailableRooms.filter {
-                    it.ownerUserType?.equals("artist", ignoreCase = true) == true && isRoomPublic(it)
+                    it.ownerUserType?.equals("artist", ignoreCase = true) == true &&
+                    isRoomPublic(it) &&
+                    !_ignoredRoomIds.value.contains(it.id)
                 }
             }
         }

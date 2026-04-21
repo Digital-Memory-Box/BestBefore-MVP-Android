@@ -6,6 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -15,6 +17,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -39,7 +42,8 @@ fun SharedUserCard(
     roomersCount: String,
     accentColor: Color,
     privacyStatus: UserPrivacyStatus = UserPrivacyStatus.NONE,
-    profileImageUri: Uri? = null
+    profileImageUri: Uri? = null,
+    tags: List<String> = emptyList()
 ) {
     var isBioExpanded by remember { mutableStateOf(false) }
     val themeColors = LocalBestBeforeColors.current
@@ -148,6 +152,41 @@ fun SharedUserCard(
                         color = accentColor,
                         modifier = Modifier.clickable { isBioExpanded = !isBioExpanded }
                     )
+                }
+            }
+        }
+
+        // Profile Tags section
+        if (tags.isNotEmpty()) {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(tags) { tag ->
+                    Row(
+                        modifier = Modifier
+                            .background(
+                                accentColor.copy(alpha = 0.15f),
+                                RoundedCornerShape(50.dp)
+                            )
+                            .border(1.dp, accentColor.copy(alpha = 0.4f), RoundedCornerShape(50.dp))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Tag,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(11.dp)
+                        )
+                        Text(
+                            text = tag,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = accentColor
+                        )
+                    }
                 }
             }
         }

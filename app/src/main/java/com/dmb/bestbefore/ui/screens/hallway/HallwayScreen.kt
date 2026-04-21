@@ -80,6 +80,7 @@ fun HallwayScreen(
     val availableTags by viewModel.availableTags.collectAsState()
     val areCollaboratorsExpanded by viewModel.areCollaboratorsExpanded.collectAsState()
     val cardImageIndices by viewModel.cardImageIndices.collectAsState()
+    val savedRoomCards by viewModel.savedRoomCards.collectAsState()
     val orbWidth = 420.dp // En güncel Swift tasarımı için daha büyük çap
     val contentEndInset = 0.dp
 
@@ -112,13 +113,15 @@ fun HallwayScreen(
                 // ═════════════════════════════════════════════════════════
                 BottomTab.ROOMING -> {
                     RoomingContent(
-                        cards = cards,
+                        collaboratorCards = cards,
+                        savedCards = savedRoomCards,
                         searchQuery = searchQuery,
                         onSearchQueryChange = viewModel::setSearchQuery,
                         contentEndInset = contentEndInset,
                         onMusicClick = onRoomingMusicClick,
                         onScanClick = onRoomingScanClick,
                         onOpenRoom = onOpenRoom,
+                        onRemoveSaved = { cardId -> viewModel.removeSavedRoom(cardId) },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -217,17 +220,30 @@ fun HallwayScreen(
 // ═══════════════════════════════════════════════════════════════════════════
 @Composable
 private fun RoomingContent(
-    cards: List<HallwayCard>,
+    collaboratorCards: List<HallwayCard>,
+    savedCards: List<HallwayCard>,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     contentEndInset: Dp,
     onMusicClick: () -> Unit,
     onScanClick: () -> Unit,
     onOpenRoom: (HallwayCard) -> Unit,
+    onRemoveSaved: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalBestBeforeColors.current
     val cardHeight = 280.dp
+
+    // Apply search filter to both lists
+    val filteredSaved = savedCards.filter { card ->
+        searchQuery.isBlank() || card.title.contains(searchQuery, ignoreCase = true)
+    }
+    val filteredCollaborator = collaboratorCards.filter { card ->
+        searchQuery.isBlank() || card.title.contains(searchQuery, ignoreCase = true)
+    }
+
+    val isEmpty = filteredSaved.isEmpty() && filteredCollaborator.isEmpty()
+
     LazyColumn(
         modifier = modifier
             .fillMaxWidth()
@@ -313,28 +329,68 @@ private fun RoomingContent(
             }
         }
 
-        item { Spacer(modifier = Modifier.height(20.dp)) }
+        item { Spacer(modifier = Modifier.height(24.dp)) }
 
-        if (cards.isEmpty()) {
+        // ─── SAVED ROOMS SECTION ─────────────────────────────────────────
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    Icons.Default.Bookmark,
+                    contentDescription = null,
+                    tint = Color(0xFF007AFF),
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    "Saved Rooms",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textPrimary
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Box(
+                    modifier = Modifier
+                        .size(22.dp)
+                        .background(Color(0xFF007AFF).copy(alpha = 0.2f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        filteredSaved.size.toString(),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF007AFF)
+                    )
+                }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(12.dp)) }
+
+        if (filteredSaved.isEmpty()) {
             item {
-                Column(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 100.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                        .padding(horizontal = 24.dp)
+                        .height(100.dp)
+                        .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        Icons.Default.Search,
-                        null,
-                        tint = Color.Gray.copy(alpha = 0.3f),
-                        modifier = Modifier.size(50.dp)
-                    )
-                    Text("No rooms discovered yet.", color = Color.Gray)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Bookmark, null, tint = Color.Gray, modifier = Modifier.size(28.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("No saved rooms yet.", color = Color.Gray, fontSize = 13.sp)
+                        Text("Open a room and tap Add to Rooming.", color = Color.Gray.copy(alpha = 0.7f), fontSize = 11.sp)
+                    }
                 }
             }
         } else {
-            itemsIndexed(cards) { _, card ->
+            itemsIndexed(filteredSaved) { _, card ->
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -344,21 +400,111 @@ private fun RoomingContent(
                     RoomingCard(
                         card = card,
                         height = cardHeight.value.toInt(),
-                        onClick = { onOpenRoom(card) }
+                        isSaved = true,
+                        onClick = { onOpenRoom(card) },
+                        onRemove = { onRemoveSaved(card.id) }
                     )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
+
+        item { Spacer(modifier = Modifier.height(28.dp)) }
+
+        // ─── COLLABORATORS SECTION ────────────────────────────────────────
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    Icons.Default.Groups,
+                    contentDescription = null,
+                    tint = Color(0xFFAF52DE),
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    "Collaborators",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textPrimary
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Box(
+                    modifier = Modifier
+                        .size(22.dp)
+                        .background(Color(0xFFAF52DE).copy(alpha = 0.2f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        filteredCollaborator.size.toString(),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFAF52DE)
+                    )
+                }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(12.dp)) }
+
+        if (filteredCollaborator.isEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .height(100.dp)
+                        .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.PersonAdd, null, tint = Color.Gray, modifier = Modifier.size(28.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("No collaborative rooms.", color = Color.Gray, fontSize = 13.sp)
+                    }
+                }
+            }
+        } else {
+            itemsIndexed(filteredCollaborator) { _, card ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .height(cardHeight)
+                ) {
+                    RoomingCard(
+                        card = card,
+                        height = cardHeight.value.toInt(),
+                        isSaved = false,
+                        onClick = { onOpenRoom(card) },
+                        onRemove = {}
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(16.dp)) }
     }
 }
 
 // ── BB-UI-04: Rooming Card ──────────────────────────────────────────────
 @Composable
-private fun RoomingCard(card: HallwayCard, height: Int, onClick: () -> Unit) {
+private fun RoomingCard(
+    card: HallwayCard,
+    height: Int,
+    isSaved: Boolean = false,
+    onClick: () -> Unit,
+    onRemove: () -> Unit = {}
+) {
     val colors = LocalBestBeforeColors.current
     val themeColor = parseThemeColor(card.themeColorHex, fallback = colors.primary)
     val isLocked = card.timeCapsuleDays > 0
+    var showRemoveConfirm by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -379,6 +525,39 @@ private fun RoomingCard(card: HallwayCard, height: Int, onClick: () -> Unit) {
                 )
         )
 
+        // Saved badge top-right
+        if (isSaved) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(14.dp)
+                    .background(Color(0xFF007AFF).copy(alpha = 0.85f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text("Saved", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+        }
+
+        // Remove button for saved rooms (top-left corner)
+        if (isSaved) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(14.dp)
+                    .size(30.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    .clickable { showRemoveConfirm = true },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "Remove",
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+
         // Bottom info
         Column(
             modifier = Modifier
@@ -398,7 +577,7 @@ private fun RoomingCard(card: HallwayCard, height: Int, onClick: () -> Unit) {
                 color = colors.textSecondary
             )
             Text(
-                "Click to view details >",
+                "Tap to view details >",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = colors.textSecondary,
@@ -422,6 +601,26 @@ private fun RoomingCard(card: HallwayCard, height: Int, onClick: () -> Unit) {
                 }
             }
         }
+    }
+
+    // Confirm remove dialog
+    if (showRemoveConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRemoveConfirm = false },
+            containerColor = Color(0xFF1C1C1E),
+            title = { Text("Remove from Rooming", color = Color.White) },
+            text = { Text("Remove \"${card.title}\" from your saved rooms?", color = Color.LightGray) },
+            confirmButton = {
+                TextButton(onClick = { onRemove(); showRemoveConfirm = false }) {
+                    Text("Remove", color = Color.Red, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRemoveConfirm = false }) {
+                    Text("Cancel", color = Color.Gray)
+                }
+            }
+        )
     }
 }
 
