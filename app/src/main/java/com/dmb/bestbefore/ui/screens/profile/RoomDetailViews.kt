@@ -584,7 +584,66 @@ fun RoomDetailScreen(
                             }
                         }
                     }
-                } // End of isLocked / isClosed / isEmpty check
+                }
+
+                // ─── CONNECTED ROOMS SECTION ────────────────────────────────
+                val connectedIds = room!!.connectedRooms
+                if (connectedIds.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(40.dp))
+                    Text(
+                        "Connected Rooms",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        connectedIds.forEach { targetId ->
+                            // Resolve room name from ProfileViewModel's lists
+                            val targetRoom = viewModel.createdRooms.value.find { it.id == targetId }
+                                ?: viewModel.getRoomByIdFromRemote(targetId)
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp))
+                                    .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+                                    .clickable {
+                                        if (targetRoom != null) {
+                                            viewModel.selectRoom(targetRoom)
+                                        }
+                                    }
+                                    .padding(16.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(Icons.Default.Link, "Connected", tint = Color(0xFF007AFF), modifier = Modifier.size(20.dp))
+                                    Column {
+                                        Text(
+                                            text = targetRoom?.roomName ?: "Connected Room ($targetId)",
+                                            color = Color.White,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        if (targetRoom != null) {
+                                            Text(
+                                                text = "Tap to view room",
+                                                color = Color.Gray,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             } // End of Column (has room)
             } // End of PullToRefreshBox
         } // End of room == null else block

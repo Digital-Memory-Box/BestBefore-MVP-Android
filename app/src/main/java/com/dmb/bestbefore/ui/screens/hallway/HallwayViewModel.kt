@@ -19,6 +19,9 @@ import kotlinx.coroutines.async
 class HallwayViewModel(application: Application) : AndroidViewModel(application) {
 
     private val roomRepository = RoomRepository()
+    private val authRepository: com.dmb.bestbefore.data.repository.AuthRepository by lazy {
+        com.dmb.bestbefore.data.repository.AuthRepository(getApplication())
+    }
 
     private val _cards = MutableStateFlow<List<HallwayCard>>(emptyList())
     val cards: StateFlow<List<HallwayCard>> = _cards.asStateFlow()
@@ -34,6 +37,15 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    // Rooming tab filter: NONE (All), SAVED_ONLY, COLLABORATED_ONLY
+    enum class RoomingFilter { NONE, SAVED_ONLY, COLLABORATED_ONLY }
+    private val _roomingFilter = MutableStateFlow(RoomingFilter.NONE)
+    val roomingFilter: StateFlow<RoomingFilter> = _roomingFilter.asStateFlow()
+
+    fun setRoomingFilter(filter: RoomingFilter) {
+        _roomingFilter.value = filter
+    }
 
     val filteredCards: StateFlow<List<HallwayCard>> = combine(_cards, _selectedFilterTag, _searchQuery) { cards, tag, query ->
         val normalizedQuery = query.trim()
@@ -76,15 +88,24 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
     fun saveRoomToRooming(card: HallwayCard) {
         if (_savedRoomCards.value.none { it.id == card.id }) {
             _savedRoomCards.value = _savedRoomCards.value + card
+            persistSavedRooms()
         }
     }
 
     fun removeSavedRoom(cardId: String) {
         _savedRoomCards.value = _savedRoomCards.value.filter { it.id != cardId }
+        persistSavedRooms()
     }
 
     fun isRoomSaved(cardId: String): Boolean {
         return _savedRoomCards.value.any { it.id == cardId }
+    }
+
+    private fun persistSavedRooms() {
+        viewModelScope.launch {
+            val ids = _savedRoomCards.value.map { it.id }
+            authRepository.updateMe(com.dmb.bestbefore.data.api.models.UpdateMeRequest(savedRoomIds = ids))
+        }
     }
 
     // ── Ignored Rooms (hidden from Hallway & Artists) ────────────────────
@@ -96,6 +117,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
         if (!_ignoredRoomIds.value.contains(card.id)) {
             _ignoredRoomIds.value = _ignoredRoomIds.value + card.id
             _ignoredRoomCards.value = _ignoredRoomCards.value + card
+            persistIgnoredRooms()
             // Re-filter current tab to remove it instantly
             filterCards(_currentTab.value)
         }
@@ -104,13 +126,57 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
     fun unignoreRoom(cardId: String) {
         _ignoredRoomIds.value = _ignoredRoomIds.value - cardId
         _ignoredRoomCards.value = _ignoredRoomCards.value.filter { it.id != cardId }
+        persistIgnoredRooms()
         filterCards(_currentTab.value)
+    }
+
+    private fun persistIgnoredRooms() {
+        viewModelScope.launch {
+            authRepository.updateMe(com.dmb.bestbefore.data.api.models.UpdateMeRequest(ignoredRoomIds = _ignoredRoomIds.value.toList()))
+        }
     }
 
     fun isRoomIgnored(cardId: String): Boolean = _ignoredRoomIds.value.contains(cardId)
 
     private var myRoomsList: List<com.dmb.bestbefore.data.api.models.RoomDto> = emptyList()
     private var discoverRoomsList: List<com.dmb.bestbefore.data.api.models.RoomDto> = emptyList()
+
+    // ── Similar Rooms Mode ──────────────────────────────────────────────
+    private val _similarModeSource = MutableStateFlow<HallwayCard?>(null)
+    val similarModeSource: StateFlow<HallwayCard?> = _similarModeSource.asStateFlow()
+
+    private val _similarityScores = MutableStateFlow<Map<String, Int>>(emptyMap())
+
+    fun enterSimilarMode(card: HallwayCard) {
+        _similarModeSource.value = card
+        _selectedCardIndex.value = 0
+        _activePagerPage.value = 0
+        
+        viewModelScope.launch {
+            val result = roomRepository.getRoomSuggestions(card.id)
+            result.onSuccess { response ->
+                _similarityScores.value = response.suggestions.associate { it.targetRoomId to it.score }
+                filterCards(_currentTab.value)
+            }
+        }
+    }
+
+    fun exitSimilarMode() {
+        _similarModeSource.value = null
+        _similarityScores.value = emptyMap()
+        filterCards(_currentTab.value)
+    }
+
+    fun connectRoom(targetCard: HallwayCard) {
+        val sourceCard = _similarModeSource.value ?: return
+        viewModelScope.launch {
+            val result = roomRepository.acceptSuggestion(sourceCard.id, targetCard.id)
+            result.onSuccess {
+                // Success! Maybe show a toast or update local state
+                Log.d("HallwayViewModel", "Connected ${sourceCard.title} to ${targetCard.title}")
+            }
+        }
+    }
 
     init {
         fetchRooms()
@@ -138,6 +204,57 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 }
                 discoverResult.onFailure { e ->
                     Log.e("HallwayViewModel", "getDiscoverRooms failed: ${e.message}")
+                }
+
+                // Sync ignored/saved rooms from profile
+                val meResult = authRepository.getMe()
+                meResult.onSuccess { userDto ->
+                    _ignoredRoomIds.value = userDto.ignoredRoomIds?.toSet() ?: emptySet()
+                    
+                    // We need to fetch the actual cards for these IDs to populate _ignoredRoomCards
+                    val allRooms = (myRoomsList + discoverRoomsList).distinctBy { it.id }
+                    _ignoredRoomCards.value = allRooms.filter { _ignoredRoomIds.value.contains(it.id) }.map { room ->
+                        HallwayCard(
+                            id = room.id,
+                            title = room.name,
+                            timeCapsuleDays = room.capsuleDurationDays,
+                            description = room.description ?: "",
+                            imageUrl = room.photos?.firstOrNull(),
+                            photos = room.photos ?: emptyList(),
+                            themeColorHex = room.theme,
+                            tags = room.tags ?: emptyList(),
+                            ownerEmail = room.ownerEmail,
+                            ownerName = room.ownerName,
+                            ownerUserType = room.ownerUserType,
+                            ownerProfilePic = room.ownerProfilePic,
+                            collaboratorCount = room.collaborators?.size ?: 0,
+                            collaborators = emptyList(), // minimal for settings view
+                            location = null,
+                            backgroundMusic = room.backgroundMusic
+                        )
+                    }
+
+                    val savedIds = userDto.savedRoomIds?.toSet() ?: emptySet()
+                    _savedRoomCards.value = allRooms.filter { savedIds.contains(it.id) }.map { room ->
+                        HallwayCard(
+                            id = room.id,
+                            title = room.name,
+                            timeCapsuleDays = room.capsuleDurationDays,
+                            description = room.description ?: "",
+                            imageUrl = room.photos?.firstOrNull(),
+                            photos = room.photos ?: emptyList(),
+                            themeColorHex = room.theme,
+                            tags = room.tags ?: emptyList(),
+                            ownerEmail = room.ownerEmail,
+                            ownerName = room.ownerName,
+                            ownerUserType = room.ownerUserType,
+                            ownerProfilePic = room.ownerProfilePic,
+                            collaboratorCount = room.collaborators?.size ?: 0,
+                            collaborators = emptyList(),
+                            location = null,
+                            backgroundMusic = room.backgroundMusic
+                        )
+                    }
                 }
                 
                 filterCards(_currentTab.value)
@@ -196,34 +313,52 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
         val currentUserEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
         val allAvailableRooms = (myRoomsList + discoverRoomsList).distinctBy { it.id }
 
-        val filteredRooms = when (tab) {
-            BottomTab.ROOMING -> {
-                myRoomsList.filter { room ->
-                    val isOwner = room.ownerEmail?.equals(currentUserEmail, ignoreCase = true) == true
-                    val isCollaborator = room.collaborators?.any { element ->
-                        if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
-                            element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
-                        } else false
-                    } == true
-                    val isViewer = room.viewers?.any { element ->
-                        if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
-                            element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
-                        } else false
-                    } == true
-                    val isPrivate = room.isPrivate
-                    !isOwner && (isCollaborator || isViewer) && isPrivate
+        val filteredRooms = if (_similarModeSource.value != null) {
+            val scores = _similarityScores.value
+            val sourceId = _similarModeSource.value?.id ?: ""
+            
+            // In similar mode, we only show rooms that have a suggestion score
+            val relevantRooms = allAvailableRooms.filter { room ->
+                room.id != sourceId && scores.containsKey(room.id) && !_ignoredRoomIds.value.contains(room.id)
+            }
+            
+            // Group 1: User's rooms sorted by score
+            val myRelevant = relevantRooms.filter { it.ownerEmail?.equals(currentUserEmail, ignoreCase = true) == true }
+                .sortedByDescending { scores[it.id] ?: 0 }
+            
+            // Group 2: Other rooms sorted by score
+            val otherRelevant = relevantRooms.filter { it.ownerEmail?.equals(currentUserEmail, ignoreCase = true) != true }
+                .sortedByDescending { scores[it.id] ?: 0 }
+            
+            myRelevant + otherRelevant
+        } else {
+            when (tab) {
+                BottomTab.ROOMING -> {
+                    myRoomsList.filter { room ->
+                        val isOwner = room.ownerEmail?.equals(currentUserEmail, ignoreCase = true) == true
+                        val isCollaborator = room.collaborators?.any { element ->
+                            if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
+                                element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
+                            } else false
+                        } == true
+                        val isViewer = room.viewers?.any { element ->
+                            if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
+                                element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
+                            } else false
+                        } == true
+                        val isPrivate = room.isPrivate
+                        !isOwner && (isCollaborator || isViewer) && isPrivate
+                    }
                 }
-            }
-            BottomTab.EVERYONE -> {
-                // Show ALL public rooms in the Hallway tab, excluding ignored
-                allAvailableRooms.filter { isRoomPublic(it) && !_ignoredRoomIds.value.contains(it.id) }
-            }
-            BottomTab.ARTISTS -> {
-                // Show public artist rooms, excluding ignored
-                allAvailableRooms.filter {
-                    it.ownerUserType?.equals("artist", ignoreCase = true) == true &&
-                    isRoomPublic(it) &&
-                    !_ignoredRoomIds.value.contains(it.id)
+                BottomTab.EVERYONE -> {
+                    allAvailableRooms.filter { isRoomPublic(it) && !_ignoredRoomIds.value.contains(it.id) }
+                }
+                BottomTab.ARTISTS -> {
+                    allAvailableRooms.filter {
+                        it.ownerUserType?.equals("artist", ignoreCase = true) == true &&
+                        isRoomPublic(it) &&
+                        !_ignoredRoomIds.value.contains(it.id)
+                    }
                 }
             }
         }

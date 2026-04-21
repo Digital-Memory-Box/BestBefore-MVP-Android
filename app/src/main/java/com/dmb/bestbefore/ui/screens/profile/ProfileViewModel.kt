@@ -144,6 +144,15 @@ class ProfileViewModel : ViewModel() {
         _syncAccentWithRoom.value = enabled
         com.dmb.bestbefore.ui.theme.ThemeState.updateSyncAccentWithRoom(enabled)
     }
+
+    // Helper for resolving connected rooms names
+    fun getRoomByIdFromRemote(id: String): TimeCapsuleRoom? {
+        // First check in created rooms
+        _createdRooms.value.find { it.id == id }?.let { return it }
+        // Potentially check a global room cache if implemented, 
+        // for now we just return null and the UI handles the ID fallback.
+        return null
+    }
     
     // Credential Update State
     private val _isUpdatingCredential = MutableStateFlow(false)
@@ -583,7 +592,8 @@ class ProfileViewModel : ViewModel() {
                 description = dto.description,
                 music = dto.backgroundMusic ?: "None",
                 rollingExpiration = rollingString,
-                isViewerOnly = isViewerOnly
+                isViewerOnly = isViewerOnly,
+                connectedRooms = dto.connectedRooms ?: emptyList()
             )
         }
     }

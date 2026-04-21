@@ -79,6 +79,19 @@ interface ApiService {
         @Path("id") roomId: String
     ): Response<Unit>
 
+    @GET("rooms/{roomId}/suggestions")
+    suspend fun getRoomSuggestions(
+        @Header("Authorization") token: String,
+        @Path("roomId") roomId: String
+    ): Response<RoomSuggestionsResponse>
+
+    @POST("rooms/{roomId}/suggestions/{suggestionId}/accept")
+    suspend fun acceptSuggestion(
+        @Header("Authorization") token: String,
+        @Path("roomId") roomId: String,
+        @Path("suggestionId") suggestionId: String
+    ): Response<Unit>
+
     // Owner approves a pending join request (QR/link)
     @POST("rooms/{id}/approve-join")
     suspend fun approveJoinRequest(

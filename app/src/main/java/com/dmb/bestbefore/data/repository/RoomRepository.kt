@@ -235,6 +235,29 @@ class RoomRepository {
         }
     }
 
+    suspend fun getRoomSuggestions(roomId: String): Result<RoomSuggestionsResponse> {
+        return try {
+            val response = api.getRoomSuggestions(freshBearer(), roomId)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("Failed to fetch suggestions: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun acceptSuggestion(roomId: String, suggestionId: String): Result<Unit> {
+        return try {
+            val response = api.acceptSuggestion(freshBearer(), roomId, suggestionId)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("Failed to accept suggestion: ${response.code()}"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // ── Invite Tokens ────────────────────────────────────────────────────────
     suspend fun generateInviteToken(roomId: String, expiresInHours: Int? = null, maxUses: Int? = null): Result<Map<String, Any>> {
         return try {

@@ -53,6 +53,7 @@ import com.dmb.bestbefore.ui.theme.ThemeState
 import androidx.core.graphics.toColorInt
 import kotlin.math.absoluteValue
 
+
 // ═══════════════════════════════════════════════════════════════════════════
 // BB-UI-04 → BB-UI-10: Hallway Screen
 // Contains: Rooming (stacked cards), Hallway (carousel), Artists (carousel)
@@ -81,6 +82,8 @@ fun HallwayScreen(
     val areCollaboratorsExpanded by viewModel.areCollaboratorsExpanded.collectAsState()
     val cardImageIndices by viewModel.cardImageIndices.collectAsState()
     val savedRoomCards by viewModel.savedRoomCards.collectAsState()
+    val similarModeSource by viewModel.similarModeSource.collectAsState()
+    val roomingFilter by viewModel.roomingFilter.collectAsState()
     val orbWidth = 420.dp // En güncel Swift tasarımı için daha büyük çap
     val contentEndInset = 0.dp
 
@@ -122,6 +125,8 @@ fun HallwayScreen(
                         onScanClick = onRoomingScanClick,
                         onOpenRoom = onOpenRoom,
                         onRemoveSaved = { cardId -> viewModel.removeSavedRoom(cardId) },
+                        roomingFilter = roomingFilter,
+                        onFilterChange = { viewModel.setRoomingFilter(it) },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -152,6 +157,10 @@ fun HallwayScreen(
                         onOpenRoom = onOpenRoom,
                         onImageIndexChange = { cardId, index -> viewModel.setCardImageIndex(cardId, index) },
                         onPagerPageChanged = { viewModel.setActivePagerPage(it) },
+                        similarModeSource = similarModeSource,
+                        onEnterSimilarMode = { viewModel.enterSimilarMode(it) },
+                        onExitSimilarMode = { viewModel.exitSimilarMode() },
+                        onConnectRoom = { viewModel.connectRoom(it) },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -229,17 +238,28 @@ private fun RoomingContent(
     onScanClick: () -> Unit,
     onOpenRoom: (HallwayCard) -> Unit,
     onRemoveSaved: (String) -> Unit,
+    roomingFilter: HallwayViewModel.RoomingFilter = HallwayViewModel.RoomingFilter.NONE,
+    onFilterChange: (HallwayViewModel.RoomingFilter) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = LocalBestBeforeColors.current
     val cardHeight = 280.dp
 
-    // Apply search filter to both lists
-    val filteredSaved = savedCards.filter { card ->
-        searchQuery.isBlank() || card.title.contains(searchQuery, ignoreCase = true)
+    // Apply category and search filter
+    val filteredSaved = if (roomingFilter == HallwayViewModel.RoomingFilter.COLLABORATED_ONLY) {
+        emptyList()
+    } else {
+        savedCards.filter { card ->
+            searchQuery.isBlank() || card.title.contains(searchQuery, ignoreCase = true)
+        }
     }
-    val filteredCollaborator = collaboratorCards.filter { card ->
-        searchQuery.isBlank() || card.title.contains(searchQuery, ignoreCase = true)
+
+    val filteredCollaborator = if (roomingFilter == HallwayViewModel.RoomingFilter.SAVED_ONLY) {
+        emptyList()
+    } else {
+        collaboratorCards.filter { card ->
+            searchQuery.isBlank() || card.title.contains(searchQuery, ignoreCase = true)
+        }
     }
 
     val isEmpty = filteredSaved.isEmpty() && filteredCollaborator.isEmpty()
@@ -297,6 +317,36 @@ private fun RoomingContent(
                         )
                     }
                 }
+            }
+        }
+
+        item {
+            // ── Rooming Filters (Saved / Collaborated) ──────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(top = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // SAVED Button
+                FilterChip(
+                    label = "Saved",
+                    isSelected = roomingFilter == HallwayViewModel.RoomingFilter.SAVED_ONLY,
+                    onClick = {
+                        if (roomingFilter == HallwayViewModel.RoomingFilter.SAVED_ONLY) onFilterChange(HallwayViewModel.RoomingFilter.NONE)
+                        else onFilterChange(HallwayViewModel.RoomingFilter.SAVED_ONLY)
+                    }
+                )
+                // COLLABORATED Button
+                FilterChip(
+                    label = "Collaborated",
+                    isSelected = roomingFilter == HallwayViewModel.RoomingFilter.COLLABORATED_ONLY,
+                    onClick = {
+                        if (roomingFilter == HallwayViewModel.RoomingFilter.COLLABORATED_ONLY) onFilterChange(HallwayViewModel.RoomingFilter.NONE)
+                        else onFilterChange(HallwayViewModel.RoomingFilter.COLLABORATED_ONLY)
+                    }
+                )
             }
         }
 
@@ -650,6 +700,10 @@ private fun HallwayContent(
     onOpenRoom: (HallwayCard) -> Unit,
     onImageIndexChange: (String, Int) -> Unit,
     onPagerPageChanged: (Int) -> Unit,
+    similarModeSource: HallwayCard? = null,
+    onEnterSimilarMode: (HallwayCard) -> Unit = {},
+    onExitSimilarMode: () -> Unit = {},
+    onConnectRoom: (HallwayCard) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = LocalBestBeforeColors.current
@@ -671,7 +725,9 @@ private fun HallwayContent(
             onSearchQueryChange = onSearchQueryChange,
             selectedTag = selectedFilterTag,
             onTagSelected = onFilterTagSelected,
-            tags = availableTags
+            tags = availableTags,
+            similarModeSourceName = similarModeSource?.title,
+            onExitSimilarMode = onExitSimilarMode
         )
 
         if (cards.isEmpty()) {
@@ -801,7 +857,10 @@ private fun HallwayContent(
                         showAllCollaborators = areCollaboratorsExpanded,
                         onToggleCollaborators = onToggleCollaborators,
                         onDismissCollaborators = onCollapseCollaborators,
-                        onSeeAllClick = onExpandDescription
+                        onSeeAllClick = onExpandDescription,
+                        onShowSimilarRooms = { onEnterSimilarMode(activeCard) },
+                        isSimilarMode = similarModeSource != null,
+                        onConnectRoom = { onConnectRoom(activeCard) }
                     )
                 }
 
@@ -1044,7 +1103,10 @@ fun ActiveCardDetails(
     showAllCollaborators: Boolean,
     onToggleCollaborators: () -> Unit,
     onDismissCollaborators: () -> Unit,
-    onSeeAllClick: () -> Unit
+    onSeeAllClick: () -> Unit,
+    onShowSimilarRooms: () -> Unit = {},
+    isSimilarMode: Boolean = false,
+    onConnectRoom: () -> Unit = {}
     ) {
     val colors = LocalBestBeforeColors.current
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -1172,16 +1234,67 @@ fun ActiveCardDetails(
                 overflow = TextOverflow.Ellipsis
             )
 
-            // See All button — shown when description is truncatable or tags > 2
-            // BB-UI-09: Not shown when no description AND no tags
             if (hasDescription || (hasTags && card.tags.size > 2)) {
-                Text(
-                    text = "See All",
-                    color = accentColor,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { onSeeAllClick() }
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "See All",
+                        color = accentColor,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { onSeeAllClick() }
+                    )
+
+                    if (!isSimilarMode) {
+                        Text(
+                            text = "Show Similar Rooms",
+                            color = colors.textPrimary.copy(alpha = 0.7f),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.clickable { onShowSimilarRooms() }
+                        )
+                    } else {
+                        // "Connection" button in Similarity Mode
+                        Box(
+                            modifier = Modifier
+                                .background(accentColor, RoundedCornerShape(100.dp))
+                                .clickable { onConnectRoom() }
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Icon(Icons.Default.Link, null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                                Text(
+                                    text = "Connection",
+                                    color = Color.Black,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            } else if (isSimilarMode) {
+                // If description is short but we are in similar mode, still show Connection button
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .background(accentColor, RoundedCornerShape(100.dp))
+                        .clickable { onConnectRoom() }
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(Icons.Default.Link, null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                        Text(
+                            text = "Connection",
+                            color = Color.Black,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
         }
 
@@ -1256,6 +1369,26 @@ fun ActiveCardDetails(
     }
 }
 
+// ── Filter Chip Component ──────────────────────────────────────────────
+@Composable
+fun FilterChip(label: String, isSelected: Boolean, onClick: () -> Unit) {
+    val colors = LocalBestBeforeColors.current
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = if (isSelected) colors.primary else Color.White.copy(alpha = 0.1f),
+        contentColor = if (isSelected) Color.Black else Color.White,
+        modifier = Modifier.height(36.dp)
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text = label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
 // ── Tag Chip Component ──────────────────────────────────────────────────
 @Composable
 fun TagChip(label: String, color: Color) {
@@ -1312,7 +1445,9 @@ fun SearchBarAndTags(
     onSearchQueryChange: (String) -> Unit,
     selectedTag: String?,
     onTagSelected: (String?) -> Unit,
-    tags: List<String>
+    tags: List<String>,
+    similarModeSourceName: String? = null,
+    onExitSimilarMode: () -> Unit = {}
 ) {
     val colors = LocalBestBeforeColors.current
     Column {
@@ -1322,20 +1457,49 @@ fun SearchBarAndTags(
                 .padding(horizontal = 24.dp)
                 .padding(top = 15.dp)
                 .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
-                .padding(12.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.Search, null, tint = colors.textSecondary)
+            Icon(Icons.Default.Search, null, tint = colors.textSecondary, modifier = Modifier.size(20.dp))
             Spacer(modifier = Modifier.width(8.dp))
+
+            if (similarModeSourceName != null) {
+                // Similarity Tag Chip INSIDE the Search Bar
+                Box(
+                    modifier = Modifier
+                        .background(Color(0xFF007AFF).copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                        .border(0.5.dp, Color(0xFF007AFF).copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Similar Rooms as $similarModeSourceName",
+                            color = Color(0xFF007AFF),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Exit Similarity Mode",
+                            tint = Color(0xFF007AFF),
+                            modifier = Modifier
+                                .size(14.dp)
+                                .clickable { onExitSimilarMode() }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+
             BasicTextField(
                 value = searchQuery,
                 onValueChange = onSearchQueryChange,
                 singleLine = true,
-                textStyle = TextStyle(color = colors.textPrimary),
+                textStyle = TextStyle(color = colors.textPrimary, fontSize = 14.sp),
                 modifier = Modifier.fillMaxWidth(),
                 decorationBox = { innerTextField ->
-                    if (searchQuery.isBlank()) {
-                        Text("Search by name, owner, or tags...", color = colors.textSecondary)
+                    if (searchQuery.isBlank() && similarModeSourceName == null) {
+                        Text("Search by name, owner, or tags...", color = colors.textSecondary, fontSize = 14.sp)
                     }
                     innerTextField()
                 }

@@ -17,7 +17,9 @@ data class UserDto(
     val createdAt: String? = null,
     val userType: String? = "normal",
     val bio: String? = null,
-    val profileImageUrl: String? = null
+    val profileImageUrl: String? = null,
+    val ignoredRoomIds: List<String>? = emptyList(),
+    val savedRoomIds: List<String>? = emptyList()
 )
 
 data class UpdateMeRequest(
@@ -29,7 +31,9 @@ data class UpdateMeRequest(
     val fcmToken: String? = null,
     val userType: String? = null,
     val bio: String? = null,
-    val profileImageUrl: String? = null
+    val profileImageUrl: String? = null,
+    val ignoredRoomIds: List<String>? = null,
+    val savedRoomIds: List<String>? = null
 )
 
 // Room Models — field names aligned to backend roomController.js
@@ -81,7 +85,8 @@ data class RoomDto(
     val rollingExpiryDays: Int = 0,
     val description: String? = null,
     val tags: List<String>? = null,
-    val backgroundMusic: String? = null
+    val backgroundMusic: String? = null,
+    val connectedRooms: List<String>? = null
 )
 
 // --- Dynamic Recommendation Models ---
@@ -101,6 +106,23 @@ data class RoomRecommendationDto(
     val connectionType: String, // "DYNAMIC" (80+ score) or "AI_CONFIRMED" (OpenAI decision)
     val tagsMatch: List<String>,
     val description: String? = null
+)
+
+// Matches backend suggestionController.js response
+data class RoomSuggestionDto(
+    val targetRoomId: String,
+    val targetRoomName: String,
+    val score: Int,
+    val category: String,
+    val reasoning: String? = null,
+    val similarity: Double? = null
+)
+
+data class RoomSuggestionsResponse(
+    val sourceRoomId: String,
+    val suggestions: List<RoomSuggestionDto>,
+    val count: Int,
+    val strategy: String? = null
 )
 
 data class UploadResponse(
