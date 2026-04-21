@@ -54,86 +54,72 @@ object OrbMenuLayout {
 @Composable
 fun OrbMenu(
     modifier: Modifier = Modifier,
-    diameter: Dp = OrbMenuLayout.computeDiameter(
-        LocalConfiguration.current.screenHeightDp.toFloat()
-    ),
-    primaryColor: Color = Color(0xFF0D59F2),
-    secondaryColor: Color = Color(0xFF00D972),
+    diameter: Dp = 420.dp, // Biraz daha büyütüldü
     onAddClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
     onCameraClick: () -> Unit = {}
 ) {
-    val appTheme = ThemeState.currentTheme
-    val accent = ThemeState.currentAccent
-    val applyAccent = ThemeState.applyAccentToAll
-    val isGlass = appTheme.name == "Glass"
-    val isMidnight = appTheme.name == "Midnight"
-
-    val iconTint = when {
-        isMidnight -> accent
-        isGlass -> if (applyAccent) Color.White else accent
-        else -> Color.White
-    }
-
-    val baseBackground = when {
-        isGlass -> Color.White.copy(alpha = 0.1f)
-        isMidnight -> Color.Black
-        else -> accent
-    }
+    // İkonların merkeze uzaklığı - Swift versiyonundaki sıkı görünüm için biraz artırıldı
+    val buttonRadius = diameter * 0.42f
 
     Box(
         modifier = modifier
             .size(diameter)
-            .offset(x = OrbMenuLayout.horizontalOffset(diameter))
+            // Orbu sağa daha fazla iterek (0.5f -> 0.72f) boşluğu azalttım
+            .offset(x = diameter * 0.82f)
             .clip(CircleShape)
-            .background(Color(0xFF007AFF)) // Solid blue like the screenshot
+            .background(Color(0xFF007AFF))
     ) {
+        // İkonlar merkeze göre sol tarafa offsetlenir.
 
-        // Add button — top arc
+        // 1. Add Button (Üst Kavis)
         Box(
             modifier = Modifier
                 .align(Alignment.Center)
-                .offset(x = -(diameter * 0.38f), y = -(diameter * 0.25f))
+                .offset(
+                    x = -(buttonRadius * 0.88f), // Daha sola çekildi (0.75f -> 0.88f)
+                    y = -(buttonRadius * 0.52f)  // Kavis uyumu için hafif yukarı (0.50f -> 0.52f)
+                )
         ) {
             OrbButton(
                 icon = Icons.Default.Add,
                 contentDescription = "Add",
                 onClick = onAddClick,
-                size = 48.dp,
-                iconSize = 28.dp,
-                tint = Color.White
+                size = 46.dp,
+                iconSize = 30.dp
             )
         }
 
-        // Profile button — middle
+        // 2. Profile Button (Tam Orta)
         Box(
             modifier = Modifier
                 .align(Alignment.Center)
-                .offset(x = -(diameter * 0.38f), y = 0.dp)
+                .offset(x = -buttonRadius, y = 0.dp)
         ) {
             OrbButton(
                 icon = Icons.Default.Person,
                 contentDescription = "Profile",
                 onClick = onProfileClick,
-                size = 64.dp,
-                iconSize = 36.dp,
-                tint = Color.White
+                size = 60.dp,
+                iconSize = 38.dp
             )
         }
 
-        // Camera button — bottom
+        // 3. Camera Button (Alt Kavis)
         Box(
             modifier = Modifier
                 .align(Alignment.Center)
-                .offset(x = -(diameter * 0.38f), y = (diameter * 0.25f))
+                .offset(
+                    x = -(buttonRadius * 0.88f), // Daha sola çekildi (0.75f -> 0.88f)
+                    y = (buttonRadius * 0.52f)   // Kavis uyumu için hafif aşağı (0.50f -> 0.52f)
+                )
         ) {
             OrbButton(
                 icon = Icons.Default.Camera,
                 contentDescription = "Camera",
                 onClick = onCameraClick,
-                size = 48.dp,
-                iconSize = 28.dp,
-                tint = Color.White
+                size = 46.dp,
+                iconSize = 30.dp
             )
         }
     }

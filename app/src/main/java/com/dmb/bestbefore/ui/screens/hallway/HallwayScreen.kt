@@ -80,7 +80,7 @@ fun HallwayScreen(
     val availableTags by viewModel.availableTags.collectAsState()
     val areCollaboratorsExpanded by viewModel.areCollaboratorsExpanded.collectAsState()
     val cardImageIndices by viewModel.cardImageIndices.collectAsState()
-    val orbWidth = 160.dp
+    val orbWidth = 420.dp // En güncel Swift tasarımı için daha büyük çap
     val contentEndInset = 0.dp
 
     // Refresh rooms data every time screen enters composition
