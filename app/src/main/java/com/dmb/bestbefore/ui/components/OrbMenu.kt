@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Camera
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
@@ -127,7 +128,7 @@ fun OrbMenu(
                 .offset(x = -(diameter * 0.38f), y = (diameter * 0.25f))
         ) {
             OrbButton(
-                icon = androidx.compose.material.icons.Icons.Default.CameraAlt,
+                icon = Icons.Default.Camera,
                 contentDescription = "Camera",
                 onClick = onCameraClick,
                 size = 48.dp,

@@ -157,7 +157,7 @@ fun ProfileScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            val intent = android.content.Intent(context, com.dmb.bestbefore.ui.screens.profile.QrScannerActivity::class.java)
+            val intent = Intent(context, QrScannerActivity::class.java)
             qrScanLauncher.launch(intent)
         } else {
             android.widget.Toast.makeText(context, "Camera permission required to scan QR codes", android.widget.Toast.LENGTH_SHORT).show()
@@ -187,28 +187,26 @@ fun ProfileScreen(
         viewModel.initDatabase(context)
         
         viewModel.onRequestNotificationPermission = {
-            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         viewModel.onRequestCalendarPermission = {
-            calendarPermissionLauncher.launch(android.Manifest.permission.WRITE_CALENDAR)
+            calendarPermissionLauncher.launch(Manifest.permission.WRITE_CALENDAR)
         }
         viewModel.onRequestReadCalendarPermission = {
-            readCalendarPermissionLauncher.launch(android.Manifest.permission.READ_CALENDAR)
+            readCalendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
         }
         
         viewModel.onRequestCameraPermission = {
-            cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
         
         viewModel.onRequestGalleryPermission = {
-            val permission =
-                android.Manifest.permission.READ_MEDIA_IMAGES
+            val permission = Manifest.permission.READ_MEDIA_IMAGES
             galleryPermissionLauncher.launch(permission)
         }
         
         viewModel.onRequestFilePermission = {
-            val permission =
-                android.Manifest.permission.READ_MEDIA_IMAGES
+            val permission = Manifest.permission.READ_MEDIA_IMAGES
             filePermissionLauncher.launch(permission)
         }
     }
@@ -328,7 +326,7 @@ fun ProfileScreen(
             enter = fadeIn(),
             exit = fadeOut()
         ) {
-            com.dmb.bestbefore.ui.screens.hallway.HallwayScreen(
+            HallwayScreen(
                 onNavigateToProfile = { viewModel.openProfileMenu() },
                 onNavigateToNotifications = onNavigateToNotifications,
                 onRoomingMusicClick = { showMusicSelector = true },
@@ -440,7 +438,7 @@ fun ProfileScreen(
                         filePickerLauncher = filePickerLauncher
                     )
                     ProfileStep.EDIT_ROOM -> EditRoomScreen(viewModel)
-                    ProfileStep.CAMERA_ACTION -> CameraActionSheet(viewModel)
+                    ProfileStep.CAMERA_ACTION -> CameraActionSheet(viewModel, context)
                     else -> {}
                 }
             }
@@ -449,8 +447,8 @@ fun ProfileScreen(
 }
 
 @Composable
-fun CameraActionSheet(viewModel: ProfileViewModel) {
-    val imageUri by viewModel.capturedImage.collectAsState()
+fun CameraActionSheet(viewModel: ProfileViewModel, context: android.content.Context) {
+    val imageUri by viewModel.capturedImageUri.collectAsState()
 
     Column(
         modifier = Modifier
@@ -513,7 +511,7 @@ fun CameraActionSheet(viewModel: ProfileViewModel) {
                 .background(Color(0xFF2C2C2E), RoundedCornerShape(16.dp))
                 .clickable {
                     // Quick add to the current room if available, otherwise just dismiss or tell them to select one
-                    viewModel.uploadMedia(androidx.compose.ui.platform.LocalContext.current)
+                    viewModel.uploadMedia(context)
                     viewModel.closeOverlay()
                 }
                 .padding(vertical = 16.dp),

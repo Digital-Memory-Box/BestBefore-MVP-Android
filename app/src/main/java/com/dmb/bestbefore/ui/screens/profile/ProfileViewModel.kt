@@ -24,6 +24,7 @@ import com.dmb.bestbefore.data.local.PreferencesManager
 import androidx.compose.ui.graphics.Color
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.EmailAuthProvider
+import com.dmb.bestbefore.data.api.models.UserDto
 
 class ProfileViewModel : ViewModel() {
 
@@ -1323,9 +1324,9 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
-    // Live search state
-    private val _userSearchResults = MutableStateFlow<List<UserDto>>(emptyList())
-    val userSearchResults: StateFlow<List<UserDto>> = _userSearchResults.asStateFlow()
+    // Live search state (UI-friendly model)
+    private val _userSearchResults = MutableStateFlow<List<InvitedUser>>(emptyList())
+    val userSearchResults: StateFlow<List<InvitedUser>> = _userSearchResults.asStateFlow()
 
     fun searchUsers(query: String) {
         if (query.isBlank()) {
@@ -1333,9 +1334,11 @@ class ProfileViewModel : ViewModel() {
             return
         }
         viewModelScope.launch {
-            val result = roomRepo.searchUsers(query)
+            val result = roomRepository.searchUsers(query)
             if (result.isSuccess) {
-                _userSearchResults.value = result.getOrNull() ?: emptyList()
+                _userSearchResults.value = result.getOrNull().orEmpty().map { dto ->
+                    InvitedUser(email = dto.email, name = dto.name)
+                }
             } else {
                 _userSearchResults.value = emptyList()
             }

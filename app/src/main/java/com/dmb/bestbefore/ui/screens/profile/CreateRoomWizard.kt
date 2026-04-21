@@ -16,8 +16,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +41,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.Image
+import com.dmb.bestbefore.data.api.models.UserDto
 
 private val AccentBlue = Color(0xFF1A7AF8)
 private val CardDarkBg = Color(0xFF1C1C1E)
@@ -513,7 +512,7 @@ fun getRoomThemeColor(themeName: String): Color {
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CreateRoomStep1(viewModel: ProfileViewModel) {
@@ -940,15 +939,15 @@ fun CalendarEventDropdown(viewModel: ProfileViewModel) {
             }
             
             if (events.isNotEmpty()) {
-                androidx.compose.material3.DropdownMenu(
+                DropdownMenu(
                     expanded = expanded,
                     onDismissRequest = { expanded = false },
                     modifier = Modifier.background(CardDarkBg).fillMaxWidth(0.85f)
                 ) {
                     val dateFormat = java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault())
                     events.forEach { event ->
-                        androidx.compose.material3.DropdownMenuItem(
-                            text = { 
+                        DropdownMenuItem(
+                            text = {
                                 Column {
                                     Text(event.title, color = Color.White, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                     Text(dateFormat.format(event.startTime), color = Color(0xFF8E8E93), fontSize = 12.sp)
@@ -979,7 +978,7 @@ fun DurationStepper(
             Box(
                 modifier = Modifier
                     .size(30.dp)
-                    .background(Color(0xFF3A3A3C), androidx.compose.foundation.shape.CircleShape)
+                    .background(Color(0xFF3A3A3C), CircleShape)
                     .clickable { onDecrement() },
                 contentAlignment = Alignment.Center
             ) { Text("-", color = Color.White, fontSize = 18.sp, textAlign = TextAlign.Center) }
@@ -987,7 +986,7 @@ fun DurationStepper(
             Box(
                 modifier = Modifier
                     .size(30.dp)
-                    .background(Color(0xFF3A3A3C), androidx.compose.foundation.shape.CircleShape)
+                    .background(Color(0xFF3A3A3C), CircleShape)
                     .clickable { onIncrement() },
                 contentAlignment = Alignment.Center
             ) { Text("+", color = Color.White, fontSize = 18.sp, textAlign = TextAlign.Center) }
@@ -1117,7 +1116,7 @@ fun InlineCalendar(
                                     .aspectRatio(1f)
                                     .padding(2.dp)
                                     .then(
-                                        if (isSelected) Modifier.background(AccentBlue, androidx.compose.foundation.shape.CircleShape)
+                                        if (isSelected) Modifier.background(AccentBlue, CircleShape)
                                         else Modifier
                                     )
                                     .clickable { onDateSelected(dayCal.timeInMillis) },
@@ -1284,11 +1283,11 @@ fun CreateRoomStep3Atmosphere(viewModel: ProfileViewModel) {
                             .size(52.dp)
                             .then(
                                 if (isSelected)
-                                    Modifier.border(2.5.dp, Color.White, androidx.compose.foundation.shape.CircleShape)
+                                    Modifier.border(2.5.dp, Color.White, CircleShape)
                                 else Modifier
                             )
                             .padding(if (isSelected) 3.dp else 0.dp)
-                            .background(color, androidx.compose.foundation.shape.CircleShape)
+                            .background(color, CircleShape)
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
@@ -1514,7 +1513,10 @@ fun CreateRoomStep4(viewModel: ProfileViewModel) {
 @Composable
 fun CreateRoomStep5(viewModel: ProfileViewModel) {
     val invitedUsers by viewModel.invitedUsers.collectAsState()
-    val searchResults by viewModel.userSearchResults.collectAsState()
+    val searchResultsState = viewModel.userSearchResults.collectAsState(
+        initial = emptyList<ProfileViewModel.InvitedUser>()
+    )
+    val searchResults = searchResultsState.value
     var searchInput by remember { mutableStateOf("") }
     val context = androidx.compose.ui.platform.LocalContext.current
 
@@ -1563,13 +1565,13 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
                     .background(CardDarkBg, RoundedCornerShape(12.dp)),
                 contentPadding = PaddingValues(8.dp)
             ) {
-                items(searchResults) { user ->
+                items(items = searchResults) { user: ProfileViewModel.InvitedUser ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
                                 viewModel.addInvitedUser(ProfileViewModel.InvitedUser(
-                                    email = user.email ?: "",
+                                    email = user.email,
                                     name = user.name
                                 ))
                                 searchInput = ""
@@ -1584,7 +1586,7 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
                             if (user.name != null) {
                                 Text(user.name, color = Color.White, fontWeight = FontWeight.Medium)
                             }
-                            Text(user.email ?: "", color = Color.Gray, fontSize = 12.sp)
+                            Text(user.email, color = Color.Gray, fontSize = 12.sp)
                         }
                     }
                 }
