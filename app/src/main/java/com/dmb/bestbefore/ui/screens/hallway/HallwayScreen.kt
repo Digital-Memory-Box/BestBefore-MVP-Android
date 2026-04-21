@@ -382,159 +382,163 @@ private fun RoomingContent(
         item { Spacer(modifier = Modifier.height(24.dp)) }
 
         // ─── SAVED ROOMS SECTION ─────────────────────────────────────────
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    Icons.Default.Bookmark,
-                    contentDescription = null,
-                    tint = Color(0xFF007AFF),
-                    modifier = Modifier.size(18.dp)
-                )
-                Text(
-                    "Saved Rooms",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.textPrimary
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Box(
-                    modifier = Modifier
-                        .size(22.dp)
-                        .background(Color(0xFF007AFF).copy(alpha = 0.2f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        filteredSaved.size.toString(),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF007AFF)
-                    )
-                }
-            }
-        }
-
-        item { Spacer(modifier = Modifier.height(12.dp)) }
-
-        if (filteredSaved.isEmpty()) {
+        if (roomingFilter != HallwayViewModel.RoomingFilter.COLLABORATED_ONLY) {
             item {
-                Box(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                        .height(100.dp)
-                        .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp)),
-                    contentAlignment = Alignment.Center
+                        .padding(horizontal = 24.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.Bookmark, null, tint = Color.Gray, modifier = Modifier.size(28.dp))
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("No saved rooms yet.", color = Color.Gray, fontSize = 13.sp)
-                        Text("Open a room and tap Add to Rooming.", color = Color.Gray.copy(alpha = 0.7f), fontSize = 11.sp)
+                    Icon(
+                        Icons.Default.Bookmark,
+                        contentDescription = null,
+                        tint = Color(0xFF007AFF),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        "Saved Rooms",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.textPrimary
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .background(Color(0xFF007AFF).copy(alpha = 0.2f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            filteredSaved.size.toString(),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF007AFF)
+                        )
                     }
                 }
             }
-        } else {
-            itemsIndexed(filteredSaved) { _, card ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                        .height(cardHeight)
-                ) {
-                    RoomingCard(
-                        card = card,
-                        height = cardHeight.value.toInt(),
-                        isSaved = true,
-                        onClick = { onOpenRoom(card) },
-                        onRemove = { onRemoveSaved(card.id) }
-                    )
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-        }
 
-        item { Spacer(modifier = Modifier.height(28.dp)) }
+            item { Spacer(modifier = Modifier.height(12.dp)) }
+
+            if (filteredSaved.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp)
+                            .height(100.dp)
+                            .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Bookmark, null, tint = Color.Gray, modifier = Modifier.size(28.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("No saved rooms yet.", color = Color.Gray, fontSize = 13.sp)
+                            Text("Open a room and tap Add to Rooming.", color = Color.Gray.copy(alpha = 0.7f), fontSize = 11.sp)
+                        }
+                    }
+                }
+            } else {
+                itemsIndexed(filteredSaved) { _, card ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp)
+                            .height(cardHeight)
+                    ) {
+                        RoomingCard(
+                            card = card,
+                            height = cardHeight.value.toInt(),
+                            isSaved = true,
+                            onClick = { onOpenRoom(card) },
+                            onRemove = { onRemoveSaved(card.id) }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+            
+            item { Spacer(modifier = Modifier.height(28.dp)) }
+        }
 
         // ─── COLLABORATORS SECTION ────────────────────────────────────────
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    Icons.Default.Groups,
-                    contentDescription = null,
-                    tint = Color(0xFFAF52DE),
-                    modifier = Modifier.size(20.dp)
-                )
-                Text(
-                    "Collaborators",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.textPrimary
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Box(
-                    modifier = Modifier
-                        .size(22.dp)
-                        .background(Color(0xFFAF52DE).copy(alpha = 0.2f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        filteredCollaborator.size.toString(),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFAF52DE)
-                    )
-                }
-            }
-        }
-
-        item { Spacer(modifier = Modifier.height(12.dp)) }
-
-        if (filteredCollaborator.isEmpty()) {
+        if (roomingFilter != HallwayViewModel.RoomingFilter.SAVED_ONLY) {
             item {
-                Box(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                        .height(100.dp)
-                        .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp)),
-                    contentAlignment = Alignment.Center
+                        .padding(horizontal = 24.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.PersonAdd, null, tint = Color.Gray, modifier = Modifier.size(28.dp))
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("No collaborative rooms.", color = Color.Gray, fontSize = 13.sp)
+                    Icon(
+                        Icons.Default.Groups,
+                        contentDescription = null,
+                        tint = Color(0xFFAF52DE),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        "Collaborators",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.textPrimary
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .background(Color(0xFFAF52DE).copy(alpha = 0.2f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            filteredCollaborator.size.toString(),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFAF52DE)
+                        )
                     }
                 }
             }
-        } else {
-            itemsIndexed(filteredCollaborator) { _, card ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                        .height(cardHeight)
-                ) {
-                    RoomingCard(
-                        card = card,
-                        height = cardHeight.value.toInt(),
-                        isSaved = false,
-                        onClick = { onOpenRoom(card) },
-                        onRemove = {}
-                    )
+
+            item { Spacer(modifier = Modifier.height(12.dp)) }
+
+            if (filteredCollaborator.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp)
+                            .height(100.dp)
+                            .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.PersonAdd, null, tint = Color.Gray, modifier = Modifier.size(28.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("No collaborative rooms.", color = Color.Gray, fontSize = 13.sp)
+                        }
+                    }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+            } else {
+                itemsIndexed(filteredCollaborator) { _, card ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp)
+                            .height(cardHeight)
+                    ) {
+                        RoomingCard(
+                            card = card,
+                            height = cardHeight.value.toInt(),
+                            isSaved = false,
+                            onClick = { onOpenRoom(card) },
+                            onRemove = {}
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
             }
         }
 
