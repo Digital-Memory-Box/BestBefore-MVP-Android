@@ -12,6 +12,8 @@ import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
+import android.util.Log
 
 class SignupViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -23,6 +25,9 @@ class SignupViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _password = MutableStateFlow("")
     val password: StateFlow<String> = _password.asStateFlow()
+
+    private val _userType = MutableStateFlow("normal")
+    val userType: StateFlow<String> = _userType.asStateFlow()
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
@@ -55,13 +60,22 @@ class SignupViewModel(application: Application) : AndroidViewModel(application) 
         _errorMessage.value = null
     }
 
+    fun updateUserType(newType: String) {
+        _userType.value = newType
+    }
+
+    fun cancelSignup() {
+        _isLoading.value = false
+        _errorMessage.value = "Signup cancelled. Please try again."
+    }
+
     /**
      * Step 1: Create Firebase account + send verification email.
      * Does NOT call the backend yet — backend auto-creates the user on first sync.
      */
     fun attemptSignup() {
         val nameValue = _name.value.trim()
-        val emailValue = _email.value.trim()
+        val emailValue = _email.value.trim().lowercase()
         val passwordValue = _password.value
 
         if (!isValidEmail(emailValue)) {
@@ -77,57 +91,98 @@ class SignupViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
+            Log.d("SignupViewModel", "Starting signup for: $emailValue")
 
             try {
-                // Create or recover Firebase account
-                var user = firebaseAuth.currentUser
-                if (user == null || user.email != emailValue) {
-                    val result = firebaseAuth
-                        .createUserWithEmailAndPassword(emailValue, passwordValue)
-                        .await()
-                    user = result.user
-                }
+                var succeeded = false
 
-                // Send verification email
-                user?.sendEmailVerification()?.await()
-                _isLoading.value = false
-                _isVerificationSent.value = true
+                // Retry up to 3 times — handles intermittent WiFi data stalls
+                for (attempt in 1..3) {
+                    Log.d("SignupViewModel", "Signup attempt $attempt/3")
 
-            } catch (e: FirebaseAuthUserCollisionException) {
-                // Account already exists in Firebase — try silent sign-in to recover
-                try {
-                    val signInResult = firebaseAuth
-                        .signInWithEmailAndPassword(emailValue, passwordValue)
-                        .await()
-                    val user = signInResult.user
-                    if (user != null) {
-                        if (!user.isEmailVerified) {
-                            user.sendEmailVerification().await()
+                    val result = withTimeoutOrNull(20_000L) {
+                        try {
+                            var user = firebaseAuth.currentUser
+                            if (user == null || user.email != emailValue) {
+                                Log.d("SignupViewModel", "Creating Firebase account...")
+                                val created = firebaseAuth
+                                    .createUserWithEmailAndPassword(emailValue, passwordValue)
+                                    .await()
+                                user = created.user
+                                Log.d("SignupViewModel", "Firebase account created: ${user?.uid}")
+                            }
+                            user?.sendEmailVerification()?.await()
+                            Log.d("SignupViewModel", "Verification email sent")
+                            "ok"
+                        } catch (e: FirebaseAuthUserCollisionException) {
+                            Log.d("SignupViewModel", "Account collision — trying sign in")
+                            handleCollision(emailValue, passwordValue)
+                            "collision"
+                        } catch (e: Exception) {
+                            Log.e("SignupViewModel", "Firebase error: ${e.javaClass.simpleName}: ${e.message}")
                             _isLoading.value = false
-                            _isVerificationSent.value = true
-                        } else {
-                            // Already verified — sync directly
-                            syncAndComplete()
+                            _errorMessage.value = when (e) {
+                                is FirebaseAuthWeakPasswordException -> "Password is too weak."
+                                is FirebaseAuthInvalidCredentialsException -> "Invalid email format."
+                                else -> e.message ?: "Signup failed. Please try again."
+                            }
+                            "error"
                         }
-                        return@launch
                     }
-                } catch (signInEx: Exception) {
-                    // Password wrong or other sign-in issue
+
+                    when (result) {
+                        "ok" -> { succeeded = true; break }
+                        "collision", "error" -> break  // Already handled inside
+                        null -> {
+                            // Timed out — retry if not last attempt
+                            Log.e("SignupViewModel", "Attempt $attempt timed out")
+                            if (attempt < 3) {
+                                _errorMessage.value = "Retrying... ($attempt/3)"
+                                kotlinx.coroutines.delay(2000L)
+                            }
+                        }
+                    }
                 }
-                _isLoading.value = false
-                _errorMessage.value = "Account already exists. Please Log In instead."
+
+                if (succeeded) {
+                    _isLoading.value = false
+                    _isVerificationSent.value = true
+                } else if (_isLoading.value) {
+                    Log.e("SignupViewModel", "All signup attempts failed")
+                    _isLoading.value = false
+                    _errorMessage.value = "Network is unstable. Please check your WiFi and try again."
+                }
 
             } catch (e: Exception) {
+                Log.e("SignupViewModel", "Unexpected error: ${e.message}")
                 _isLoading.value = false
-                _errorMessage.value = when (e) {
-                    is FirebaseAuthWeakPasswordException ->
-                        "Password is too weak. Please choose a stronger password."
-                    is FirebaseAuthInvalidCredentialsException ->
-                        "Invalid email format."
-                    else -> e.message ?: "Signup failed. Please try again."
-                }
+                _errorMessage.value = e.message ?: "Unexpected error. Please try again."
             }
         }
+    }
+
+
+    private suspend fun handleCollision(emailValue: String, passwordValue: String) {
+        try {
+            val signInResult = firebaseAuth
+                .signInWithEmailAndPassword(emailValue, passwordValue)
+                .await()
+            val user = signInResult.user
+            if (user != null) {
+                if (!user.isEmailVerified) {
+                    user.sendEmailVerification().await()
+                    _isLoading.value = false
+                    _isVerificationSent.value = true
+                } else {
+                    syncAndComplete()
+                }
+                return
+            }
+        } catch (signInEx: Exception) {
+            Log.e("SignupViewModel", "Sign-in during collision failed: ${signInEx.message}")
+        }
+        _isLoading.value = false
+        _errorMessage.value = "Account already exists. Please Log In instead."
     }
 
     /**
@@ -183,8 +238,19 @@ class SignupViewModel(application: Application) : AndroidViewModel(application) 
         _isLoading.value = false
 
         result.onSuccess { userDto ->
-            sessionManager.saveUser(userDto.id, userDto.name ?: "User", userDto.email)
-            _signupSuccess.emit(userDto.email)
+            // Update name and userType via updateMe
+            viewModelScope.launch {
+                val updateResult = repository.updateMe(
+                    com.dmb.bestbefore.data.api.models.UpdateMeRequest(
+                        name = _name.value.trim(),
+                        userType = _userType.value
+                    )
+                )
+                // Proceed regardless of update success to keep flow smooth
+                val updatedDto = updateResult.getOrNull() ?: userDto
+                sessionManager.saveUser(updatedDto.id, updatedDto.name ?: "User", updatedDto.email)
+                _signupSuccess.emit(updatedDto.email)
+            }
         }.onFailure { e ->
             _errorMessage.value = e.message ?: "Server sync failed. Please try again."
         }

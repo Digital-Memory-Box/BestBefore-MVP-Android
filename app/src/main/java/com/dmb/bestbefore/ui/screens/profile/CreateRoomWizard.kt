@@ -524,10 +524,12 @@ fun CreateRoomStep1(viewModel: ProfileViewModel) {
     val isPublic by viewModel.isPublic.collectAsState()
     val themeName by viewModel.roomAtmosphereTheme.collectAsState()
 
+    val availableTags by viewModel.availableTags.collectAsState()
+
     var tagInput by remember { mutableStateOf("") }
-    val suggestedTags = remember(tagInput) {
+    val suggestedTags = remember(tagInput, availableTags) {
         if (tagInput.isBlank()) emptyList()
-        else com.dmb.bestbefore.data.local.TagsDictionary.predefinedTags.filter { it.contains(tagInput, ignoreCase = true) && !roomTags.contains(it) }.take(5)
+        else availableTags.filter { it.contains(tagInput, ignoreCase = true) && !roomTags.contains(it) }.take(5)
     }
 
     CreateRoomChrome(
@@ -1247,21 +1249,7 @@ fun CreateRoomStep3Atmosphere(viewModel: ProfileViewModel) {
         "Cyberpunk" to Color(0xFFAA3FD6)
     )
 
-    // SoundCloud playlist tracks loaded from backend
-    val musicViewModel: com.dmb.bestbefore.ui.components.MusicViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
-    val tracks by musicViewModel.tracks.collectAsState()
-    val isLoadingTracks by musicViewModel.isLoading.collectAsState()
-    val currentTrack by com.dmb.bestbefore.notifications.MusicPlayerManager.currentTrack.collectAsState()
-    val isPlaying by com.dmb.bestbefore.notifications.MusicPlayerManager.isPlaying.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
-
-    // Load playlist on first compose
-    LaunchedEffect(Unit) {
-        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        user?.getIdToken(false)?.addOnSuccessListener { result ->
-            result.token?.let { token -> musicViewModel.loadPlaylist(token) }
-        }
-    }
 
     CreateRoomChrome(
         step = 3,
@@ -1275,7 +1263,7 @@ fun CreateRoomStep3Atmosphere(viewModel: ProfileViewModel) {
         Text("Set the mood with background music.", color = Color(0xFF8E8E93), fontSize = 14.sp)
         Spacer(modifier = Modifier.height(24.dp))
 
-        // â”€â”€ Room Theme â”€â”€
+        // ── Room Theme ──
         Text("Room Theme", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(14.dp))
 
@@ -1316,8 +1304,52 @@ fun CreateRoomStep3Atmosphere(viewModel: ProfileViewModel) {
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        // â”€â”€ Background Music â”€â”€
-        Text("Background Music", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        // ── Background Music ──
+        Text("SoundCloud URL", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // URL Paste Field
+        var currentInput by remember { mutableStateOf(if (selectedMusic != "None") selectedMusic else "") }
+        val isInvalidUrl = currentInput.isNotEmpty() && !currentInput.startsWith("https://soundcloud.com/")
+
+        BasicTextField(
+            value = currentInput,
+            onValueChange = { 
+                currentInput = it
+                if (it.isEmpty()) {
+                    viewModel.updateSelectedMusic("None")
+                } else {
+                    viewModel.updateSelectedMusic(it)
+                }
+            },
+            textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+            cursorBrush = SolidColor(Color.White),
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(CardDarkBg, RoundedCornerShape(14.dp))
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            decorationBox = { inner ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Link, null, tint = Color(0xFF636366), modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(modifier = Modifier.weight(1f)) {
+                        if (currentInput.isEmpty()) Text("Paste SoundCloud URL...", color = Color(0xFF636366), fontSize = 16.sp)
+                        inner()
+                    }
+                }
+            }
+        )
+        
+        if (isInvalidUrl) {
+            Text(
+                "Must be a valid https://soundcloud.com/ URL.",
+                color = AccentBlue,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 8.dp, start = 8.dp)
+            )
+        }
+
         Spacer(modifier = Modifier.height(12.dp))
 
         // "None" option
@@ -1334,8 +1366,8 @@ fun CreateRoomStep3Atmosphere(viewModel: ProfileViewModel) {
                     else Modifier
                 )
                 .clickable {
+                    currentInput = ""
                     viewModel.updateSelectedMusic("None")
-                    com.dmb.bestbefore.notifications.MusicPlayerManager.stop(context)
                 }
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -1347,67 +1379,7 @@ fun CreateRoomStep3Atmosphere(viewModel: ProfileViewModel) {
             if (isNoneSelected) Icon(Icons.Default.CheckCircle, null, tint = AccentBlue, modifier = Modifier.size(20.dp))
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // SoundCloud tracks
-        if (isLoadingTracks) {
-            Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = AccentBlue, modifier = Modifier.size(24.dp))
-            }
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                tracks.forEach { track ->
-                    val isSelected = selectedMusic == track.title
-                    val isThisPlaying = currentTrack?.id == track.id && isPlaying
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                if (isSelected) Color(0xFF0D2B5E) else CardDarkBg,
-                                RoundedCornerShape(14.dp)
-                            )
-                            .then(
-                                if (isSelected) Modifier.border(1.5.dp, AccentBlue, RoundedCornerShape(14.dp))
-                                else Modifier
-                            )
-                            .clickable {
-                                viewModel.updateSelectedMusic(track.title)
-                                musicViewModel.playTrack(context, track)
-                            }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = if (isThisPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = track.title,
-                            tint = if (isSelected) AccentBlue else Color(0xFF8E8E93),
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(14.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = track.title,
-                                color = if (isSelected) Color.White else Color(0xFFCCCCCC),
-                                fontSize = 14.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = track.artist,
-                                color = Color(0xFF8E8E93),
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                            )
-                        }
-                        if (isSelected) {
-                            Icon(Icons.Default.CheckCircle, null, tint = AccentBlue, modifier = Modifier.size(20.dp))
-                        }
-                    }
-                }
-            }
-        }
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
@@ -1541,8 +1513,9 @@ fun CreateRoomStep4(viewModel: ProfileViewModel) {
 //  STEP 5 Invite Friends
 @Composable
 fun CreateRoomStep5(viewModel: ProfileViewModel) {
-    val emails by viewModel.inviteEmails.collectAsState()
-    var emailInput by remember { mutableStateOf("") }
+    val invitedUsers by viewModel.invitedUsers.collectAsState()
+    val searchResults by viewModel.userSearchResults.collectAsState()
+    var searchInput by remember { mutableStateOf("") }
     val context = androidx.compose.ui.platform.LocalContext.current
 
     val themeName by viewModel.roomAtmosphereTheme.collectAsState()
@@ -1557,51 +1530,97 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
     ) {
         Text("Invite Friends", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(4.dp))
-        Text("Add people and assign them roles (Viewer or Contributor).", color = Color(0xFF8E8E93), fontSize = 14.sp)
+        Text("Add people and assign them roles (Viewer or Collaborator).", color = Color(0xFF8E8E93), fontSize = 14.sp)
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Email input + add button
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            BasicTextField(
-                value = emailInput,
-                onValueChange = { emailInput = it },
-                textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
-                cursorBrush = SolidColor(Color.White),
-                singleLine = true,
+        // Search input
+        BasicTextField(
+            value = searchInput,
+            onValueChange = { 
+                searchInput = it
+                viewModel.searchUsers(it)
+            },
+            textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
+            cursorBrush = SolidColor(Color.White),
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(CardDarkBg, RoundedCornerShape(14.dp))
+                .padding(horizontal = 16.dp, vertical = 18.dp),
+            decorationBox = { inner ->
+                if (searchInput.isEmpty()) Text("Search by name or email...", color = Color(0xFF636366), fontSize = 15.sp)
+                inner()
+            }
+        )
+        
+        // Search Results
+        if (searchInput.isNotBlank() && searchResults.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            LazyColumn(
                 modifier = Modifier
-                    .weight(1f)
-                    .background(CardDarkBg, RoundedCornerShape(14.dp))
-                    .padding(horizontal = 16.dp, vertical = 18.dp),
-                decorationBox = { inner ->
-                    if (emailInput.isEmpty()) Text("Friend's Email Address", color = Color(0xFF636366), fontSize = 15.sp)
-                    inner()
-                }
-            )
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(Color(0xFF3A3A3C), androidx.compose.foundation.shape.CircleShape)
-                    .clickable {
-                        if (emailInput.isNotBlank()) {
-                            viewModel.addInviteEmail(emailInput.trim())
-                            emailInput = ""
-                        }
-                    },
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .heightIn(max = 160.dp)
+                    .background(CardDarkBg, RoundedCornerShape(12.dp)),
+                contentPadding = PaddingValues(8.dp)
             ) {
-                Icon(Icons.Default.Add, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                items(searchResults) { user ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                viewModel.addInvitedUser(ProfileViewModel.InvitedUser(
+                                    email = user.email ?: "",
+                                    name = user.name
+                                ))
+                                searchInput = ""
+                                viewModel.searchUsers("") // Clear search
+                            }
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Person, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            if (user.name != null) {
+                                Text(user.name, color = Color.White, fontWeight = FontWeight.Medium)
+                            }
+                            Text(user.email ?: "", color = Color.Gray, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        } else if (searchInput.isNotBlank() && searchResults.isEmpty()) {
+            // Allow inviting raw email if no user found
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(CardDarkBg, RoundedCornerShape(12.dp))
+                    .clickable {
+                        if (android.util.Patterns.EMAIL_ADDRESS.matcher(searchInput).matches()) {
+                            viewModel.addInvitedUser(ProfileViewModel.InvitedUser(email = searchInput.trim()))
+                            searchInput = ""
+                            viewModel.searchUsers("")
+                        } else {
+                            android.widget.Toast.makeText(context, "Enter a valid email", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Add, null, tint = Color(0xFF0D59F2), modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(12.dp))
+                Text("Invite \"$searchInput\" via email", color = Color.White)
             }
         }
 
-        // Added emails list
-        if (emails.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(16.dp))
+        // Added users list
+        if (invitedUsers.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(24.dp))
+            Text("Invited (${invitedUsers.size})", color = Color.White, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(12.dp))
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                emails.forEach { email ->
+                invitedUsers.forEach { user ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1611,11 +1630,38 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
                     ) {
                         Icon(Icons.Default.Person, null, tint = Color(0xFF8E8E93), modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(10.dp))
-                        Text(email, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        Column(modifier = Modifier.weight(1f)) {
+                            if (user.name != null) {
+                                Text(user.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                            }
+                            Text(user.email, color = if (user.name != null) Color.Gray else Color.White, fontSize = 13.sp)
+                        }
+                        
+                        // Role Selector Toggle
+                        Box(
+                            modifier = Modifier
+                                .clickable {
+                                    val newRole = if (user.role == "collaborator") "viewer" else "collaborator"
+                                    viewModel.updateInvitedUserRole(user.email, newRole)
+                                }
+                                .background(if (user.role == "collaborator") Color(0xFF00D972).copy(alpha = 0.2f) else Color(0xFF0D59F2).copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                                .border(1.dp, if (user.role == "collaborator") Color(0xFF00D972) else Color(0xFF0D59F2), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = if (user.role == "collaborator") "Collaborator" else "Viewer",
+                                color = if (user.role == "collaborator") Color(0xFF00D972) else Color(0xFF0D59F2),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.width(12.dp))
+                        
                         Icon(
                             Icons.Default.Close, null, tint = Color(0xFF8E8E93), modifier = Modifier
-                                .size(18.dp)
-                                .clickable { viewModel.removeInviteEmail(email) }
+                                .size(24.dp)
+                                .clickable { viewModel.removeInvitedUser(user.email) }
                         )
                     }
                 }

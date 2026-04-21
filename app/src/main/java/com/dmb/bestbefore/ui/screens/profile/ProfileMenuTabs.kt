@@ -93,7 +93,10 @@ fun ProfileMenuScreen(
                     color = colors.primary,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.align(Alignment.CenterEnd).clickable { viewModel.closeOverlay() } // Mock Save
+                    modifier = Modifier.align(Alignment.CenterEnd).clickable { 
+                        viewModel.saveCustomization(context)
+                        viewModel.closeOverlay() 
+                    }
                 )
             }
 
@@ -167,16 +170,19 @@ fun DashboardTab(
         // Stats Cards
         item {
             val userName by viewModel.userName.collectAsState()
+            val bio by viewModel.bio.collectAsState()
             val accentColor by viewModel.accentColor.collectAsState()
             val totalRooms by viewModel.totalRooms.collectAsState()
             val totalMemories by viewModel.totalMemories.collectAsState()
+            val roomingCount by viewModel.roomingCount.collectAsState()
+            val roomersCount by viewModel.roomersCount.collectAsState()
             val profileImageUri by viewModel.profileImageUri.collectAsState()
 
             com.dmb.bestbefore.ui.components.SharedUserCard(
-                name = userName,
-                biography = "Digital artist focusing on surreal landscapes and vibrant color theory.", // Mock bio
-                roomingCount = totalRooms.toString(),
-                roomersCount = totalMemories.toString(),
+                name = if (userName.startsWith("@")) userName else "@$userName",
+                biography = bio,
+                roomingCount = roomingCount.toString(),
+                roomersCount = roomersCount.toString(),
                 accentColor = accentColor,
                 privacyStatus = com.dmb.bestbefore.ui.components.UserPrivacyStatus.NONE,
                 profileImageUri = profileImageUri
@@ -438,10 +444,10 @@ fun CustomizationTab(
         // BB-UI-14: Biography
         Text(text = "Biography", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
-        var bioText by remember { mutableStateOf("Digital artist focusing on surreal landscapes and vibrant color theory.") }
+        val bioText by viewModel.bio.collectAsState()
         BasicTextField(
             value = bioText,
-            onValueChange = { bioText = it },
+            onValueChange = { viewModel.updateBio(it) },
             textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
             modifier = Modifier
                 .fillMaxWidth()

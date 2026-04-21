@@ -1,7 +1,8 @@
 package com.dmb.bestbefore.ui.screens.hallway
 
 import android.util.Log
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dmb.bestbefore.data.models.HallwayCard
 import com.dmb.bestbefore.data.repository.RoomRepository
@@ -13,8 +14,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
 
-class HallwayViewModel : ViewModel() {
+class HallwayViewModel(application: Application) : AndroidViewModel(application) {
 
     private val roomRepository = RoomRepository()
 
@@ -64,7 +66,11 @@ class HallwayViewModel : ViewModel() {
     private val _cardImageIndices = MutableStateFlow<Map<String, Int>>(emptyMap())
     val cardImageIndices: StateFlow<Map<String, Int>> = _cardImageIndices.asStateFlow()
 
-    private var allApiRooms: List<com.dmb.bestbefore.data.api.models.RoomDto> = emptyList()
+    private val _availableTags = MutableStateFlow<List<String>>(emptyList())
+    val availableTags: StateFlow<List<String>> = _availableTags.asStateFlow()
+
+    private var myRoomsList: List<com.dmb.bestbefore.data.api.models.RoomDto> = emptyList()
+    private var discoverRoomsList: List<com.dmb.bestbefore.data.api.models.RoomDto> = emptyList()
 
     init {
         fetchRooms()
@@ -73,33 +79,112 @@ class HallwayViewModel : ViewModel() {
     private fun fetchRooms() {
         viewModelScope.launch {
             try {
-                val result = roomRepository.getRooms()
-                result.onSuccess { apiRooms ->
-                    allApiRooms = apiRooms
-                    filterCards(_currentTab.value)
+                val myDeferred = async { roomRepository.getRooms() }
+                val discoverDeferred = async { roomRepository.getDiscoverRooms() }
+                
+                val myResult = myDeferred.await()
+                val discoverResult = discoverDeferred.await()
+                
+                myResult.onSuccess { rooms ->
+                    Log.d("HallwayViewModel", "getRooms: fetched ${rooms.size} rooms")
+                    myRoomsList = rooms
                 }
-                result.onFailure {
-                    Log.e("HallwayViewModel", "Failed to fetch hallway rooms", it)
+                myResult.onFailure { e ->
+                    Log.e("HallwayViewModel", "getRooms failed: ${e.message}")
                 }
+                discoverResult.onSuccess { rooms ->
+                    Log.d("HallwayViewModel", "getDiscoverRooms: fetched ${rooms.size} rooms")
+                    discoverRoomsList = rooms
+                }
+                discoverResult.onFailure { e ->
+                    Log.e("HallwayViewModel", "getDiscoverRooms failed: ${e.message}")
+                }
+                
+                filterCards(_currentTab.value)
             } catch (e: Exception) {
                 Log.e("HallwayViewModel", "Error fetching rooms", e)
+            }
+            
+            // Try fetching tags
+            try {
+                val token = com.dmb.bestbefore.data.repository.AuthRepository(getApplication()).getFirebaseIdToken(false)
+                if (token != null) {
+                    val tagsResponse = com.dmb.bestbefore.data.api.RetrofitClient.apiService.getTags("Bearer $token")
+                    if (tagsResponse.isSuccessful) {
+                        val bodyElement = tagsResponse.body()
+                        val parsedTags = mutableListOf<String>()
+                        if (bodyElement != null) {
+                            if (bodyElement.isJsonArray) {
+                                bodyElement.asJsonArray.forEach { 
+                                    if (it.isJsonObject) {
+                                        val obj = it.asJsonObject
+                                        val tag = obj.get("name")?.asString ?: obj.get("tag")?.asString
+                                        if (tag != null) parsedTags.add(tag)
+                                    } else if (it.isJsonPrimitive) {
+                                        parsedTags.add(it.asString)
+                                    }
+                                }
+                            } else if (bodyElement.isJsonObject) {
+                                val obj = bodyElement.asJsonObject
+                                // if it's { "tags": [...] }
+                                if (obj.has("tags") && obj.get("tags").isJsonArray) {
+                                    obj.get("tags").asJsonArray.forEach { 
+                                        if (it.isJsonPrimitive) parsedTags.add(it.asString)
+                                        else if (it.isJsonObject) {
+                                            val t = it.asJsonObject.get("name")?.asString ?: it.asJsonObject.get("tag")?.asString
+                                            if (t != null) parsedTags.add(t)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        _availableTags.value = parsedTags
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("HallwayViewModel", "Error fetching tags", e)
             }
         }
     }
 
+    private fun isRoomPublic(room: com.dmb.bestbefore.data.api.models.RoomDto): Boolean {
+        // isPublic may be null if not explicitly set; fall back to !isPrivate (false = public)
+        return room.isPublic == true || !room.isPrivate
+    }
+
     private fun filterCards(tab: BottomTab) {
         val currentUserEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
+        val allAvailableRooms = (myRoomsList + discoverRoomsList).distinctBy { it.id }
 
         val filteredRooms = when (tab) {
             BottomTab.ROOMING -> {
-                allApiRooms.filter { room ->
-                    room.ownerEmail == currentUserEmail
+                myRoomsList.filter { room ->
+                    val isOwner = room.ownerEmail?.equals(currentUserEmail, ignoreCase = true) == true
+                    val isCollaborator = room.collaborators?.any { element ->
+                        if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
+                            element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
+                        } else false
+                    } == true
+                    val isViewer = room.viewers?.any { element ->
+                        if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
+                            element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
+                        } else false
+                    } == true
+                    val isPrivate = room.isPrivate
+                    !isOwner && (isCollaborator || isViewer) && isPrivate
                 }
             }
             BottomTab.EVERYONE -> {
-                allApiRooms.filter { room -> !room.isPrivate }
+                // Show ALL public rooms in the Hallway tab
+                allAvailableRooms.filter { isRoomPublic(it) }
             }
-            BottomTab.ARTISTS -> emptyList()
+            BottomTab.ARTISTS -> {
+                // Show public rooms where owner is explicitly an artist
+                // Rooms with ownerUserType = "artist" appear here (and also in EVERYONE above)
+                allAvailableRooms.filter {
+                    it.ownerUserType?.equals("artist", ignoreCase = true) == true && isRoomPublic(it)
+                }
+            }
         }
 
         val mappedCards = filteredRooms.map { room ->
@@ -107,13 +192,23 @@ class HallwayViewModel : ViewModel() {
                 id = room.id,
                 title = room.name,
                 timeCapsuleDays = room.capsuleDurationDays,
-                description = room.description ?: "A room awaiting memories.",
+                description = room.description ?: "",
                 imageUrl = room.photos?.firstOrNull(),
                 photos = room.photos ?: emptyList(),
                 themeColorHex = room.theme,
                 tags = room.tags ?: emptyList(),
                 ownerEmail = room.ownerEmail,
+                ownerName = room.ownerName,
+                ownerUserType = room.ownerUserType,
+                ownerProfilePic = room.ownerProfilePic,
                 collaboratorCount = room.collaborators?.size ?: 0,
+                collaborators = room.collaborators?.mapNotNull { element ->
+                    if (element.isJsonObject) {
+                        try {
+                            com.google.gson.Gson().fromJson(element, com.dmb.bestbefore.data.api.models.UserDto::class.java)
+                        } catch (e: Exception) { null }
+                    } else null
+                } ?: emptyList(),
                 location = null, // Will fetch from DB if location is added to RoomDto later
                 backgroundMusic = room.backgroundMusic
             )
@@ -201,11 +296,16 @@ class HallwayViewModel : ViewModel() {
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
-                val result = roomRepository.getRooms()
-                result.onSuccess { apiRooms ->
-                    allApiRooms = apiRooms
-                    filterCards(_currentTab.value)
-                }
+                val myDeferred = async { roomRepository.getRooms() }
+                val discoverDeferred = async { roomRepository.getDiscoverRooms() }
+                
+                val myResult = myDeferred.await()
+                val discoverResult = discoverDeferred.await()
+                
+                myResult.onSuccess { rooms -> myRoomsList = rooms }
+                discoverResult.onSuccess { rooms -> discoverRoomsList = rooms }
+                
+                filterCards(_currentTab.value)
             } catch (e: Exception) {
                 Log.e("HallwayViewModel", "Error refreshing rooms", e)
             } finally {

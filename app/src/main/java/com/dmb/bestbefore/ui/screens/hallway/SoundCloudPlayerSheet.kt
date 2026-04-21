@@ -38,8 +38,12 @@ fun SoundCloudPlayerSheet(
     val context = LocalContext.current
     val trackTitle = card.backgroundMusic?.takeIf { it.isNotBlank() } ?: "Unknown Track"
     val artistHandle = card.ownerEmail?.substringBefore("@")?.takeIf { it.isNotBlank() } ?: "artist"
-    val soundCloudQuery = Uri.encode("$trackTitle $artistHandle")
-    val soundCloudUrl = "https://soundcloud.com/search?q=$soundCloudQuery"
+    
+    val isDirectUrl = trackTitle.startsWith("https://soundcloud.com/")
+    val displayTitle = if (isDirectUrl) trackTitle.substringAfterLast("/") else trackTitle
+    
+    val soundCloudQuery = Uri.encode("$displayTitle $artistHandle")
+    val soundCloudUrl = if (isDirectUrl) trackTitle else "https://soundcloud.com/search?q=$soundCloudQuery"
 
     Box(modifier = Modifier.fillMaxSize()) {
         Box(
@@ -104,19 +108,21 @@ fun SoundCloudPlayerSheet(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = trackTitle,
+                                text = displayTitle,
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.padding(horizontal = 32.dp)
                             )
-                            Text(
-                                text = "@$artistHandle",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.White.copy(alpha = 0.55f)
-                            )
+                            if (!isDirectUrl) {
+                                Text(
+                                    text = "@$artistHandle",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.White.copy(alpha = 0.55f)
+                                )
+                            }
                         }
 
                         // Listen on SoundCloud

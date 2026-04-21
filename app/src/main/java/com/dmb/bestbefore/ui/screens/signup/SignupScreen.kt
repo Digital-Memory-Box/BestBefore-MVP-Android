@@ -30,12 +30,13 @@ fun SignupScreen(
     val name by viewModel.name.collectAsState()
     val email by viewModel.email.collectAsState()
     val password by viewModel.password.collectAsState()
+    val userType by viewModel.userType.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // ── Animated Background (default theme — simple orbs) ───────
-        AnimatedBackgroundView()
+        // ── Animated Background — switches with userType ─────────────
+        AnimatedBackgroundView(theme = if (userType == "artist") "artist" else "default")
 
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -81,10 +82,43 @@ fun SignupScreen(
                         isSecure = true
                     )
 
+                    // ── User Type Selector ──────────────────────────────
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(24.dp))
+                            .padding(4.dp)
+                    ) {
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            listOf("normal" to "Normal", "artist" to "Artist").forEach { (type, label) ->
+                                val isSelected = userType == type
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                        .background(
+                                            if (isSelected) Color.White else Color.Transparent,
+                                            RoundedCornerShape(20.dp)
+                                        )
+                                        .clickable { viewModel.updateUserType(type) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 15.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) Color.Black else Color.White.copy(alpha = 0.6f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     // Sign Up Button
                     Box(
                         modifier = Modifier
-                            .padding(top = 20.dp)
+                            .padding(top = 8.dp)
                             .fillMaxWidth()
                             .height(56.dp)
                             .background(Color.White, RoundedCornerShape(28.dp))
@@ -105,16 +139,6 @@ fun SignupScreen(
                 }
             }
 
-            // Error message
-            val msg = errorMessage
-            if (msg != null) {
-                Text(
-                    text = msg,
-                    color = Color.Red,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-            }
 
             Spacer(modifier = Modifier.weight(1f))
 
@@ -135,15 +159,101 @@ fun SignupScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.4f)),
+                    .background(Color.Black.copy(alpha = 0.6f)),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.scale(1.5f)
+                    )
+                    Text(
+                        text = "Creating account...",
+                        color = Color.White,
+                        fontSize = 14.sp
+                    )
+                    TextButton(onClick = { viewModel.cancelSignup() }) {
+                        Text("Cancel", color = Color.LightGray, fontSize = 14.sp)
+                    }
+                }
+            }
+        }
+
+        // ── Error Banner ─────────────────────────────────────────────
+        val msg = errorMessage
+        if (msg != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 24.dp, vertical = 100.dp)
+                    .background(Color(0xFFCC0000), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Text(
+                    text = msg,
                     color = Color.White,
-                    strokeWidth = 3.dp,
-                    modifier = Modifier.scale(1.5f)
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
+        }
+
+        // ── Email Verification Dialog ───────────────────────────────────
+        val isVerificationSent by viewModel.isVerificationSent.collectAsState()
+        if (isVerificationSent) {
+            AlertDialog(
+                onDismissRequest = { /* prevent dismiss by tapping outside */ },
+                containerColor = Color(0xFF2C2C2C),
+                title = {
+                    Text(
+                        text = "📧 Verify Your Email",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                },
+                text = {
+                    Text(
+                        text = "A verification link has been sent to:\n$email\n\nPlease click the link in your inbox, then tap the button below.",
+                        fontSize = 14.sp,
+                        color = Color.LightGray,
+                        textAlign = TextAlign.Center
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { viewModel.checkVerificationStatus() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                        shape = RoundedCornerShape(28.dp),
+                        modifier = Modifier.fillMaxWidth().height(50.dp)
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Checking...", color = Color.Black)
+                        } else {
+                            Text("I Have Verified My Email ✓", color = Color.Black, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { viewModel.attemptSignup() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Resend Email", color = Color.Gray, fontSize = 13.sp)
+                    }
+                }
+            )
         }
     }
 
@@ -153,66 +263,5 @@ fun SignupScreen(
             onSignupSuccess(email)
         }
     }
-
-    // ── Email Verification Dialog ───────────────────────────────────
-    val isVerificationSent by viewModel.isVerificationSent.collectAsState()
-    if (isVerificationSent) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.9f))
-                .clickable(enabled = false) {},
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .background(Color(0xFF2C2C2C), RoundedCornerShape(16.dp))
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text(
-                    text = "Verify Email",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Text(
-                    text = "An email has been sent to $email.\nPlease verify your email to continue.",
-                    fontSize = 16.sp,
-                    color = Color.LightGray,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Button(
-                    onClick = { viewModel.checkVerificationStatus() },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                    shape = RoundedCornerShape(28.dp),
-                    modifier = Modifier.fillMaxWidth().height(50.dp)
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            color = Color.Black,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Checking...", color = Color.Black)
-                    } else {
-                        Text(
-                            "I have verified my email",
-                            color = Color.Black,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                TextButton(onClick = { /* Could add resend logic here */ }) {
-                    Text("Resend Email", color = Color.Gray)
-                }
-            }
-        }
-    }
 }
+

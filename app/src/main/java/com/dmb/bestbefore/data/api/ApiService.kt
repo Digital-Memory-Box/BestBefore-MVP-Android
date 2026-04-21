@@ -13,6 +13,7 @@ import retrofit2.http.Part
 import retrofit2.http.Path
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
+import retrofit2.http.Url
 
 interface ApiService {
 
@@ -205,4 +206,23 @@ interface ApiService {
     suspend fun getSoundCloudPlaylist(
         @Header("Authorization") token: String
     ): Response<SoundCloudPlaylistResponse>
+
+    // ── Tags ──────────────────────────────────────────────────────────────────
+    @GET("tags")
+    suspend fun getTags(
+        @Header("Authorization") token: String
+    ): Response<com.google.gson.JsonElement>
+
+    // ── Search Users ──────────────────────────────────────────────────────────
+    @GET("users/search")
+    suspend fun searchUsers(
+        @Header("Authorization") token: String,
+        @retrofit2.http.Query("q") query: String
+    ): Response<List<UserDto>>
+
+    // ── Direct External ──────────────────────────────────────────────────────────
+    @GET
+    suspend fun searchSoundCloudDirect(
+        @Url url: String
+    ): Response<List<Map<String, @JvmSuppressWildcards Any>>>
 }

@@ -20,5 +20,6 @@ data class TimeCapsuleRoom(
     val tags: List<String> = emptyList(),
     val description: String? = null,
     val music: String = "None",
-    val rollingExpiration: String = "Never"
+    val rollingExpiration: String = "Never",
+    val isViewerOnly: Boolean = false
 )

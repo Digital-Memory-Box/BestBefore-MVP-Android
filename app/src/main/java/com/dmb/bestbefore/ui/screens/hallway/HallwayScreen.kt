@@ -9,7 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -64,6 +64,7 @@ fun HallwayScreen(
     onRoomingScanClick: () -> Unit = {},
     onOpenRoom: (HallwayCard) -> Unit = {},
     onCreateRoomClick: () -> Unit = {},
+    onCameraClick: () -> Unit = {},
     viewModel: HallwayViewModel = viewModel()
 ) {
     val cards by viewModel.filteredCards.collectAsState()
@@ -75,10 +76,14 @@ fun HallwayScreen(
     val showingSoundCloudModal by viewModel.showingSoundCloudModal.collectAsState()
     val isDescriptionExpanded by viewModel.isDescriptionExpanded.collectAsState()
     val activePagerPage by viewModel.activePagerPage.collectAsState()
+    val availableTags by viewModel.availableTags.collectAsState()
     val areCollaboratorsExpanded by viewModel.areCollaboratorsExpanded.collectAsState()
     val cardImageIndices by viewModel.cardImageIndices.collectAsState()
     val orbWidth = 160.dp
     val contentEndInset = 0.dp
+
+    // Refresh rooms data every time screen enters composition
+    LaunchedEffect(Unit) { viewModel.refreshRooms() }
 
     Box(
         modifier = Modifier
@@ -132,6 +137,7 @@ fun HallwayScreen(
                         onMusicClick = onRoomingMusicClick,
                         onShowSoundCloud = { viewModel.setSoundCloudModalVisible(true) },
                         onExpandDescription = { viewModel.setDescriptionExpanded(true) },
+                        availableTags = availableTags,
                         isOrbMenuVisible = isOrbMenuVisible,
                         contentEndInset = contentEndInset,
                         selectedCardIndex = selectedCardIndex,
@@ -169,11 +175,10 @@ fun HallwayScreen(
             modifier = Modifier.align(Alignment.CenterEnd)
         ) {
             OrbMenu(
-                width = orbWidth,
+                diameter = orbWidth,
                 onProfileClick = onNavigateToProfile,
                 onAddClick = onCreateRoomClick,
-                onSearchClick = { },
-                onChatClick = { }
+                onCameraClick = onCameraClick
             )
         }
 
@@ -434,6 +439,7 @@ private fun HallwayContent(
     onMusicClick: () -> Unit,
     onShowSoundCloud: () -> Unit,
     onExpandDescription: () -> Unit,
+    availableTags: List<String>,
     isOrbMenuVisible: Boolean,
     contentEndInset: Dp,
     selectedCardIndex: Int,
@@ -464,7 +470,8 @@ private fun HallwayContent(
             searchQuery = searchQuery,
             onSearchQueryChange = onSearchQueryChange,
             selectedTag = selectedFilterTag,
-            onTagSelected = onFilterTagSelected
+            onTagSelected = onFilterTagSelected,
+            tags = availableTags
         )
 
         if (cards.isEmpty()) {
@@ -502,7 +509,8 @@ private fun HallwayContent(
                 start = 40.dp,
                 end = if (isOrbMenuVisible) 84.dp else 40.dp
             )
-            val cardHeight = 350.dp
+            val configuration = LocalConfiguration.current
+            val cardHeight = (configuration.screenHeightDp * 0.40f).dp
             val cardWidthFraction = 0.9f
             val cdButtonEndPadding = if (isOrbMenuVisible) 68.dp else 60.dp
 
@@ -631,8 +639,9 @@ fun HallwayActiveCard(
     cardHeight: Dp = 350.dp,
     widthFraction: Float = 0.9f
 ) {
-    val imagesList = card.photos.ifEmpty { listOf("mock_bg") }
-    val maxImages = imagesList.size.coerceAtMost(5)
+    val actualPhotos = if (card.photos.isNotEmpty()) card.photos.take(5) else emptyList()
+    val hasRealPhotos = actualPhotos.isNotEmpty()
+    val maxImages = if (hasRealPhotos) actualPhotos.size else 1
     val colors = LocalBestBeforeColors.current
 
     // Subtle pulse to mimic the richer Swift glow language.
@@ -665,27 +674,31 @@ fun HallwayActiveCard(
         label = "cardScale"
     )
 
+    // VerticalPager state for photos
+    val verticalPagerState = rememberPagerState(
+        initialPage = currentImageIndex.coerceIn(0, maxImages - 1),
+        pageCount = { maxImages }
+    )
+
+    // Sync external index changes into the pager
+    LaunchedEffect(currentImageIndex) {
+        val target = currentImageIndex.coerceIn(0, maxImages - 1)
+        if (verticalPagerState.currentPage != target) {
+            verticalPagerState.scrollToPage(target)
+        }
+    }
+
+    // Notify parent of page changes so the indicator badge and shared state stay in sync
+    LaunchedEffect(verticalPagerState.currentPage) {
+        onImageIndexChange(verticalPagerState.currentPage)
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth(widthFraction)
             .height(cardHeight)
             .clickable { onOpenRoom() }
             .scale(animatedScale)
-            .pointerInput(card.id) {
-                detectVerticalDragGestures(
-                    onDragEnd = { }
-                ) { change, dragAmount ->
-                    change.consume()
-                    if (dragAmount < -30) {
-                        // Swipe UP → next image
-                        onImageIndexChange((currentImageIndex + 1) % maxImages)
-                    } else if (dragAmount > 30) {
-                        // Swipe DOWN → previous image
-                        onImageIndexChange(if (currentImageIndex - 1 < 0)
-                            maxImages - 1 else currentImageIndex - 1)
-                    }
-                }
-            }
     ) {
         // Layer 1: wide ambient halo
         Box(
@@ -749,22 +762,37 @@ fun HallwayActiveCard(
 
         // Card body
         Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .border(
-                2.dp,
-                accentColor.copy(alpha = dynamicGlowAlpha * 0.86f),
-                RoundedCornerShape(32.dp)
-            )
-            .clip(RoundedCornerShape(32.dp))
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFF19192E), Color(0xFF14213D))
+            modifier = Modifier
+                .fillMaxSize()
+                .border(
+                    2.dp,
+                    accentColor.copy(alpha = dynamicGlowAlpha * 0.86f),
+                    RoundedCornerShape(32.dp)
                 )
-            ),
+                .clip(RoundedCornerShape(32.dp))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF19192E), Color(0xFF14213D))
+                    )
+                ),
             contentAlignment = Alignment.BottomCenter
         ) {
-            // Top sheen overlay to emulate Swift-style polished card surface.
+            if (hasRealPhotos) {
+                // Native VerticalPager for smooth up/down photo scrolling
+                VerticalPager(
+                    state = verticalPagerState,
+                    modifier = Modifier.fillMaxSize()
+                ) { page ->
+                    coil.compose.AsyncImage(
+                        model = actualPhotos[page],
+                        contentDescription = "Room Photo ${page + 1}",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                }
+            }
+
+            // Top sheen overlay
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -782,21 +810,23 @@ fun HallwayActiveCard(
             )
 
             // Image index indicator (1/N) — always shown
-            Box(
-                modifier = Modifier
-                    .padding(bottom = 12.dp)
-                    .background(
-                        Color.Black.copy(alpha = 0.5f),
-                        RoundedCornerShape(12.dp)
+            if (hasRealPhotos && maxImages > 1) {
+                Box(
+                    modifier = Modifier
+                        .padding(bottom = 12.dp)
+                        .background(
+                            Color.Black.copy(alpha = 0.5f),
+                            RoundedCornerShape(12.dp)
+                        )
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "${verticalPagerState.currentPage + 1}/$maxImages",
+                        color = colors.textPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
                     )
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = "${currentImageIndex + 1}/$maxImages",
-                    color = colors.textPrimary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                }
             }
         }
     }
@@ -815,8 +845,9 @@ fun ActiveCardDetails(
     onToggleCollaborators: () -> Unit,
     onDismissCollaborators: () -> Unit,
     onSeeAllClick: () -> Unit
-) {
+    ) {
     val colors = LocalBestBeforeColors.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val isCollabRoom = card.collaboratorCount > 0
     val hasDescription = card.description.isNotBlank() &&
             card.description != "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do usermod temper..."
@@ -848,19 +879,29 @@ fun ActiveCardDetails(
                     Box(
                         modifier = Modifier
                             .size(40.dp)
-                            .background(themeColor, CircleShape),
+                            .background(themeColor, CircleShape)
+                            .clip(CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = null,
-                            tint = Color.Black
-                        )
+                        if (!card.ownerProfilePic.isNullOrEmpty()) {
+                            coil.compose.AsyncImage(
+                                model = card.ownerProfilePic,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = null,
+                                tint = Color.Black
+                            )
+                        }
                     }
 
                     // Username
                     Text(
-                        text = "@${card.ownerEmail?.substringBefore("@") ?: "artist"}",
+                        text = card.ownerName ?: "@${card.ownerEmail?.substringBefore("@") ?: "artist"}",
                         color = colors.textPrimary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
@@ -975,8 +1016,8 @@ fun ActiveCardDetails(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.padding(start = 4.dp)
                 ) {
-                    // Show collaborator accounts stacking upward
-                    for (i in card.collaboratorCount downTo 1) {
+                    // Show actual collaborator accounts stacking upward
+                    card.collaborators.forEach { collaborator ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -992,7 +1033,7 @@ fun ActiveCardDetails(
                                 modifier = Modifier
                                     .size(32.dp)
                                     .background(themeColor, CircleShape),
-                                contentAlignment = Alignment.Center
+                                    contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     Icons.Default.Person,
@@ -1002,7 +1043,7 @@ fun ActiveCardDetails(
                                 )
                             }
                             Text(
-                                text = "@collaborator$i",
+                                text = collaborator.name ?: collaborator.email.substringBefore("@"),
                                 color = colors.textPrimary,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium
@@ -1070,7 +1111,8 @@ fun SearchBarAndTags(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     selectedTag: String?,
-    onTagSelected: (String?) -> Unit
+    onTagSelected: (String?) -> Unit,
+    tags: List<String>
 ) {
     val colors = LocalBestBeforeColors.current
     Column {
@@ -1100,7 +1142,6 @@ fun SearchBarAndTags(
             )
         }
 
-        val tags = listOf("trip", "music", "science", "party", "family")
         LazyRow(
             modifier = Modifier
                 .fillMaxWidth()

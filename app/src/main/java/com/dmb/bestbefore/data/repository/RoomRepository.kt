@@ -61,6 +61,7 @@ class RoomRepository {
         isTimeCapsule: Boolean,
         theme: String,
         collaborators: List<String> = emptyList(),
+        viewers: List<String> = emptyList(),
         scheduledClosureIso: String? = null,
         unlockDateIso: String? = null,
         rollingExpiryDays: Int = 0,
@@ -78,6 +79,7 @@ class RoomRepository {
                 capsuleDurationMinutes = minutes,
                 theme = theme,
                 collaborators = collaborators,
+                viewers = viewers,
                 unlockDate = unlockDateIso,
                 expirationDate = scheduledClosureIso,
                 rollingExpiryDays = rollingExpiryDays,
@@ -288,6 +290,19 @@ class RoomRepository {
             val response = api.createHandshakeInvite(freshBearer(), roomId, body)
             if (response.isSuccessful && response.body() != null) Result.success(response.body()!!)
             else Result.failure(Exception("Failed to create handshake invite: ${response.code()}"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun searchUsers(query: String): Result<List<UserDto>> {
+        return try {
+            val response = api.searchUsers(freshBearer(), query)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("Failed to search users: ${response.code()}"))
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }

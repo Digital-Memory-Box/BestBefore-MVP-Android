@@ -98,7 +98,7 @@ fun AsyncBase64Image(
 @Composable
 fun RoomDetailScreen(
     viewModel: ProfileViewModel,
-    multiplePhotoPickerLauncher: androidx.activity.result.ActivityResultLauncher<androidx.activity.result.PickVisualMediaRequest>,
+    multiplePhotoPickerLauncher: androidx.activity.result.ActivityResultLauncher<String>,
     filePickerLauncher: androidx.activity.result.ActivityResultLauncher<Array<String>>
 ) {
     val room by viewModel.selectedRoom.collectAsState()
@@ -267,74 +267,89 @@ fun RoomDetailScreen(
                 val currentTime = System.currentTimeMillis()
                 val isLocked = room!!.unlockTime > currentTime
                 val isRoomClosed = room!!.scheduledClosureTime > 0L && currentTime >= room!!.scheduledClosureTime
+                val isViewer = room!!.isViewerOnly
 
-                // Grid of Actions
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    userScrollEnabled = false,
-                    modifier = Modifier.height(330.dp)
-                ) {
-                    // Item 1: Add Photo (Blue)
-                    item { MemoryActionCard(Icons.Default.Image, "Add Photo", if (isRoomClosed) Color.Gray else Color(0xFF007AFF)) {
-                         if (isRoomClosed) android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
-                         else multiplePhotoPickerLauncher.launch(
-                             androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                         )
-                     }}
-                    // Item 2: Write Note (Purple)
-                    item { MemoryActionCard(Icons.Default.Edit, "Write Note", if (isRoomClosed) Color.Gray else Color(0xFFAF52DE)) {
-                        if (isRoomClosed) android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
-                        else showWriteNoteDialog = true
-                    }}
-                    // Item 3: Add Video (Orange)
-                    item { MemoryActionCard(Icons.Default.Videocam, "Add Video", if (isRoomClosed) Color.Gray else Color(0xFFFF9500)) {
-                        if (isRoomClosed) android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
-                        else multiplePhotoPickerLauncher.launch(
-                            androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
-                        )
-                    }}
-                    // Item 4: Add Music (Red)
-                    item { MemoryActionCard(Icons.Default.MusicNote, "Add Music", if (isRoomClosed) Color.Gray else Color(0xFFFF3B30)) {
-                        if (isRoomClosed) android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
-                        else filePickerLauncher.launch(arrayOf("audio/*"))
-                    }}
-                    // Item 5: Record Audio (Pink/Red)
-                    item { 
-                        val label = if (isRecording) "Stop Recording" else "Record Audio"
-                        val icon = if (isRecording) Icons.Default.Stop else Icons.Default.Mic
-                        MemoryActionCard(icon, label, if (isRoomClosed) Color.Gray else Color(0xFFFF2D55)) {
-                            if (isRoomClosed) {
-                                android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
-                            } else {
-                                if (isRecording) {
-                                    viewModel.stopAudioRecordingAndUpload(context)
+                if (isViewer) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF1E88E5).copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                            .border(1.dp, Color(0xFF1E88E5), RoundedCornerShape(12.dp))
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Explore, contentDescription = "Explorer Mode", tint = Color(0xFF1E88E5))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Explorer Mode (Viewer)", color = Color(0xFF1E88E5), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(32.dp))
+                } else {
+                    // Grid of Actions
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        userScrollEnabled = false,
+                        modifier = Modifier.height(330.dp)
+                    ) {
+                        // Item 1: Add Photo (Blue)
+                        item { MemoryActionCard(Icons.Default.Image, "Add Photo", if (isRoomClosed) Color.Gray else Color(0xFF007AFF)) {
+                             if (isRoomClosed) android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
+                             else multiplePhotoPickerLauncher.launch("image/*")
+                         }}
+                        // Item 2: Write Note (Purple)
+                        item { MemoryActionCard(Icons.Default.Edit, "Write Note", if (isRoomClosed) Color.Gray else Color(0xFFAF52DE)) {
+                            if (isRoomClosed) android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
+                            else showWriteNoteDialog = true
+                        }}
+                        // Item 3: Add Video (Orange)
+                        item { MemoryActionCard(Icons.Default.Videocam, "Add Video", if (isRoomClosed) Color.Gray else Color(0xFFFF9500)) {
+                            if (isRoomClosed) android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
+                            else multiplePhotoPickerLauncher.launch("video/*")
+                        }}
+                        // Item 4: Add Music (Red)
+                        item { MemoryActionCard(Icons.Default.MusicNote, "Add Music", if (isRoomClosed) Color.Gray else Color(0xFFFF3B30)) {
+                            if (isRoomClosed) android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
+                            else filePickerLauncher.launch(arrayOf("audio/*"))
+                        }}
+                        // Item 5: Record Audio (Pink/Red)
+                        item { 
+                            val label = if (isRecording) "Stop Recording" else "Record Audio"
+                            val icon = if (isRecording) Icons.Default.Stop else Icons.Default.Mic
+                            MemoryActionCard(icon, label, if (isRoomClosed) Color.Gray else Color(0xFFFF2D55)) {
+                                if (isRoomClosed) {
+                                    android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
                                 } else {
-                                    val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                                    if (hasPermission) {
-                                        viewModel.startAudioRecording(context)
+                                    if (isRecording) {
+                                        viewModel.stopAudioRecordingAndUpload(context)
                                     } else {
-                                        recordAudioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                                        val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                                        if (hasPermission) {
+                                            viewModel.startAudioRecording(context)
+                                        } else {
+                                            recordAudioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                    // Item 6: View All (Green) — shown when room is unlocked
-                    item {
-                        val isLockedLocal = System.currentTimeMillis() < room!!.unlockTime
-                        if (!isLockedLocal) {
-                            MemoryActionCard(Icons.Default.FolderOpen, "View All", Color(0xFF34C759)) {
-                                showAllMediaGrid = true
+                        // Item 6: View All (Green) — shown when room is unlocked
+                        item {
+                            val isLockedLocal = System.currentTimeMillis() < room!!.unlockTime
+                            if (!isLockedLocal) {
+                                MemoryActionCard(Icons.Default.FolderOpen, "View All", Color(0xFF34C759)) {
+                                    showAllMediaGrid = true
+                                }
+                            } else {
+                                Box(modifier = Modifier.fillMaxWidth()) {} // empty placeholder to keep grid layout
                             }
-                        } else {
-                            Box(modifier = Modifier.fillMaxWidth()) {} // empty placeholder to keep grid layout
                         }
                     }
+                    
+                    Spacer(modifier = Modifier.height(32.dp))
                 }
-                
-                Spacer(modifier = Modifier.height(32.dp))
                 
                 // Recent Drops Section
                 Text("Recent Drops", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -385,8 +400,17 @@ fun RoomDetailScreen(
                     Spacer(modifier = Modifier.height(24.dp))
                 }
                 
-                // Display Media Strategy
-                val displayMedia = if (isLocked || isClosed) currentRoomMedia.takeLast(2) else currentRoomMedia
+                // Display Media Strategy:
+                // Viewers can only see max 5 drops if locked.
+                // If it's closed/locked, default was previously takeLast(2) but now updated to 5.
+                // If room is OPEN, viewers get see all. 
+                val displayMedia = if (isLocked) {
+                    currentRoomMedia.takeLast(5)
+                } else if (isClosed) {
+                    currentRoomMedia.takeLast(5)
+                } else {
+                    currentRoomMedia
+                }
                 
                 if (displayMedia.isEmpty()) {
                     Box(

@@ -11,6 +11,7 @@ object RetrofitClient {
     // Production Backend on Railway
     internal const val BASE_URL = "https://bestbefore.up.railway.app/" 
 
+
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY // Increase logging to see payloads
     }

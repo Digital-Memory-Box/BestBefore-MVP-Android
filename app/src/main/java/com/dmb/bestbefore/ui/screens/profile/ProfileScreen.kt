@@ -215,7 +215,7 @@ fun ProfileScreen(
 
     // Media Picker Launchers
     val multiplePhotoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia()
+        contract = ActivityResultContracts.GetMultipleContents()
     ) { uris ->
         if (uris.isNotEmpty()) {
             viewModel.updateSelectedMedia(uris)
@@ -225,13 +225,12 @@ fun ProfileScreen(
     
     // Camera capture launcher
     var cameraImageUri by remember { mutableStateOf<Uri?>(null) }
-    rememberLauncherForActivityResult(
+    val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success && cameraImageUri != null) {
             viewModel.setCapturedImage(cameraImageUri!!)
-            viewModel.acceptCapturedImage()
-            viewModel.uploadMedia(context)
+            viewModel.goToStep(ProfileStep.CAMERA_ACTION)
         }
     }
     
@@ -350,6 +349,16 @@ fun ProfileScreen(
                 onCreateRoomClick = {
                     viewModel.startCreateRoom(RoomCreationSource.HALLWAY)
                 },
+                onCameraClick = {
+                    val file = java.io.File.createTempFile("camera_image_", ".jpg", context.cacheDir)
+                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file
+                    )
+                    cameraImageUri = uri
+                    cameraLauncher.launch(uri)
+                },
                 viewModel = hallwayViewModel
             )
         }
@@ -431,9 +440,99 @@ fun ProfileScreen(
                         filePickerLauncher = filePickerLauncher
                     )
                     ProfileStep.EDIT_ROOM -> EditRoomScreen(viewModel)
+                    ProfileStep.CAMERA_ACTION -> CameraActionSheet(viewModel)
                     else -> {}
                 }
             }
         }
+    }
+}
+
+@Composable
+fun CameraActionSheet(viewModel: ProfileViewModel) {
+    val imageUri by viewModel.capturedImage.collectAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        if (imageUri != null) {
+            coil.compose.AsyncImage(
+                model = imageUri,
+                contentDescription = "Captured Image",
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth(0.85f)
+                    .aspectRatio(3f / 4f)
+                    .clip(RoundedCornerShape(24.dp))
+                    .border(2.dp, Color(0xFF1A7AF8), RoundedCornerShape(24.dp))
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.85f)
+                    .aspectRatio(3f / 4f)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color.DarkGray),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No Image Captured", color = Color.White)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(40.dp))
+
+        // Actions
+        // 1. Create a New Room
+        Row(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .background(Color(0xFF1A7AF8), RoundedCornerShape(16.dp))
+                .clickable {
+                    viewModel.goToStep(ProfileStep.ROOM_NAME)
+                    // The image is already staged in the viewModel
+                }
+                .padding(vertical = 16.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Create a New Room", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 2. Add to Existing Room
+        Row(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .background(Color(0xFF2C2C2E), RoundedCornerShape(16.dp))
+                .clickable {
+                    // Quick add to the current room if available, otherwise just dismiss or tell them to select one
+                    viewModel.uploadMedia(androidx.compose.ui.platform.LocalContext.current)
+                    viewModel.closeOverlay()
+                }
+                .padding(vertical = 16.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.Upload, contentDescription = null, tint = Color.White)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Upload to Current Room", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Text(
+            text = "Cancel",
+            color = Color(0xFF8E8E93),
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.clickable { viewModel.closeOverlay() }
+        )
     }
 }

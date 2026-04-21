@@ -41,13 +41,35 @@ fun AppNavigation() {
         composable(Routes.OPENING) {
             val context = androidx.compose.ui.platform.LocalContext.current
             
-            // Check for potential auto-login
+            // Auto-login: only if Firebase user exists, email is verified, AND backend sync completed
             LaunchedEffect(Unit) {
                 val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
-                if (sessionManager.isLoggedIn()) {
-                    // Auto-login active: skip to profile
-                    navController.navigate(Routes.PROFILE) {
-                        popUpTo(Routes.OPENING) { inclusive = true }
+                val firebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                val hasBackendSession = sessionManager.getUserId() != null
+
+                when {
+                    firebaseUser == null -> {
+                        // No Firebase session — stay on opening screen
+                    }
+                    !firebaseUser.isEmailVerified -> {
+                        // Firebase account exists but email not verified — clear & go to login
+                        sessionManager.clearSession()
+                        navController.navigate(Routes.LOGIN) {
+                            popUpTo(Routes.OPENING) { inclusive = true }
+                        }
+                    }
+                    hasBackendSession -> {
+                        // Fully authenticated — auto-login
+                        navController.navigate(Routes.PROFILE) {
+                            popUpTo(Routes.OPENING) { inclusive = true }
+                        }
+                    }
+                    else -> {
+                        // Firebase verified but no backend session — clear & go to login
+                        sessionManager.clearSession()
+                        navController.navigate(Routes.LOGIN) {
+                            popUpTo(Routes.OPENING) { inclusive = true }
+                        }
                     }
                 }
             }
@@ -135,7 +157,7 @@ fun AppNavigation() {
             val context = androidx.compose.ui.platform.LocalContext.current
             
             val multiplePhotoPickerLauncher = rememberLauncherForActivityResult(
-                contract = ActivityResultContracts.PickMultipleVisualMedia()
+                contract = ActivityResultContracts.GetMultipleContents()
             ) { uris ->
                 if (uris.isNotEmpty()) {
                     profileViewModel.updateSelectedMedia(uris)

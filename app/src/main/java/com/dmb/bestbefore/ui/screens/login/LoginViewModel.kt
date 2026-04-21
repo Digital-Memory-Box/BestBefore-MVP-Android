@@ -65,24 +65,33 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
      * 3. POST /auth/sync to register/fetch MongoDB user
      * 4. Cache session locally
      */
-    fun login(emailParam: String, passwordParam: String, onSuccess: () -> Unit) {
+    fun login(emailParam: String, passwordParam: String, loginMode: LoginMode, onSuccess: () -> Unit) {
         if (emailParam.isEmpty() || passwordParam.isEmpty()) {
             _errorMessage.value = "Please enter both email and password"
             return
         }
 
-        _email.value = emailParam
+        _email.value = emailParam.lowercase()
         _password.value = passwordParam
 
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
 
-            val result = repository.login(emailParam, passwordParam)
+            val result = repository.login(_email.value, passwordParam)
 
             _isLoading.value = false
 
             result.onSuccess { user ->
+                val type = user.userType ?: "normal"
+                if (loginMode == LoginMode.ARTISTS && type != "artist") {
+                    _errorMessage.value = "This login is for artist accounts only."
+                    return@onSuccess
+                } else if (loginMode == LoginMode.EVERYONE && type == "artist") {
+                    _errorMessage.value = "Artist accounts must use the Artist login screen."
+                    return@onSuccess
+                }
+                
                 sessionManager.saveUser(user.id, user.name ?: "User", user.email)
                 onSuccess()
             }.onFailure { e ->
@@ -98,6 +107,6 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun attemptLogin() {
-        login(_email.value, _password.value) {}
+        login(_email.value, _password.value, LoginMode.EVERYONE) {}
     }
 }

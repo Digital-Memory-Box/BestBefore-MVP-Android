@@ -169,6 +169,7 @@ fun LoginScreen(
                                     viewModel.login(
                                         email.trim(),
                                         password.trim(),
+                                        loginMode,
                                         onLoginSuccess
                                     )
                                 }

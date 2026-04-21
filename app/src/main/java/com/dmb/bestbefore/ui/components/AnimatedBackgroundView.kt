@@ -69,11 +69,17 @@ fun AnimatedBackgroundView(theme: String = "default") {
         }
     }
 
+    // Match the selected theme from CreateRoomWizard to its exact color
     val centerGlowColors = when(theme.lowercase()) {
+        "ocean" -> listOf(Color(0xFF00C6A2).copy(alpha = 0.5f), Color(0xFF00C6A2).copy(alpha = 0.2f), Color.Transparent)
+        "sunset" -> listOf(Color(0xFFE8820C).copy(alpha = 0.5f), Color(0xFFE8820C).copy(alpha = 0.2f), Color.Transparent)
+        "forest" -> listOf(Color(0xFF22A84A).copy(alpha = 0.5f), Color(0xFF22A84A).copy(alpha = 0.2f), Color.Transparent)
+        "cyberpunk" -> listOf(Color(0xFFAA3FD6).copy(alpha = 0.5f), Color(0xFFAA3FD6).copy(alpha = 0.2f), Color.Transparent)
+        "default" -> listOf(Color(0xFF1A7AF8).copy(alpha = 0.5f), Color(0xFF1A7AF8).copy(alpha = 0.2f), Color.Transparent)
         "artist", "vibrant" -> listOf(Color(0.9f, 0.1f, 0.5f, 0.5f), Color(0.5f, 0.1f, 0.9f, 0.2f), Color.Transparent)
-        "cyberpunk", "midnight" -> listOf(Color(0.8f, 0.0f, 0.8f, 0.4f), Color(0.0f, 0.8f, 0.9f, 0.2f), Color.Transparent)
+        "midnight" -> listOf(Color(0.8f, 0.0f, 0.8f, 0.4f), Color(0.0f, 0.8f, 0.9f, 0.2f), Color.Transparent)
         "glass" -> listOf(Color.White.copy(alpha = 0.15f), Color.White.copy(alpha = 0.05f), Color.Transparent)
-        else -> listOf(Color(0.05f, 0.35f, 0.95f, 0.4f), Color(0.0f, 0.85f, 0.45f, 0.2f), Color.Transparent)
+        else -> listOf(Color(0xFF1A7AF8).copy(alpha = 0.5f), Color(0xFF1A7AF8).copy(alpha = 0.2f), Color.Transparent)
     }
 
     val orb1Colors = if (isArtistTheme) listOf(Color(0.5f, 0.2f, 1.0f), Color(0.2f, 0.8f, 1.0f)) else listOf(Color(0.95f, 0.14f, 0.91f), Color(1.0f, 0.6f, 0.2f))

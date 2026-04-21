@@ -14,7 +14,10 @@ data class UserDto(
     val theme: String = "Default",
     val accentColor: String = "#007AFF",
     val profileMusic: String? = null,
-    val createdAt: String? = null
+    val createdAt: String? = null,
+    val userType: String? = "normal",
+    val bio: String? = null,
+    val profileImageUrl: String? = null
 )
 
 data class UpdateMeRequest(
@@ -23,7 +26,10 @@ data class UpdateMeRequest(
     val accentColor: String? = null,
     val profileMusic: String? = null,
     val email: String? = null,
-    val fcmToken: String? = null
+    val fcmToken: String? = null,
+    val userType: String? = null,
+    val bio: String? = null,
+    val profileImageUrl: String? = null
 )
 
 // Room Models — field names aligned to backend roomController.js
@@ -36,6 +42,7 @@ data class CreateRoomRequest(
     val capsuleDurationMinutes: Int,
     val theme: String = "default",
     val collaborators: List<String> = emptyList(),
+    val viewers: List<String> = emptyList(),
     val unlockDate: String? = null,
     val expirationDate: String? = null,
     val rollingExpiryDays: Int = 0,
@@ -52,19 +59,25 @@ data class RoomDto(
     @SerializedName("_id") val id: String,
     val name: String,
     val ownerId: String,
+    val ownerName: String? = null,
     val ownerEmail: String?,
+    val ownerUserType: String? = null,
+    val ownerProfilePic: String? = null,
     val createdAt: String?,
     val photos: List<String>? = null,
     val capsuleDurationDays: Int = 0,
     val capsuleDurationHours: Int = 0,
     val capsuleDurationMinutes: Int = 0,
     val isPrivate: Boolean = false,
+    val isPublic: Boolean? = null,
     val isTimeCapsule: Boolean = false,
     val theme: String? = null,
     val unlockDate: String? = null,
     val expirationDate: String? = null,
-    val collaborators: List<Any>? = null,
+    val collaborators: List<com.google.gson.JsonElement>? = null,
     val pendingCollaborators: List<String>? = null,
+    val viewers: List<com.google.gson.JsonElement>? = null,
+    val pendingViewers: List<String>? = null,
     val rollingExpiryDays: Int = 0,
     val description: String? = null,
     val tags: List<String>? = null,

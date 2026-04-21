@@ -49,12 +49,17 @@ class ProfileViewModel : ViewModel() {
     private val _createdRooms = MutableStateFlow<List<TimeCapsuleRoom>>(emptyList())
     val createdRooms: StateFlow<List<TimeCapsuleRoom>> = _createdRooms.asStateFlow()
     
-    // Stats State
     private val _totalRooms = MutableStateFlow(0)
     val totalRooms: StateFlow<Int> = _totalRooms.asStateFlow()
     
     private val _totalMemories = MutableStateFlow(0)
     val totalMemories: StateFlow<Int> = _totalMemories.asStateFlow()
+    
+    private val _roomingCount = MutableStateFlow(0)
+    val roomingCount: StateFlow<Int> = _roomingCount.asStateFlow()
+
+    private val _roomersCount = MutableStateFlow(0)
+    val roomersCount: StateFlow<Int> = _roomersCount.asStateFlow()
     
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -89,6 +94,9 @@ class ProfileViewModel : ViewModel() {
     
     private val _userName = MutableStateFlow("User") 
     val userName: StateFlow<String> = _userName.asStateFlow()
+
+    private val _bio = MutableStateFlow("Digital artist focusing on surreal landscapes and vibrant color theory.")
+    val bio: StateFlow<String> = _bio.asStateFlow()
 
     private val _showOnlySaved = MutableStateFlow(false)
     val showOnlySaved: StateFlow<Boolean> = _showOnlySaved.asStateFlow()
@@ -191,6 +199,9 @@ class ProfileViewModel : ViewModel() {
     private val _roomTags = MutableStateFlow<List<String>>(emptyList())
     val roomTags: StateFlow<List<String>> = _roomTags.asStateFlow()
 
+    private val _availableTags = MutableStateFlow<List<String>>(emptyList())
+    val availableTags: StateFlow<List<String>> = _availableTags.asStateFlow()
+
     private val _roomDescription = MutableStateFlow("")
     val roomDescription: StateFlow<String> = _roomDescription.asStateFlow()
 
@@ -233,8 +244,14 @@ class ProfileViewModel : ViewModel() {
     private val _scheduledClosureMinute = MutableStateFlow(59)
     val scheduledClosureMinute: StateFlow<Int> = _scheduledClosureMinute.asStateFlow()
 
-    private val _inviteEmails = MutableStateFlow<List<String>>(emptyList())
-    val inviteEmails: StateFlow<List<String>> = _inviteEmails.asStateFlow()
+    data class InvitedUser(
+        val email: String,
+        val name: String? = null,
+        val role: String = "collaborator" // "collaborator" or "viewer"
+    )
+
+    private val _invitedUsers = MutableStateFlow<List<InvitedUser>>(emptyList())
+    val invitedUsers: StateFlow<List<InvitedUser>> = _invitedUsers.asStateFlow()
 
     private val _isPublic = MutableStateFlow(true)
     val isPublic: StateFlow<Boolean> = _isPublic.asStateFlow()
@@ -369,6 +386,27 @@ class ProfileViewModel : ViewModel() {
         _profileMusic.value = if (!savedMusic.isNullOrEmpty()) savedMusic else "None"
         _profileImageUri.value = savedProfilePhotoUri?.let { Uri.parse(it) }
 
+        viewModelScope.launch {
+            try {
+                val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
+                val meResult = authRepo.getMe()
+                meResult.onSuccess { userDto ->
+                    if (!userDto.name.isNullOrEmpty()) _userName.value = userDto.name
+                    if (!userDto.bio.isNullOrEmpty()) {
+                        _bio.value = userDto.bio
+                    } else {
+                        // User has no bio yet, default
+                        _bio.value = "Digital artist focusing on surreal landscapes and vibrant color theory."
+                    }
+                    if (!userDto.profileImageUrl.isNullOrEmpty()) {
+                        _profileImageUri.value = Uri.parse(userDto.profileImageUrl)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ProfileViewModel", "Failed to fetch user profile", e)
+            }
+        }
+
         // RoomRepository now fetches its own fresh Firebase token per request.
         // Just launch the load — no token management needed here.
         viewModelScope.launch {
@@ -378,11 +416,34 @@ class ProfileViewModel : ViewModel() {
                 result.onSuccess { apiRooms ->
                     Log.d("ProfileViewModel", "Fetched ${apiRooms.size} rooms from backend")
                     val currentUserEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
-                    val myRooms = apiRooms.filter { room ->
-                        room.ownerEmail == currentUserEmail ||
-                        room.collaborators?.any { it.toString().contains(currentUserEmail) } == true
+                    
+                    val myCreatedRoomsDtos = apiRooms.filter { room ->
+                        room.ownerEmail?.equals(currentUserEmail, ignoreCase = true) == true
                     }
-                    allRooms.addAll(mapDtosToRooms(myRooms, isSaved = false))
+                    
+                    val myJoinedRoomsDtos = apiRooms.filter { room ->
+                        room.ownerEmail?.equals(currentUserEmail, ignoreCase = true) != true &&
+                        room.collaborators?.any { element ->
+                            if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
+                                element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
+                            } else false
+                        } == true
+                    }
+                    
+                    val uniqueRoomers = mutableSetOf<String>()
+                    myCreatedRoomsDtos.forEach { room ->
+                        room.collaborators?.forEach { element ->
+                            if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
+                                uniqueRoomers.add(element.asJsonObject.get("email").asString)
+                            }
+                        }
+                    }
+                    
+                    _roomingCount.value = myJoinedRoomsDtos.size
+                    _roomersCount.value = uniqueRoomers.size
+                    
+                    // The UI requirement stipulates "My Rooms" strictly lists created rooms.
+                    allRooms.addAll(mapDtosToRooms(myCreatedRoomsDtos, isSaved = false))
                 }
                 result.onFailure { e ->
                     Log.e("ProfileViewModel", "getRooms failed: ${e.message}")
@@ -417,6 +478,48 @@ class ProfileViewModel : ViewModel() {
                 _roomMedia.value = mediaMap
                 _totalMemories.value = totalLoadedMemories
                 refreshRoomLists(allRooms)
+
+                // Fetch tags
+                try {
+                    val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
+                    val token = authRepo.getFirebaseIdToken(false)
+                    if (token != null) {
+                        val tagsResponse = com.dmb.bestbefore.data.api.RetrofitClient.apiService.getTags("Bearer $token")
+                        if (tagsResponse.isSuccessful) {
+                            val bodyElement = tagsResponse.body()
+                            val parsedTags = mutableListOf<String>()
+                            if (bodyElement != null) {
+                                if (bodyElement.isJsonArray) {
+                                    bodyElement.asJsonArray.forEach { 
+                                        if (it.isJsonObject) {
+                                            val obj = it.asJsonObject
+                                            val tag = obj.get("name")?.asString ?: obj.get("tag")?.asString
+                                            if (tag != null) parsedTags.add(tag)
+                                        } else if (it.isJsonPrimitive) {
+                                            parsedTags.add(it.asString)
+                                        }
+                                    }
+                                } else if (bodyElement.isJsonObject) {
+                                    val obj = bodyElement.asJsonObject
+                                    // if it's { "tags": [...] }
+                                    if (obj.has("tags") && obj.get("tags").isJsonArray) {
+                                        obj.get("tags").asJsonArray.forEach { 
+                                            if (it.isJsonPrimitive) parsedTags.add(it.asString)
+                                            else if (it.isJsonObject) {
+                                                val t = it.asJsonObject.get("name")?.asString ?: it.asJsonObject.get("tag")?.asString
+                                                if (t != null) parsedTags.add(t)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            _availableTags.value = parsedTags
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("ProfileViewModel", "Failed to fetch tags", e)
+                }
+
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "initDatabase failed", e)
             }
@@ -424,6 +527,7 @@ class ProfileViewModel : ViewModel() {
     }
 
     private fun mapDtosToRooms(dtos: List<com.dmb.bestbefore.data.api.models.RoomDto>, isSaved: Boolean): List<TimeCapsuleRoom> {
+        val currentUserEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
         return dtos.map { dto ->
             val createdMs = parseCreatedAt(dto.createdAt)
             val unlock = createdMs + (dto.capsuleDurationDays * 24 * 3600 * 1000L) +
@@ -436,6 +540,12 @@ class ProfileViewModel : ViewModel() {
                 365 -> "1 year"
                 else -> "Never"
             }
+            val isViewerOnly = dto.viewers?.any { element ->
+                if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
+                    element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
+                } else false
+            } == true
+
             TimeCapsuleRoom(
                 id = dto.id,
                 roomName = dto.name,
@@ -456,7 +566,8 @@ class ProfileViewModel : ViewModel() {
                 tags = dto.tags ?: emptyList(),
                 description = dto.description,
                 music = dto.backgroundMusic ?: "None",
-                rollingExpiration = rollingString
+                rollingExpiration = rollingString,
+                isViewerOnly = isViewerOnly
             )
         }
     }
@@ -600,7 +711,8 @@ class ProfileViewModel : ViewModel() {
                  newRoom.isPublic,
                  newRoom.isCollaboration,
                  newRoom.theme,
-                 collaborators = _inviteEmails.value,
+                 collaborators = _invitedUsers.value.filter { it.role == "collaborator" }.map { it.email },
+                 viewers = _invitedUsers.value.filter { it.role == "viewer" }.map { it.email },
                  scheduledClosureIso = closureIso,
                  unlockDateIso = unlockIso,
                  rollingExpiryDays = rollingDays,
@@ -1076,7 +1188,7 @@ class ProfileViewModel : ViewModel() {
         _selectedMusic.value = "None"
         _rollingExpiration.value = "Never"
         _scheduledClosureEnabled.value = false
-        _inviteEmails.value = emptyList()
+        _invitedUsers.value = emptyList()
         _targetTime.value = System.currentTimeMillis() + 86400000
     }
 
@@ -1197,13 +1309,37 @@ class ProfileViewModel : ViewModel() {
     fun updateSelectedTheme(theme: String) { _roomAtmosphereTheme.value = theme }
     fun updateSelectedMusic(music: String) { _selectedMusic.value = music }
     fun updateRollingExpiration(option: String) { _rollingExpiration.value = option }
-    fun addInviteEmail(email: String) {
-        if (email.isNotBlank() && !_inviteEmails.value.contains(email)) {
-            _inviteEmails.value = _inviteEmails.value + email
+    fun addInvitedUser(user: InvitedUser) {
+        if (!_invitedUsers.value.any { it.email == user.email }) {
+            _invitedUsers.value = _invitedUsers.value + user
         }
     }
-    fun removeInviteEmail(email: String) {
-        _inviteEmails.value = _inviteEmails.value.filter { it != email }
+    fun removeInvitedUser(email: String) {
+        _invitedUsers.value = _invitedUsers.value.filter { it.email != email }
+    }
+    fun updateInvitedUserRole(email: String, role: String) {
+        _invitedUsers.value = _invitedUsers.value.map {
+            if (it.email == email) it.copy(role = role) else it
+        }
+    }
+
+    // Live search state
+    private val _userSearchResults = MutableStateFlow<List<UserDto>>(emptyList())
+    val userSearchResults: StateFlow<List<UserDto>> = _userSearchResults.asStateFlow()
+
+    fun searchUsers(query: String) {
+        if (query.isBlank()) {
+            _userSearchResults.value = emptyList()
+            return
+        }
+        viewModelScope.launch {
+            val result = roomRepo.searchUsers(query)
+            if (result.isSuccess) {
+                _userSearchResults.value = result.getOrNull() ?: emptyList()
+            } else {
+                _userSearchResults.value = emptyList()
+            }
+        }
     }
     
     fun selectRoomForEditing(room: TimeCapsuleRoom) {
@@ -1399,11 +1535,16 @@ class ProfileViewModel : ViewModel() {
     }
 
     // ========== PROFILE CUSTOMIZATION ====================
+
     fun updateUserName(name: String) {
         _userName.value = name
     }
 
-    fun savePublicName(context: Context) {
+    fun updateBio(newBio: String) {
+        _bio.value = newBio
+    }
+
+    fun saveCustomization(context: Context) {
         viewModelScope.launch {
             try {
                 _isUpdatingCredential.value = true
@@ -1411,12 +1552,16 @@ class ProfileViewModel : ViewModel() {
                 val firebaseToken = authRepo.getFirebaseIdToken(false)
                 if (firebaseToken != null) {
                     val updateResult = authRepo.updateMe(
-                        com.dmb.bestbefore.data.api.models.UpdateMeRequest(name = _userName.value)
+                        com.dmb.bestbefore.data.api.models.UpdateMeRequest(
+                            name = _userName.value,
+                            bio = _bio.value,
+                            profileImageUrl = _profileImageUri.value?.toString()
+                        )
                     )
                     if (updateResult.isSuccess) {
-                        Toast.makeText(context, "Public Name updated!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Profile updated!", Toast.LENGTH_SHORT).show()
                     } else {
-                        Toast.makeText(context, "Failed to string name", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Failed to update profile", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
@@ -1603,6 +1748,7 @@ enum class ProfileStep {
     EDIT_ROOM,
     CREATE_HALLWAY,
     CAMERA,
+    CAMERA_ACTION,
     TIME_CAPSULE_LIST,
     NO_OP,
     SAVED_ROOMS_LIST,

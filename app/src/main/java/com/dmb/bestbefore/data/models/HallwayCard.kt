@@ -10,7 +10,11 @@ data class HallwayCard(
     val themeColorHex: String? = null,
     val tags: List<String> = emptyList(),
     val ownerEmail: String? = null,
+    val ownerName: String? = null,
+    val ownerUserType: String? = null,
+    val ownerProfilePic: String? = null,
     val collaboratorCount: Int = 0,
+    val collaborators: List<com.dmb.bestbefore.data.api.models.UserDto> = emptyList(),
     val location: String? = null,
     val backgroundMusic: String? = null
 )

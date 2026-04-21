@@ -26,37 +26,23 @@ import com.dmb.bestbefore.ui.theme.ThemeState
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 
-/**
- * True oval shape (ellipse) to avoid the flat vertical side produced by rounded rectangles.
- */
-private object OrbOvalShape : Shape {
-    override fun createOutline(
-        size: androidx.compose.ui.geometry.Size,
-        layoutDirection: androidx.compose.ui.unit.LayoutDirection,
-        density: androidx.compose.ui.unit.Density
-    ): Outline = Outline.Generic(
-        Path().apply {
-            addOval(Rect(0f, 0f, size.width, size.height))
-        }
-    )
-}
+import androidx.compose.foundation.shape.CircleShape
 
 /**
- * Shared geometry contract for OrbMenu placement.
- * `visibleInset(width)` returns the horizontal space the orb occupies inside the screen.
+ * Shared geometry contract for OrbMenu placement ensuring a perfect half circle.
  */
 object OrbMenuLayout {
-    private const val REVEAL_FRACTION = 0.55f
-    private const val HEIGHT_RATIO = 0.38f     // Ekranın %38'i kadar yükseklik
-    private const val MIN_HEIGHT = 200f
-    private const val MAX_HEIGHT = 380f
+    private const val REVEAL_FRACTION = 0.5f     // Exactly half
+    private const val DIAMETER_RATIO = 0.55f     // 0.55 ratio
+    private const val MIN_DIAMETER = 600f
+    private const val MAX_DIAMETER = 1200f
 
-    fun horizontalOffset(width: Dp): Dp = width * REVEAL_FRACTION
-    fun visibleInset(width: Dp): Dp = width - horizontalOffset(width)
+    fun horizontalOffset(diameter: Dp): Dp = diameter * REVEAL_FRACTION
+    fun visibleInset(diameter: Dp): Dp = diameter - horizontalOffset(diameter)
 
-    fun computeHeight(screenHeightDp: Float): Dp {
-        val raw = screenHeightDp * HEIGHT_RATIO
-        return raw.coerceIn(MIN_HEIGHT, MAX_HEIGHT).dp
+    fun computeDiameter(screenHeightDp: Float): Dp {
+        val raw = screenHeightDp * DIAMETER_RATIO
+        return raw.coerceIn(MIN_DIAMETER, MAX_DIAMETER).dp
     }
 }
 
@@ -67,16 +53,14 @@ object OrbMenuLayout {
 @Composable
 fun OrbMenu(
     modifier: Modifier = Modifier,
-    width: Dp = 160.dp,
-    height: Dp = OrbMenuLayout.computeHeight(
+    diameter: Dp = OrbMenuLayout.computeDiameter(
         LocalConfiguration.current.screenHeightDp.toFloat()
     ),
     primaryColor: Color = Color(0xFF0D59F2),
     secondaryColor: Color = Color(0xFF00D972),
-    onSearchClick: () -> Unit = {},
-    onChatClick: () -> Unit = {},
     onAddClick: () -> Unit = {},
-    onProfileClick: () -> Unit = {}
+    onProfileClick: () -> Unit = {},
+    onCameraClick: () -> Unit = {}
 ) {
     val appTheme = ThemeState.currentTheme
     val accent = ThemeState.currentAccent
@@ -98,101 +82,57 @@ fun OrbMenu(
 
     Box(
         modifier = modifier
-            .width(width)
-            .height(height)
-            .offset(x = OrbMenuLayout.horizontalOffset(width))
-            .clip(OrbOvalShape)
-            .background(
-                brush = if (isGlass) {
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.18f),
-                            accent.copy(alpha = 0.08f),
-                            primaryColor.copy(alpha = 0.05f),
-                            secondaryColor.copy(alpha = 0.03f)
-                        )
-                    )
-                } else {
-                    Brush.radialGradient(listOf(baseBackground, baseBackground))
-                }
-            )
-            .then(
-                if (isMidnight) Modifier.border(1.dp, accent, OrbOvalShape)
-                else Modifier
-            )
+            .size(diameter)
+            .offset(x = OrbMenuLayout.horizontalOffset(diameter))
+            .clip(CircleShape)
+            .background(Color(0xFF007AFF)) // Solid blue like the screenshot
     ) {
-        // Inner lighter half-circle for depth
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp)
-                .clip(OrbOvalShape)
-                .background(
-                    if (isMidnight) Color.Black else Color.White.copy(alpha = 0.10f)
-                )
-        )
 
-        // Large centered profile button
+        // Add button — top arc
         Box(
             modifier = Modifier
                 .align(Alignment.Center)
-                .offset(x = (-25).dp)
-        ) {
-            OrbButton(
-                icon = Icons.Default.Person,
-                contentDescription = "Profile",
-                onClick = onProfileClick,
-                size = 56.dp,
-                iconSize = 32.dp,
-                tint = iconTint
-            )
-        }
-
-        // Message button — top of the arc
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .offset(x = (-25).dp, y = 25.dp)
-        ) {
-            OrbButton(
-                icon = Icons.Default.Email,
-                contentDescription = "Messages",
-                onClick = onChatClick,
-                size = 40.dp,
-                iconSize = 20.dp,
-                tint = iconTint
-            )
-        }
-
-        // Add button — middle of the arc
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .offset(x = 5.dp)
+                .offset(x = -(diameter * 0.38f), y = -(diameter * 0.25f))
         ) {
             OrbButton(
                 icon = Icons.Default.Add,
                 contentDescription = "Add",
                 onClick = onAddClick,
-                size = 40.dp,
-                iconSize = 20.dp,
-                tint = iconTint
+                size = 48.dp,
+                iconSize = 28.dp,
+                tint = Color.White
             )
         }
 
-        // Search button — bottom of the arc
+        // Profile button — middle
         Box(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .offset(x = (-25).dp, y = (-25).dp)
+                .align(Alignment.Center)
+                .offset(x = -(diameter * 0.38f), y = 0.dp)
         ) {
             OrbButton(
-                icon = Icons.Default.Search,
-                contentDescription = "Search",
-                onClick = onSearchClick,
-                size = 40.dp,
-                iconSize = 20.dp,
-                tint = iconTint
+                icon = Icons.Default.Person,
+                contentDescription = "Profile",
+                onClick = onProfileClick,
+                size = 64.dp,
+                iconSize = 36.dp,
+                tint = Color.White
+            )
+        }
+
+        // Camera button — bottom
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(x = -(diameter * 0.38f), y = (diameter * 0.25f))
+        ) {
+            OrbButton(
+                icon = androidx.compose.material.icons.Icons.Default.CameraAlt,
+                contentDescription = "Camera",
+                onClick = onCameraClick,
+                size = 48.dp,
+                iconSize = 28.dp,
+                tint = Color.White
             )
         }
     }
