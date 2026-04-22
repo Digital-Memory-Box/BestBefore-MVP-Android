@@ -250,6 +250,7 @@ class SignupViewModel(application: Application) : AndroidViewModel(application) 
                 // Proceed regardless of update success to keep flow smooth
                 val updatedDto = updateResult.getOrNull() ?: userDto
                 sessionManager.saveUser(updatedDto)
+                repository.syncFcmToken()
                 _signupSuccess.emit(updatedDto.email)
             }
         }.onFailure { e ->

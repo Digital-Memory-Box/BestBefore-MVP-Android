@@ -1,70 +1,63 @@
 package com.dmb.bestbefore.data.repository
 
-import android.content.Context
-import android.content.SharedPreferences
+import com.dmb.bestbefore.data.api.RetrofitClient
 import com.dmb.bestbefore.data.models.AppNotification
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import com.dmb.bestbefore.data.models.NotificationType
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.tasks.await
 
-class NotificationRepository(context: Context) {
+class NotificationRepository {
+    private val api = RetrofitClient.apiService
 
-    private val prefs: SharedPreferences = context.getSharedPreferences("bestbefore_notifications", Context.MODE_PRIVATE)
-    private val gson = Gson()
-    
-    private val _notifications = MutableStateFlow<List<AppNotification>>(emptyList())
-    val notifications: StateFlow<List<AppNotification>> = _notifications.asStateFlow()
-
-    private val _unreadCount = MutableStateFlow(0)
-    val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
-
-    init {
-        loadNotifications()
-    }
-
-    private fun loadNotifications() {
-        val json = prefs.getString("notifications_list", null)
-        if (json != null) {
-            val type = object : TypeToken<List<AppNotification>>() {}.type
-            val list: List<AppNotification> = gson.fromJson(json, type)
-            _notifications.value = list.sortedByDescending { it.timestamp }
-        } else {
-            _notifications.value = emptyList()
+    suspend fun getNotifications(): Result<List<AppNotification>> {
+        return try {
+            val token = FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token
+                ?: return Result.failure(Exception("Not authenticated"))
+            
+            val response = api.getNotifications("Bearer $token")
+            if (response.isSuccessful && response.body() != null) {
+                val notifications = response.body()!!.map { map ->
+                    val typeStr = map["type"] as? String
+                    val type = when (typeStr) {
+                        "INVITATION" -> NotificationType.INVITATION
+                        "ROOM_CREATED" -> NotificationType.ROOM_CREATED
+                        "JOIN_REQUEST" -> NotificationType.JOIN_REQUEST
+                        else -> NotificationType.GENERAL
+                    }
+                    
+                    AppNotification(
+                        id = map["_id"] as? String ?: java.util.UUID.randomUUID().toString(),
+                        title = map["title"] as? String ?: "",
+                        message = map["body"] as? String ?: "",
+                        type = type,
+                        relatedRoomId = map["roomId"] as? String,
+                        relatedRoomName = map["roomName"] as? String
+                    )
+                }
+                Result.success(notifications)
+            } else {
+                Result.failure(Exception("Failed to fetch notifications"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-        _unreadCount.value = prefs.getInt("unread_count", 0)
     }
 
-    private fun saveNotifications(list: List<AppNotification>) {
-        val json = gson.toJson(list)
-        prefs.edit().putString("notifications_list", json).apply()
-        _notifications.value = list.sortedByDescending { it.timestamp }
-    }
-
-    fun addNotification(notification: AppNotification) {
-        val current = _notifications.value.toMutableList()
-        current.add(notification)
-        saveNotifications(current)
-        val newCount = _unreadCount.value + 1
-        _unreadCount.value = newCount
-        prefs.edit().putInt("unread_count", newCount).apply()
-    }
-
-    fun removeNotification(notificationId: String) {
-        val current = _notifications.value.toMutableList()
-        current.removeAll { it.id == notificationId }
-        saveNotifications(current)
-    }
-
-    fun clearAll() {
-        saveNotifications(emptyList())
-        _unreadCount.value = 0
-        prefs.edit().putInt("unread_count", 0).apply()
-    }
-
-    fun markAllRead() {
-        _unreadCount.value = 0
-        prefs.edit().putInt("unread_count", 0).apply()
+    suspend fun respondToInvitation(notificationId: String, accept: Boolean): Result<Unit> {
+        return try {
+            val token = FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token
+                ?: return Result.failure(Exception("Not authenticated"))
+            
+            val action = if (accept) "accept" else "ignore"
+            val response = api.respondToNotification("Bearer $token", notificationId, mapOf("action" to action))
+            
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Failed to respond to notification"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }

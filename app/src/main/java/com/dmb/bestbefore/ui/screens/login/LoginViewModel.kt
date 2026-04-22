@@ -99,6 +99,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 
                 sessionManager.saveUser(user)
+                viewModelScope.launch { repository.syncFcmToken() }
                 onSuccess()
             }.onFailure { e ->
                 _errorMessage.value = when (e) {

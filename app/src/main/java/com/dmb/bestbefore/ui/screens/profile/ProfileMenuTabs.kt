@@ -112,7 +112,7 @@ fun ProfileMenuScreen(
                     .padding(2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val tabs = listOf("Dashboard", "Customization", "Settings")
+                val tabs = listOf("Dashboard", "Notifications", "Customization", "Settings")
                 tabs.forEachIndexed { index, title ->
                     val isSelected = selectedTab == index
                     Box(
@@ -142,8 +142,9 @@ fun ProfileMenuScreen(
             Box(modifier = Modifier.weight(1f)) {
                 when (selectedTab) {
                     0 -> DashboardTab(viewModel, createdRooms)
-                    1 -> CustomizationTab(viewModel, musicViewModel)
-                    2 -> SettingsTab(viewModel, hallwayViewModel, onLogout)
+                    1 -> NotificationsTab(viewModel)
+                    2 -> CustomizationTab(viewModel, musicViewModel)
+                    3 -> SettingsTab(viewModel, hallwayViewModel, onLogout)
                 }
             }
         }
@@ -390,7 +391,127 @@ fun ActivityItem(icon: androidx.compose.ui.graphics.vector.ImageVector, title: S
     }
 }
 
-// --- TAB 2: CUSTOMIZATION ---
+// --- TAB 2: NOTIFICATIONS ---
+@Composable
+fun NotificationsTab(viewModel: ProfileViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val notifications by viewModel.notifications.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+    ) {
+        Text(
+            text = "Notifications",
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 20.sp,
+            modifier = Modifier.padding(vertical = 16.dp)
+        )
+
+        if (notifications.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = if (isLoading) "Loading..." else "No new notifications",
+                    color = Color.Gray,
+                    fontSize = 16.sp
+                )
+            }
+        } else {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(notifications) { notification ->
+                    NotificationItem(
+                        notification = notification,
+                        onAccept = { viewModel.handleRespondToNotification(context, notification, true) },
+                        onIgnore = { viewModel.handleRespondToNotification(context, notification, false) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun NotificationItem(
+    notification: com.dmb.bestbefore.data.models.AppNotification,
+    onAccept: () -> Unit,
+    onIgnore: () -> Unit
+) {
+    val accentColor = Color(0xFF007AFF) // Default accent
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF1C1C1E), RoundedCornerShape(16.dp))
+            .padding(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(accentColor.copy(alpha = 0.1f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = when (notification.type) {
+                        com.dmb.bestbefore.data.models.NotificationType.INVITATION -> Icons.Default.Mail
+                        com.dmb.bestbefore.data.models.NotificationType.JOIN_REQUEST -> Icons.Default.PersonAdd
+                        else -> Icons.Default.Notifications
+                    },
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = notification.title,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+                Text(
+                    text = notification.message,
+                    color = Color.Gray,
+                    fontSize = 14.sp
+                )
+            }
+        }
+
+        if (notification.type == com.dmb.bestbefore.data.models.NotificationType.INVITATION) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    onClick = onAccept,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Accept", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+                Button(
+                    onClick = onIgnore,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C2E)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Ignore", color = Color.White)
+                }
+            }
+        }
+    }
+}
+
+// --- TAB 3: CUSTOMIZATION ---
 @Composable
 fun CustomizationTab(
     viewModel: ProfileViewModel,

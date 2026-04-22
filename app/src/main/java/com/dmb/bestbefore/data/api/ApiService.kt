@@ -144,6 +144,19 @@ interface ApiService {
         @Header("Authorization") token: String
     ): Response<Map<String, @JvmSuppressWildcards Any>>
 
+    // ── Notifications ────────────────────────────────────────────────────────
+    @GET("notifications")
+    suspend fun getNotifications(
+        @Header("Authorization") token: String
+    ): Response<List<Map<String, @JvmSuppressWildcards Any>>>
+
+    @POST("notifications/{notificationId}/respond")
+    suspend fun respondToNotification(
+        @Header("Authorization") token: String,
+        @Path("notificationId") notificationId: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<Unit>
+
     // ── Dynamic Recommendation & Analytics ───────────────────────────────────
     @POST("analytics/interaction")
     suspend fun trackInteraction(

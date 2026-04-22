@@ -6,6 +6,7 @@ import com.dmb.bestbefore.data.api.models.UpdateMeRequest
 import com.dmb.bestbefore.data.api.models.UserDto
 import com.dmb.bestbefore.data.local.SessionManager
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.tasks.await
 
 class AuthRepository(context: Context) {
@@ -120,6 +121,18 @@ class AuthRepository(context: Context) {
             } else {
                 Result.failure(Exception("Failed to fetch user data: ${response.code()}"))
             }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun syncFcmToken(): Result<Unit> {
+        return try {
+            val fcmToken = FirebaseMessaging.getInstance().token.await()
+            val token = getFirebaseIdToken() ?: return Result.failure(Exception("Not signed in"))
+            val response = api.updateMe("Bearer $token", UpdateMeRequest(fcmToken = fcmToken))
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("Failed to sync fcmToken: ${response.code()}"))
         } catch (e: Exception) {
             Result.failure(e)
         }

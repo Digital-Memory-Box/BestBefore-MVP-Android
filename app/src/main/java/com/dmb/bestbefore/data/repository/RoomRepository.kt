@@ -5,6 +5,7 @@ import com.dmb.bestbefore.data.api.RetrofitClient
 import com.dmb.bestbefore.data.api.models.*
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.tasks.await
+import java.io.IOException
 
 /**
  * RoomRepository — handles Room data and dynamic analytics/recommendations.
@@ -34,6 +35,11 @@ class RoomRepository {
                 val err = response.errorBody()?.string() ?: "HTTP ${response.code()}"
                 Result.failure(Exception("Failed to fetch rooms: $err"))
             }
+        } catch (e: IOException) {
+            tryFallbackRoomsRequest(
+                endpointName = "getRooms",
+                request = { service, bearer -> service.getRooms(bearer) }
+            )
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -47,8 +53,33 @@ class RoomRepository {
             } else {
                 Result.failure(Exception("Failed to discover rooms: ${response.code()}"))
             }
+        } catch (e: IOException) {
+            tryFallbackRoomsRequest(
+                endpointName = "getDiscoverRooms",
+                request = { service, bearer -> service.getDiscoverRooms(bearer) }
+            )
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    private suspend fun tryFallbackRoomsRequest(
+        endpointName: String,
+        request: suspend (com.dmb.bestbefore.data.api.ApiService, String) -> retrofit2.Response<List<RoomDto>>
+    ): Result<List<RoomDto>> {
+        return try {
+            val bearer = freshBearer()
+            val fallbackService = RetrofitClient.apiServiceForBaseUrl(RetrofitClient.SECONDARY_BASE_URL)
+            val fallbackResponse = request(fallbackService, bearer)
+            if (fallbackResponse.isSuccessful && fallbackResponse.body() != null) {
+                Log.w("RoomRepository", "$endpointName primary host failed, fallback host succeeded")
+                Result.success(fallbackResponse.body()!!)
+            } else {
+                val err = fallbackResponse.errorBody()?.string() ?: "HTTP ${fallbackResponse.code()}"
+                Result.failure(Exception("$endpointName failed on fallback host: $err"))
+            }
+        } catch (fallbackError: Exception) {
+            Result.failure(fallbackError)
         }
     }
 
