@@ -58,7 +58,7 @@ fun OrbMenu(
     val isGlass = theme.isGlass
     val isMidnight = theme.name == "Midnight"
     val useAccentIcons = (applyAccentToAll && theme.name != "Default") || isGlass || isMidnight
-    val iconTint = if (useAccentIcons) accentColor else Color.White
+
     val baseColor = when {
         isMidnight -> theme.surfaceColor.copy(alpha = 0.95f)
         isGlass -> theme.surfaceColor.copy(alpha = 0.85f)
@@ -88,10 +88,7 @@ fun OrbMenu(
     val buttonRadius = diameter * 0.42f
 
     // Read theme & accent from global ThemeState so orb follows profile settings
-    val accentColor = ThemeState.currentAccent
     val selectedTheme = ThemeState.currentTheme.name
-    val isGlass = selectedTheme == "Glass"
-    val isMidnight = selectedTheme == "Midnight"
 
     // Background color matches OrbMenuPremium logic
     val orbBackground = when {
@@ -141,8 +138,6 @@ fun OrbMenu(
                 size = 46.dp,
                 iconSize = 30.dp,
                 tint = iconTint
-                iconSize = 30.dp,
-                tint = iconTint
             )
         }
 
@@ -157,8 +152,6 @@ fun OrbMenu(
                 contentDescription = "Profile",
                 onClick = onProfileClick,
                 size = 60.dp,
-                iconSize = 38.dp,
-                tint = iconTint
                 iconSize = 38.dp,
                 tint = iconTint
             )
@@ -178,8 +171,6 @@ fun OrbMenu(
                 contentDescription = "Camera",
                 onClick = onCameraClick,
                 size = 46.dp,
-                iconSize = 30.dp,
-                tint = iconTint
                 iconSize = 30.dp,
                 tint = iconTint
             )
