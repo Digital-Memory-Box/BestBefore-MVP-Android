@@ -105,6 +105,15 @@ private fun isAudioMemoryUri(uri: Uri): Boolean {
 
 private fun isNoteMemoryUri(uri: Uri): Boolean = uri.toString().startsWith("NOTE:")
 
+private fun isVideoMemoryUri(uri: Uri): Boolean {
+    val value = uri.toString().lowercase()
+    return value.startsWith("data:video") ||
+        value.endsWith(".mp4") ||
+        value.endsWith(".mov") ||
+        value.endsWith(".avi") ||
+        value.endsWith(".mkv")
+}
+
 // --- ROOM DETAIL SCREEN ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -636,6 +645,7 @@ fun RoomDetailScreen(
                                     val itemStr = item1.toString()
                                     val isAudio1 = isAudioMemoryUri(item1)
                                     val isNote1 = isNoteMemoryUri(item1)
+                                    val isVideo1 = isVideoMemoryUri(item1)
                                     if (isNote1) {
                                         val parts = itemStr.removePrefix("NOTE:").split(":", limit = 2)
                                         val noteTitle = parts.getOrElse(0) { "Note" }
@@ -658,6 +668,15 @@ fun RoomDetailScreen(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Icon(Icons.Default.PlayCircle, null, tint = Color.White, modifier = Modifier.size(52.dp))
+                                        }
+                                    } else if (isVideo1) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(Color(0xFF2C2C2E)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Default.Videocam, null, tint = Color.White, modifier = Modifier.size(52.dp))
                                         }
                                     } else {
                                         AsyncBase64Image(
@@ -682,6 +701,7 @@ fun RoomDetailScreen(
                                         val item2Str = item2.toString()
                                         val isAudio2 = isAudioMemoryUri(item2)
                                         val isNote2 = isNoteMemoryUri(item2)
+                                        val isVideo2 = isVideoMemoryUri(item2)
                                         if (isNote2) {
                                             val parts = item2Str.removePrefix("NOTE:").split(":", limit = 2)
                                             val noteTitle2 = parts.getOrElse(0) { "Note" }
@@ -704,6 +724,15 @@ fun RoomDetailScreen(
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(Icons.Default.PlayCircle, null, tint = Color.White, modifier = Modifier.size(52.dp))
+                                            }
+                                        } else if (isVideo2) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(Color(0xFF2C2C2E)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(Icons.Default.Videocam, null, tint = Color.White, modifier = Modifier.size(52.dp))
                                             }
                                         } else {
                                             AsyncBase64Image(
@@ -845,6 +874,10 @@ fun RoomDetailScreen(
                             } else if (isAudioMemoryUri(item)) {
                                 Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)), contentAlignment = Alignment.Center) {
                                     Icon(Icons.Default.PlayCircle, null, tint = Color.White, modifier = Modifier.size(34.dp))
+                                }
+                            } else if (isVideoMemoryUri(item)) {
+                                Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)), contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Videocam, null, tint = Color.White, modifier = Modifier.size(34.dp))
                                 }
                             } else {
                                 AsyncBase64Image(
@@ -1275,6 +1308,7 @@ fun ProfileGalleryViewer(viewModel: ProfileViewModel) {
              Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                  val isAudio = isAudioMemoryUri(media[page])
                  val isNote = isNoteMemoryUri(media[page])
+                 val isVideo = isVideoMemoryUri(media[page])
                  if (isAudio) {
                      val context = androidx.compose.ui.platform.LocalContext.current
                      Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1298,6 +1332,14 @@ fun ProfileGalleryViewer(viewModel: ProfileViewModel) {
                          Text(noteTitle, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                          Spacer(modifier = Modifier.height(12.dp))
                          Text(noteBody, color = Color(0xFFD0D0D0), fontSize = 16.sp, lineHeight = 22.sp)
+                     }
+                 } else if (isVideo) {
+                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                         Icon(Icons.Default.Videocam, null, tint = Color.White, modifier = Modifier.size(80.dp))
+                         Spacer(modifier = Modifier.height(16.dp))
+                         Text("Video Playback", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                         Spacer(modifier = Modifier.height(8.dp))
+                         Text("Video playback is not yet supported in this version.", color = Color.Gray, fontSize = 14.sp)
                      }
                  } else {
                      AsyncBase64Image(

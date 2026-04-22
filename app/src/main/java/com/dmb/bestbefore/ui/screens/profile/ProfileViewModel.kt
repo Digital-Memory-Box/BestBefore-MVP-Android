@@ -936,6 +936,18 @@ class ProfileViewModel : ViewModel() {
                             result.onSuccess {
                                 uploadedDataUris.add("data:$mimeType;base64,$base64")
                             }
+                        } else if (mimeType.startsWith("video/")) {
+                            val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                            val memoryData: Map<String, Any> = mapOf(
+                                "type" to "video",
+                                "title" to "Video Drop",
+                                "content" to base64,
+                                "metadata" to mapOf("mimeType" to mimeType)
+                            )
+                            val result = roomRepository.addMemoryToRoom(currentRoomId, memoryData)
+                            result.onSuccess {
+                                uploadedDataUris.add("data:$mimeType;base64,$base64")
+                            }
                         } else {
                             // Downsample image payloads for safer upload and render.
                             val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -983,12 +995,12 @@ class ProfileViewModel : ViewModel() {
 
                     val newActivity = RecentActivity(
                         type = ActivityType.ADDED_PHOTOS,
-                        title = "Added ${uploadedDataUris.size} photo(s) to \"${_selectedRoom.value?.roomName}\"",
+                        title = "Added ${uploadedDataUris.size} media file(s) to \"${_selectedRoom.value?.roomName}\"",
                         date = System.currentTimeMillis()
                     )
                     _recentActivities.value = listOf(newActivity) + _recentActivities.value
 
-                    Toast.makeText(context, "Uploaded ${uploadedDataUris.size} photo(s)!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Uploaded ${uploadedDataUris.size} media file(s)!", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(context, "Upload failed – check connection", Toast.LENGTH_SHORT).show()
                 }
@@ -1018,6 +1030,7 @@ class ProfileViewModel : ViewModel() {
                         if (content != null) {
                             when {
                                 type == "audio" -> memoriesUrls.add("data:${mimeType ?: "audio/mp4"};base64,$content")
+                                type == "video" -> memoriesUrls.add("data:${mimeType ?: "video/mp4"};base64,$content")
                                 type == "note" -> memoriesUrls.add("NOTE:${title ?: ""}:$content")
                                 content.startsWith("http") -> memoriesUrls.add(content)
                                 content.length > 100 -> memoriesUrls.add("data:image/jpeg;base64,$content")
