@@ -14,6 +14,7 @@ object RetrofitClient {
     // --- SERVER URL CONFIGURATION ---
     // Debug: local backend (10.0.2.2), Release: Railway
     internal const val BASE_URL = BuildConfig.API_BASE_URL
+    internal const val SECONDARY_BASE_URL = "https://bestbefore-ai.up.railway.app/"
 
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
@@ -32,12 +33,20 @@ object RetrofitClient {
         .registerTypeAdapter(RoomDto::class.java, RoomDtoJsonDeserializer())
         .create()
 
-    val apiService: ApiService by lazy {
-        Retrofit.Builder()
-            .baseUrl(BASE_URL)
+    private fun createApiService(baseUrl: String): ApiService {
+        return Retrofit.Builder()
+            .baseUrl(baseUrl)
             .client(client)
             .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
             .create(ApiService::class.java)
+    }
+
+    val apiService: ApiService by lazy {
+        createApiService(BASE_URL)
+    }
+
+    fun apiServiceForBaseUrl(baseUrl: String): ApiService {
+        return createApiService(baseUrl)
     }
 }

@@ -24,8 +24,8 @@ android {
 
     buildTypes {
         debug {
-            // Emulator -> host machine backend
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000/\"")
+            // Default debug backend (Railway). Switch to 10.0.2.2 only when running backend locally.
+            buildConfigField("String", "API_BASE_URL", "\"https://bestbefore.up.railway.app/\"")
         }
         release {
             isMinifyEnabled = false

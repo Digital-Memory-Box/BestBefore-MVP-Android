@@ -84,6 +84,7 @@ fun HallwayScreen(
     val savedRoomCards by viewModel.savedRoomCards.collectAsState()
     val similarModeSource by viewModel.similarModeSource.collectAsState()
     val roomingFilter by viewModel.roomingFilter.collectAsState()
+    val isInitialLoading by viewModel.isInitialLoading.collectAsState()
     // Responsive orb diameter to avoid collapse/clipping on narrow phones.
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val orbWidth = (screenWidthDp * 0.82f).dp.coerceIn(300.dp, 420.dp)
@@ -137,34 +138,52 @@ fun HallwayScreen(
                 // BB-UI-05 → BB-UI-10: HALLWAY & ARTISTS TABS
                 // ═════════════════════════════════════════════════════════
                 else -> {
-                    HallwayContent(
-                        cards = cards,
-                        searchQuery = searchQuery,
-                        onSearchQueryChange = viewModel::setSearchQuery,
-                        currentTab = currentTab,
-                        selectedFilterTag = selectedFilterTag,
-                        onFilterTagSelected = { viewModel.setSelectedFilterTag(it) },
-                        onNavigateToNotifications = onNavigateToNotifications,
-                        onMusicClick = onRoomingMusicClick,
-                        onShowSoundCloud = { viewModel.setSoundCloudModalVisible(true) },
-                        onExpandDescription = { viewModel.setDescriptionExpanded(true) },
-                        availableTags = availableTags,
-                        isOrbMenuVisible = isOrbMenuVisible,
-                        contentEndInset = contentEndInset,
-                        selectedCardIndex = selectedCardIndex,
-                        cardImageIndices = cardImageIndices,
-                        areCollaboratorsExpanded = areCollaboratorsExpanded,
-                        onToggleCollaborators = { viewModel.toggleCollaboratorsExpanded() },
-                        onCollapseCollaborators = { viewModel.collapseCollaborators() },
-                        onOpenRoom = onOpenRoom,
-                        onImageIndexChange = { cardId, index -> viewModel.setCardImageIndex(cardId, index) },
-                        onPagerPageChanged = { viewModel.setActivePagerPage(it) },
-                        similarModeSource = similarModeSource,
-                        onEnterSimilarMode = { viewModel.enterSimilarMode(it) },
-                        onExitSimilarMode = { viewModel.exitSimilarMode() },
-                        onConnectRoom = { viewModel.connectRoom(it) },
-                        modifier = Modifier.weight(1f)
-                    )
+                    if (isInitialLoading) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator(color = LocalBestBeforeColors.current.primary)
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = if (currentTab == BottomTab.ARTISTS) "Loading artists..." else "Loading hallway...",
+                                    color = LocalBestBeforeColors.current.textSecondary
+                                )
+                            }
+                        }
+                    } else {
+                        HallwayContent(
+                            cards = cards,
+                            searchQuery = searchQuery,
+                            onSearchQueryChange = viewModel::setSearchQuery,
+                            currentTab = currentTab,
+                            selectedFilterTag = selectedFilterTag,
+                            onFilterTagSelected = { viewModel.setSelectedFilterTag(it) },
+                            onNavigateToNotifications = onNavigateToNotifications,
+                            onMusicClick = onRoomingMusicClick,
+                            onShowSoundCloud = { viewModel.setSoundCloudModalVisible(true) },
+                            onExpandDescription = { viewModel.setDescriptionExpanded(true) },
+                            availableTags = availableTags,
+                            isOrbMenuVisible = isOrbMenuVisible,
+                            contentEndInset = contentEndInset,
+                            selectedCardIndex = selectedCardIndex,
+                            cardImageIndices = cardImageIndices,
+                            areCollaboratorsExpanded = areCollaboratorsExpanded,
+                            onToggleCollaborators = { viewModel.toggleCollaboratorsExpanded() },
+                            onCollapseCollaborators = { viewModel.collapseCollaborators() },
+                            onOpenRoom = onOpenRoom,
+                            onImageIndexChange = { cardId, index -> viewModel.setCardImageIndex(cardId, index) },
+                            onPagerPageChanged = { viewModel.setActivePagerPage(it) },
+                            similarModeSource = similarModeSource,
+                            onEnterSimilarMode = { viewModel.enterSimilarMode(it) },
+                            onExitSimilarMode = { viewModel.exitSimilarMode() },
+                            onConnectRoom = { viewModel.connectRoom(it) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
 

@@ -33,6 +33,7 @@ data class UpdateMeRequest(
     val userType: String? = null,
     val bio: String? = null,
     val profileImageUrl: String? = null,
+    val profileImageBase64: String? = null,
     val ignoredRoomIds: List<String>? = null,
     val savedRoomIds: List<String>? = null,
     val tags: List<String>? = null

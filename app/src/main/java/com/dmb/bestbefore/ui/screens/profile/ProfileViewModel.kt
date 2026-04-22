@@ -49,6 +49,10 @@ class ProfileViewModel : ViewModel() {
 
     // RoomRepository — no token arg; fetches fresh Firebase token per request (matches iOS pattern)
     private val roomRepository = com.dmb.bestbefore.data.repository.RoomRepository()
+    private val notificationRepository = com.dmb.bestbefore.data.repository.NotificationRepository()
+    
+    private val _notifications = MutableStateFlow<List<com.dmb.bestbefore.data.models.AppNotification>>(emptyList())
+    val notifications: StateFlow<List<com.dmb.bestbefore.data.models.AppNotification>> = _notifications.asStateFlow()
     
     // Switch createdRooms to loading from DB/API
     private val _createdRooms = MutableStateFlow<List<TimeCapsuleRoom>>(emptyList())
@@ -400,6 +404,34 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
+    fun fetchNotifications() {
+        viewModelScope.launch {
+            val result = notificationRepository.getNotifications()
+            result.onSuccess { list ->
+                _notifications.value = list
+            }
+        }
+    }
+
+    fun handleRespondToNotification(context: Context, notification: com.dmb.bestbefore.data.models.AppNotification, accept: Boolean) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                val result = notificationRepository.respondToInvitation(notification.id, accept)
+                result.onSuccess {
+                    Toast.makeText(context, if (accept) "Invitation accepted!" else "Invitation ignored", Toast.LENGTH_SHORT).show()
+                    fetchNotifications()
+                    if (accept) initDatabase(context) // Refresh rooms if accepted
+                }
+                result.onFailure {
+                    Toast.makeText(context, "Failed to respond to invitation", Toast.LENGTH_SHORT).show()
+                }
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
     // Callbacks for permissions
     var onRequestNotificationPermission: (() -> Unit)? = null
     var onRequestCalendarPermission: (() -> Unit)? = null
@@ -444,6 +476,8 @@ class ProfileViewModel : ViewModel() {
                 Log.e("ProfileViewModel", "Failed to fetch user profile", e)
             }
         }
+
+        fetchNotifications()
 
         // RoomRepository now fetches its own fresh Firebase token per request.
         // Just launch the load — no token management needed here.
@@ -1656,11 +1690,22 @@ class ProfileViewModel : ViewModel() {
                 val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
                 val firebaseToken = authRepo.getFirebaseIdToken(false)
                 if (firebaseToken != null) {
+                    val rawProfileImageUri = _profileImageUri.value?.toString()
+                    val profileImageUrlForBackend = if (
+                        rawProfileImageUri != null &&
+                        (rawProfileImageUri.startsWith("http://") ||
+                            rawProfileImageUri.startsWith("https://") ||
+                            rawProfileImageUri.startsWith("data:image"))
+                    ) rawProfileImageUri else null
+                    val profileImageBase64 = _profileImageUri.value?.let { uri ->
+                        encodeProfileImageBase64(context, uri)
+                    }
                     val updateResult = authRepo.updateMe(
                         com.dmb.bestbefore.data.api.models.UpdateMeRequest(
                             name = _userName.value,
                             bio = _bio.value,
-                            profileImageUrl = _profileImageUri.value?.toString(),
+                            profileImageUrl = profileImageUrlForBackend,
+                            profileImageBase64 = profileImageBase64,
                             tags = _profileTags.value.ifEmpty { null },
                             theme = _selectedTheme.value.name,
                             accentColor = colorToHex(_accentColor.value)
@@ -1679,6 +1724,25 @@ class ProfileViewModel : ViewModel() {
                 _isUpdatingCredential.value = false
             }
         }
+    }
+
+    private fun encodeProfileImageBase64(context: Context, uri: Uri): String? {
+        return runCatching {
+            val stream = context.contentResolver.openInputStream(uri) ?: return null
+            val raw = stream.use { it.readBytes() }
+            val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeByteArray(raw, 0, raw.size, options)
+            var inSampleSize = 1
+            while (options.outWidth / inSampleSize > 512 || options.outHeight / inSampleSize > 512) {
+                inSampleSize *= 2
+            }
+            options.inJustDecodeBounds = false
+            options.inSampleSize = inSampleSize
+            val bitmap = android.graphics.BitmapFactory.decodeByteArray(raw, 0, raw.size, options) ?: return null
+            val bos = java.io.ByteArrayOutputStream()
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, bos)
+            android.util.Base64.encodeToString(bos.toByteArray(), android.util.Base64.NO_WRAP)
+        }.getOrNull()
     }
 
     private fun colorToHex(color: Color): String {

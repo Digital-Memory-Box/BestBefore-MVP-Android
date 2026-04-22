@@ -19,6 +19,7 @@ service-account.json
 # Exclude backend and iOS from Android repo
 backend/
 backend2/
+backend-main/
 BestBefore_Prototype_IOS/
 
 # Temp scripts

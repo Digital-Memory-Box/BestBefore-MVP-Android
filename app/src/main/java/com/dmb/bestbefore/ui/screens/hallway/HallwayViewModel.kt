@@ -81,6 +81,9 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
     private val _availableTags = MutableStateFlow<List<String>>(emptyList())
     val availableTags: StateFlow<List<String>> = _availableTags.asStateFlow()
 
+    private val _isInitialLoading = MutableStateFlow(true)
+    val isInitialLoading: StateFlow<Boolean> = _isInitialLoading.asStateFlow()
+
     // ── Saved Rooms (Added to Rooming via "Add to Rooming" button) ─────────
     private val _savedRoomCards = MutableStateFlow<List<HallwayCard>>(emptyList())
     val savedRoomCards: StateFlow<List<HallwayCard>> = _savedRoomCards.asStateFlow()
@@ -196,6 +199,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
 
     private fun fetchRooms() {
         viewModelScope.launch {
+            _isInitialLoading.value = true
             try {
                 val myDeferred = async { roomRepository.getRooms() }
                 val discoverDeferred = async { roomRepository.getDiscoverRooms() }
@@ -273,6 +277,8 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 filterCards(_currentTab.value)
             } catch (e: Exception) {
                 Log.e("HallwayViewModel", "Error fetching rooms", e)
+            } finally {
+                _isInitialLoading.value = false
             }
             
             // Try fetching tags
@@ -322,9 +328,16 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
         return room.isPublic == true || !room.isPrivate
     }
 
+    private fun isArtistRoom(room: com.dmb.bestbefore.data.api.models.RoomDto): Boolean {
+        val type = room.ownerUserType?.trim()?.lowercase() ?: return false
+        return type == "artist" || type.contains("artist")
+    }
+
     private fun isCollaborator(room: com.dmb.bestbefore.data.api.models.RoomDto, currentUserEmail: String): Boolean {
         return room.collaborators?.any { element ->
-            if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
+            if (element.isJsonPrimitive) {
+                element.asString.equals(currentUserEmail, ignoreCase = true)
+            } else if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
                 element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
             } else {
                 false
@@ -334,7 +347,9 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
 
     private fun isViewer(room: com.dmb.bestbefore.data.api.models.RoomDto, currentUserEmail: String): Boolean {
         return room.viewers?.any { element ->
-            if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
+            if (element.isJsonPrimitive) {
+                element.asString.equals(currentUserEmail, ignoreCase = true)
+            } else if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
                 element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
             } else {
                 false
@@ -378,14 +393,17 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 BottomTab.EVERYONE -> {
                     allAvailableRooms.filter {
                         val isOwner = it.ownerEmail?.equals(currentUserEmail, ignoreCase = true) == true
-                        !isOwner && isRoomPublic(it) && !_ignoredRoomIds.value.contains(it.id)
+                        !isOwner &&
+                        isRoomPublic(it) &&
+                        !isArtistRoom(it) &&
+                        !_ignoredRoomIds.value.contains(it.id)
                     }
                 }
                 BottomTab.ARTISTS -> {
                     allAvailableRooms.filter {
                         val isOwner = it.ownerEmail?.equals(currentUserEmail, ignoreCase = true) == true
                         !isOwner &&
-                        it.ownerUserType?.equals("artist", ignoreCase = true) == true &&
+                        isArtistRoom(it) &&
                         isRoomPublic(it) &&
                         !_ignoredRoomIds.value.contains(it.id)
                     }
