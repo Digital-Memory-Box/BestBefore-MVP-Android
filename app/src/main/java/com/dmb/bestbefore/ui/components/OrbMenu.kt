@@ -7,9 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Camera
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -17,15 +15,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.dmb.bestbefore.ui.theme.ThemeState
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalConfiguration
+import com.dmb.bestbefore.ui.theme.ThemeState
 
 import androidx.compose.foundation.shape.CircleShape
 
@@ -59,6 +52,38 @@ fun OrbMenu(
     onProfileClick: () -> Unit = {},
     onCameraClick: () -> Unit = {}
 ) {
+    val theme = ThemeState.currentTheme
+    val accentColor = ThemeState.currentAccent
+    val applyAccentToAll = ThemeState.applyAccentToAll
+    val isGlass = theme.isGlass
+    val isMidnight = theme.name == "Midnight"
+    val useAccentIcons = (applyAccentToAll && theme.name != "Default") || isGlass || isMidnight
+    val iconTint = if (useAccentIcons) accentColor else Color.White
+    val baseColor = when {
+        isMidnight -> theme.surfaceColor.copy(alpha = 0.95f)
+        isGlass -> theme.surfaceColor.copy(alpha = 0.85f)
+        else -> accentColor
+    }
+    val innerGlow = if (isGlass || isMidnight) {
+        Brush.radialGradient(
+            colors = listOf(
+                Color.Transparent,
+                accentColor.copy(alpha = if (isMidnight) 0.18f else 0.28f)
+            )
+        )
+    } else {
+        Brush.radialGradient(listOf(Color.Transparent, Color.Transparent))
+    }
+    val orbGlow = Brush.radialGradient(
+        colors = listOf(
+            theme.orbColor1.copy(alpha = 0.35f),
+            theme.orbColor2.copy(alpha = 0.15f),
+            Color.Transparent
+        )
+    )
+    val borderWidth = if (isGlass || isMidnight) 2.dp else 1.dp
+    val borderColor = accentColor.copy(alpha = if (isGlass || isMidnight) 0.85f else 0.45f)
+
     // İkonların merkeze uzaklığı - Swift versiyonundaki sıkı görünüm için biraz artırıldı
     val buttonRadius = diameter * 0.42f
 
@@ -67,8 +92,11 @@ fun OrbMenu(
             .size(diameter)
             // Orbu sağa daha fazla iterek (0.5f -> 0.72f) boşluğu azalttım
             .offset(x = diameter * 0.82f)
+            .background(baseColor, CircleShape)
+            .background(orbGlow, CircleShape)
+            .background(innerGlow, CircleShape)
+            .border(borderWidth, borderColor, CircleShape)
             .clip(CircleShape)
-            .background(Color(0xFF007AFF))
     ) {
         // İkonlar merkeze göre sol tarafa offsetlenir.
 
@@ -86,7 +114,8 @@ fun OrbMenu(
                 contentDescription = "Add",
                 onClick = onAddClick,
                 size = 46.dp,
-                iconSize = 30.dp
+                iconSize = 30.dp,
+                tint = iconTint
             )
         }
 
@@ -101,7 +130,8 @@ fun OrbMenu(
                 contentDescription = "Profile",
                 onClick = onProfileClick,
                 size = 60.dp,
-                iconSize = 38.dp
+                iconSize = 38.dp,
+                tint = iconTint
             )
         }
 
@@ -119,7 +149,8 @@ fun OrbMenu(
                 contentDescription = "Camera",
                 onClick = onCameraClick,
                 size = 46.dp,
-                iconSize = 30.dp
+                iconSize = 30.dp,
+                tint = iconTint
             )
         }
     }
