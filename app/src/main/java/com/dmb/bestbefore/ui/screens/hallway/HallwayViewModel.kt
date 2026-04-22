@@ -203,28 +203,33 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
             try {
                 val myDeferred = async { roomRepository.getRooms() }
                 val discoverDeferred = async { roomRepository.getDiscoverRooms() }
+                val meDeferred = async { authRepository.getMe() }
                 
                 val myResult = myDeferred.await()
                 val discoverResult = discoverDeferred.await()
+                val meResult = meDeferred.await()
                 
-                myResult.onSuccess { rooms ->
+                if (myResult.isSuccess) {
+                    val rooms = myResult.getOrThrow()
                     Log.d("HallwayViewModel", "getRooms: fetched ${rooms.size} rooms")
                     myRoomsList = rooms
+                } else {
+                    val e = myResult.exceptionOrNull()
+                    Log.e("HallwayViewModel", "getRooms failed: ${e?.message}")
                 }
-                myResult.onFailure { e ->
-                    Log.e("HallwayViewModel", "getRooms failed: ${e.message}")
-                }
-                discoverResult.onSuccess { rooms ->
+
+                if (discoverResult.isSuccess) {
+                    val rooms = discoverResult.getOrThrow()
                     Log.d("HallwayViewModel", "getDiscoverRooms: fetched ${rooms.size} rooms")
                     discoverRoomsList = rooms
-                }
-                discoverResult.onFailure { e ->
-                    Log.e("HallwayViewModel", "getDiscoverRooms failed: ${e.message}")
+                } else {
+                    val e = discoverResult.exceptionOrNull()
+                    Log.e("HallwayViewModel", "getDiscoverRooms failed: ${e?.message}")
                 }
 
                 // Sync ignored/saved rooms from profile
-                val meResult = authRepository.getMe()
-                meResult.onSuccess { userDto ->
+                if (meResult.isSuccess) {
+                    val userDto = meResult.getOrThrow()
                     _ignoredRoomIds.value = userDto.ignoredRoomIds?.toSet() ?: emptySet()
                     
                     // We need to fetch the actual cards for these IDs to populate _ignoredRoomCards
@@ -302,13 +307,21 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                                 }
                             } else if (bodyElement.isJsonObject) {
                                 val obj = bodyElement.asJsonObject
-                                // if it's { "tags": [...] }
                                 if (obj.has("tags") && obj.get("tags").isJsonArray) {
                                     obj.get("tags").asJsonArray.forEach { 
                                         if (it.isJsonPrimitive) parsedTags.add(it.asString)
                                         else if (it.isJsonObject) {
                                             val t = it.asJsonObject.get("name")?.asString ?: it.asJsonObject.get("tag")?.asString
                                             if (t != null) parsedTags.add(t)
+                                        }
+                                    }
+                                } else {
+                                    // Handle category object { "category": ["tag1", "tag2"] }
+                                    obj.entrySet().forEach { entry ->
+                                        if (entry.value.isJsonArray) {
+                                            entry.value.asJsonArray.forEach { 
+                                                if (it.isJsonPrimitive) parsedTags.add(it.asString)
+                                            }
                                         }
                                     }
                                 }

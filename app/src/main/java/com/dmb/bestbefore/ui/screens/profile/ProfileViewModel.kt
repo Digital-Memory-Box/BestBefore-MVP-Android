@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -26,6 +27,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.EmailAuthProvider
 import com.dmb.bestbefore.data.api.models.UserDto
 import com.dmb.bestbefore.data.api.models.UpdateMeRequest
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 
 class ProfileViewModel : ViewModel() {
     companion object {
@@ -455,37 +459,37 @@ class ProfileViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
-                val meResult = authRepo.getMe()
-                meResult.onSuccess { userDto ->
+                val meDeferred = async { authRepo.getMe() }
+                val roomsDeferred = async { roomRepository.getRooms() }
+                val notificationsDeferred = async { fetchNotifications() }
+                val tagsDeferred = async { fetchTagsLocally(context) }
+                
+                val meResult = meDeferred.await()
+                val roomsResult = roomsDeferred.await()
+                notificationsDeferred.await()
+                val tagsList = tagsDeferred.await()
+                _availableTags.value = tagsList
+
+                if (meResult.isSuccess) {
+                    val userDto = meResult.getOrThrow()
                     if (!userDto.name.isNullOrEmpty()) _userName.value = userDto.name
                     if (!userDto.bio.isNullOrEmpty()) {
                         _bio.value = userDto.bio
                     } else {
-                        // User has no bio yet, clear placeholder so field is blank
                         _bio.value = ""
                     }
                     if (!userDto.profileImageUrl.isNullOrEmpty()) {
                         _profileImageUri.value = Uri.parse(userDto.profileImageUrl)
                     }
                     // Load profile tags from backend
-                    if (!userDto.tags.isNullOrEmpty()) {
-                        _profileTags.value = userDto.tags
+                    if (!userDto.profileTags.isNullOrEmpty()) {
+                        _profileTags.value = userDto.profileTags!!
                     }
                 }
-            } catch (e: Exception) {
-                Log.e("ProfileViewModel", "Failed to fetch user profile", e)
-            }
-        }
 
-        fetchNotifications()
-
-        // RoomRepository now fetches its own fresh Firebase token per request.
-        // Just launch the load — no token management needed here.
-        viewModelScope.launch {
-            try {
-                val result = roomRepository.getRooms()
                 val allRooms = mutableListOf<TimeCapsuleRoom>()
-                result.onSuccess { apiRooms ->
+                if (roomsResult.isSuccess) {
+                    val apiRooms = roomsResult.getOrThrow()
                     Log.d("ProfileViewModel", "Fetched ${apiRooms.size} rooms from backend")
                     val currentUserEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
                     
@@ -514,61 +518,70 @@ class ProfileViewModel : ViewModel() {
                     _roomingCount.value = myJoinedRoomsDtos.size
                     _roomersCount.value = uniqueRoomers.size
                     
-                    // The UI requirement stipulates "My Rooms" strictly lists created rooms.
                     allRooms.addAll(mapDtosToRooms(myCreatedRoomsDtos, isSaved = false))
-                }
-                result.onFailure { e ->
-                    Log.e("ProfileViewModel", "getRooms failed: ${e.message}")
+                } else {
+                    val e = roomsResult.exceptionOrNull()
+                    Log.e("ProfileViewModel", "getRooms failed: ${e?.message}")
                 }
 
-                // Room memories are fetched lazily when a room is opened to avoid unnecessary network calls
+                // Memories will be fetched lazily when a room is selected or specifically refreshed.
+                _totalMemories.value = allRooms.sumOf { it.photos?.size ?: 0 } // Estimate from photo count
                 refreshRoomLists(allRooms)
-
-                // Fetch tags
-                try {
-                    val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
-                    val token = authRepo.getFirebaseIdToken(false)
-                    if (token != null) {
-                        val tagsResponse = com.dmb.bestbefore.data.api.RetrofitClient.apiService.getTags("Bearer $token")
-                        if (tagsResponse.isSuccessful) {
-                            val bodyElement = tagsResponse.body()
-                            val parsedTags = mutableListOf<String>()
-                            if (bodyElement != null) {
-                                if (bodyElement.isJsonArray) {
-                                    bodyElement.asJsonArray.forEach { 
-                                        if (it.isJsonObject) {
-                                            val obj = it.asJsonObject
-                                            val tag = obj.get("name")?.asString ?: obj.get("tag")?.asString
-                                            if (tag != null) parsedTags.add(tag)
-                                        } else if (it.isJsonPrimitive) {
-                                            parsedTags.add(it.asString)
-                                        }
-                                    }
-                                } else if (bodyElement.isJsonObject) {
-                                    val obj = bodyElement.asJsonObject
-                                    // if it's { "tags": [...] }
-                                    if (obj.has("tags") && obj.get("tags").isJsonArray) {
-                                        obj.get("tags").asJsonArray.forEach { 
-                                            if (it.isJsonPrimitive) parsedTags.add(it.asString)
-                                            else if (it.isJsonObject) {
-                                                val t = it.asJsonObject.get("name")?.asString ?: it.asJsonObject.get("tag")?.asString
-                                                if (t != null) parsedTags.add(t)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            _availableTags.value = parsedTags
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e("ProfileViewModel", "Failed to fetch tags", e)
-                }
-
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "initDatabase failed", e)
             }
         }
+    }
+
+    private suspend fun fetchTagsLocally(context: Context): List<String> {
+        val parsedTags = mutableListOf<String>()
+        try {
+            val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
+            val token = authRepo.getFirebaseIdToken(false)
+            if (token != null) {
+                val tagsResponse = com.dmb.bestbefore.data.api.RetrofitClient.apiService.getTags("Bearer $token")
+                if (tagsResponse.isSuccessful) {
+                    val bodyElement = tagsResponse.body()
+                    if (bodyElement != null) {
+                        if (bodyElement.isJsonArray) {
+                            bodyElement.asJsonArray.forEach { 
+                                if (it.isJsonObject) {
+                                    val obj = it.asJsonObject
+                                    val tag = obj.get("name")?.asString ?: obj.get("tag")?.asString
+                                    if (tag != null) parsedTags.add(tag)
+                                } else if (it.isJsonPrimitive) {
+                                    parsedTags.add(it.asString)
+                                }
+                            }
+                        } else if (bodyElement.isJsonObject) {
+                            val obj = bodyElement.asJsonObject
+                            if (obj.has("tags") && obj.get("tags").isJsonArray) {
+                                obj.get("tags").asJsonArray.forEach { 
+                                    if (it.isJsonPrimitive) parsedTags.add(it.asString)
+                                    else if (it.isJsonObject) {
+                                        val t = it.asJsonObject.get("name")?.asString ?: it.asJsonObject.get("tag")?.asString
+                                        if (t != null) parsedTags.add(t)
+                                    }
+                                }
+                            } else {
+                                // Handle category object { "category": ["tag1", "tag2"] }
+                                obj.entrySet().forEach { entry ->
+                                    if (entry.value.isJsonArray) {
+                                        entry.value.asJsonArray.forEach { 
+                                            if (it.isJsonPrimitive) parsedTags.add(it.asString)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("ProfileViewModel", "Failed to fetch tags", e)
+        }
+        return parsedTags
+    }
     }
 
     private fun mapDtosToRooms(dtos: List<com.dmb.bestbefore.data.api.models.RoomDto>, isSaved: Boolean): List<TimeCapsuleRoom> {
@@ -1700,7 +1713,7 @@ class ProfileViewModel : ViewModel() {
                             bio = _bio.value,
                             profileImageUrl = profileImageUrlForBackend,
                             profileImageBase64 = profileImageBase64,
-                            tags = _profileTags.value.ifEmpty { null },
+                            profileTags = _profileTags.value.ifEmpty { null },
                             theme = _selectedTheme.value.name,
                             accentColor = colorToHex(_accentColor.value)
                         )
@@ -1720,9 +1733,9 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
-    private fun encodeProfileImageBase64(context: Context, uri: Uri): String? {
-        return runCatching {
-            val stream = context.contentResolver.openInputStream(uri) ?: return null
+    private suspend fun encodeProfileImageBase64(context: Context, uri: Uri): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        runCatching {
+            val stream = context.contentResolver.openInputStream(uri) ?: return@runCatching null
             val raw = stream.use { it.readBytes() }
             val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
             android.graphics.BitmapFactory.decodeByteArray(raw, 0, raw.size, options)
@@ -1732,7 +1745,7 @@ class ProfileViewModel : ViewModel() {
             }
             options.inJustDecodeBounds = false
             options.inSampleSize = inSampleSize
-            val bitmap = android.graphics.BitmapFactory.decodeByteArray(raw, 0, raw.size, options) ?: return null
+            val bitmap = android.graphics.BitmapFactory.decodeByteArray(raw, 0, raw.size, options) ?: return@runCatching null
             val bos = java.io.ByteArrayOutputStream()
             bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, bos)
             android.util.Base64.encodeToString(bos.toByteArray(), android.util.Base64.NO_WRAP)

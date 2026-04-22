@@ -20,7 +20,7 @@ data class UserDto(
     val profileImageUrl: String? = null,
     val ignoredRoomIds: List<String>? = emptyList(),
     val savedRoomIds: List<String>? = emptyList(),
-    val tags: List<String>? = emptyList()
+    val profileTags: List<String>? = emptyList()
 )
 
 data class UpdateMeRequest(
@@ -36,7 +36,7 @@ data class UpdateMeRequest(
     val profileImageBase64: String? = null,
     val ignoredRoomIds: List<String>? = null,
     val savedRoomIds: List<String>? = null,
-    val tags: List<String>? = null
+    val profileTags: List<String>? = null
 )
 
 // Room Models — field names aligned to backend roomController.js
