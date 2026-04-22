@@ -114,19 +114,19 @@ class ProfileViewModel : ViewModel() {
     private val _bio = MutableStateFlow("Digital artist focusing on surreal landscapes and vibrant color theory.")
     val bio: StateFlow<String> = _bio.asStateFlow()
 
-    // ── Profile Tags ─────────────────────────────────────────────────
-    private val _profileTags = MutableStateFlow<List<String>>(emptyList())
-    val profileTags: StateFlow<List<String>> = _profileTags.asStateFlow()
+    // ── Preferred Tags (for recommendation) ──────────────────────────
+    private val _preferredTags = MutableStateFlow<List<String>>(emptyList())
+    val preferredTags: StateFlow<List<String>> = _preferredTags.asStateFlow()
 
     fun addProfileTag(tag: String) {
         val trimmed = tag.trim().lowercase()
-        if (trimmed.isNotEmpty() && _profileTags.value.none { it.equals(trimmed, ignoreCase = true) }) {
-            _profileTags.value = _profileTags.value + trimmed
+        if (trimmed.isNotEmpty() && _preferredTags.value.none { it.equals(trimmed, ignoreCase = true) }) {
+            _preferredTags.value = _preferredTags.value + trimmed
         }
     }
 
     fun removeProfileTag(tag: String) {
-        _profileTags.value = _profileTags.value.filter { !it.equals(tag, ignoreCase = true) }
+        _preferredTags.value = _preferredTags.value.filter { !it.equals(tag, ignoreCase = true) }
     }
 
     private val _showOnlySaved = MutableStateFlow(false)
@@ -482,8 +482,8 @@ class ProfileViewModel : ViewModel() {
                         _profileImageUri.value = Uri.parse(userDto.profileImageUrl)
                     }
                     // Load profile tags from backend
-                    if (!userDto.profileTags.isNullOrEmpty()) {
-                        _profileTags.value = userDto.profileTags!!
+                    if (!userDto.preferredTags.isNullOrEmpty()) {
+                        _preferredTags.value = userDto.preferredTags!!
                     }
                 }
 
@@ -1713,7 +1713,7 @@ class ProfileViewModel : ViewModel() {
                             bio = _bio.value,
                             profileImageUrl = profileImageUrlForBackend,
                             profileImageBase64 = profileImageBase64,
-                            profileTags = _profileTags.value.ifEmpty { null },
+                            preferredTags = _preferredTags.value.ifEmpty { null },
                             theme = _selectedTheme.value.name,
                             accentColor = colorToHex(_accentColor.value)
                         )
