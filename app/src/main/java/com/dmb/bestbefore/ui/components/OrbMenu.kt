@@ -49,7 +49,7 @@ object OrbMenuLayout {
 
 /**
  * Floating orb menu component that appears on the right edge of the screen.
- * Gradient colors follow the current app theme (primaryColor → secondaryColor).
+ * Dynamically reflects the user's selected theme and accent color via ThemeState.
  */
 @Composable
 fun OrbMenu(
@@ -62,13 +62,37 @@ fun OrbMenu(
     // İkonların merkeze uzaklığı - Swift versiyonundaki sıkı görünüm için biraz artırıldı
     val buttonRadius = diameter * 0.42f
 
+    // Read theme & accent from global ThemeState so orb follows profile settings
+    val accentColor = ThemeState.currentAccent
+    val selectedTheme = ThemeState.currentTheme.name
+    val isGlass = selectedTheme == "Glass"
+    val isMidnight = selectedTheme == "Midnight"
+
+    // Background color matches OrbMenuPremium logic
+    val orbBackground = when {
+        isMidnight -> Color(0xFF121212).copy(alpha = 0.95f)
+        isGlass    -> Color(0xFF2C2C2E).copy(alpha = 0.85f)
+        else       -> accentColor
+    }
+
+    // Icon tint follows OrbMenuPremium's BB-UI-21 rule
+    val iconTint = when {
+        isMidnight -> accentColor
+        isGlass    -> accentColor
+        else       -> Color.White
+    }
+
     Box(
         modifier = modifier
             .size(diameter)
             // Orbu sağa daha fazla iterek (0.5f -> 0.72f) boşluğu azalttım
             .offset(x = diameter * 0.82f)
             .clip(CircleShape)
-            .background(Color(0xFF007AFF))
+            .background(orbBackground)
+            .then(
+                if (isMidnight || isGlass) Modifier.border(2.dp, accentColor.copy(alpha = 0.85f), CircleShape)
+                else Modifier
+            )
     ) {
         // İkonlar merkeze göre sol tarafa offsetlenir.
 
@@ -86,7 +110,8 @@ fun OrbMenu(
                 contentDescription = "Add",
                 onClick = onAddClick,
                 size = 46.dp,
-                iconSize = 30.dp
+                iconSize = 30.dp,
+                tint = iconTint
             )
         }
 
@@ -101,7 +126,8 @@ fun OrbMenu(
                 contentDescription = "Profile",
                 onClick = onProfileClick,
                 size = 60.dp,
-                iconSize = 38.dp
+                iconSize = 38.dp,
+                tint = iconTint
             )
         }
 
@@ -119,7 +145,8 @@ fun OrbMenu(
                 contentDescription = "Camera",
                 onClick = onCameraClick,
                 size = 46.dp,
-                iconSize = 30.dp
+                iconSize = 30.dp,
+                tint = iconTint
             )
         }
     }

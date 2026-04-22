@@ -112,7 +112,7 @@ fun ProfileMenuScreen(
                     .padding(2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val tabs = listOf("Dashboard", "Notifications", "Customization", "Settings")
+                val tabs = listOf("Dashboard", "Customization", "Settings")
                 tabs.forEachIndexed { index, title ->
                     val isSelected = selectedTab == index
                     Box(
@@ -142,9 +142,8 @@ fun ProfileMenuScreen(
             Box(modifier = Modifier.weight(1f)) {
                 when (selectedTab) {
                     0 -> DashboardTab(viewModel, createdRooms)
-                    1 -> NotificationsTab(viewModel)
-                    2 -> CustomizationTab(viewModel, musicViewModel)
-                    3 -> SettingsTab(viewModel, hallwayViewModel, onLogout)
+                    1 -> CustomizationTab(viewModel, musicViewModel)
+                    2 -> SettingsTab(viewModel, hallwayViewModel, onLogout)
                 }
             }
         }

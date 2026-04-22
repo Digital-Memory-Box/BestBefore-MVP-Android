@@ -1521,6 +1521,7 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
     val context = androidx.compose.ui.platform.LocalContext.current
 
     val themeName by viewModel.roomAtmosphereTheme.collectAsState()
+    val isPublic by viewModel.isPublic.collectAsState()
 
     CreateRoomChrome(
         step = 5,
@@ -1583,19 +1584,21 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
                         
                         // Explicit Role Invite Buttons
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Box(
-                                modifier = Modifier
-                                    .clickable {
-                                        viewModel.addInvitedUser(ProfileViewModel.InvitedUser(
-                                            email = user.email, name = user.name, role = "viewer"
-                                        ))
-                                        searchInput = ""; viewModel.searchUsers("")
-                                    }
-                                    .background(Color(0xFF0D59F2).copy(alpha = 0.2f), RoundedCornerShape(8.dp))
-                                    .border(1.dp, Color(0xFF0D59F2), RoundedCornerShape(8.dp))
-                                    .padding(horizontal = 8.dp, vertical = 6.dp)
-                            ) {
-                                Text("Viewer", color = Color(0xFF0D59F2), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            if (!isPublic) {
+                                Box(
+                                    modifier = Modifier
+                                        .clickable {
+                                            viewModel.addInvitedUser(ProfileViewModel.InvitedUser(
+                                                email = user.email, name = user.name, role = "viewer"
+                                            ))
+                                            searchInput = ""; viewModel.searchUsers("")
+                                        }
+                                        .background(Color(0xFF0D59F2).copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                                        .border(1.dp, Color(0xFF0D59F2), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                                ) {
+                                    Text("Viewer", color = Color(0xFF0D59F2), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
                             
                             Box(
@@ -1633,26 +1636,28 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
                 }
                 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // Invite as Viewer
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable {
-                                val identifier = searchInput.trim()
-                                if (identifier.isNotEmpty()) {
-                                    viewModel.addInvitedUser(ProfileViewModel.InvitedUser(email = identifier, role = "viewer"))
-                                    searchInput = ""; viewModel.searchUsers("")
+                    // Invite as Viewer (Private only)
+                    if (!isPublic) {
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    val identifier = searchInput.trim()
+                                    if (identifier.isNotEmpty()) {
+                                        viewModel.addInvitedUser(ProfileViewModel.InvitedUser(email = identifier, role = "viewer"))
+                                        searchInput = ""; viewModel.searchUsers("")
+                                    }
                                 }
-                            }
-                            .background(Color(0xFF0D59F2).copy(alpha = 0.2f), RoundedCornerShape(8.dp))
-                            .border(1.dp, Color(0xFF0D59F2), RoundedCornerShape(8.dp))
-                            .padding(vertical = 10.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Add, null, tint = Color(0xFF0D59F2), modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Add as Viewer", color = Color(0xFF0D59F2), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                .background(Color(0xFF0D59F2).copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                                .border(1.dp, Color(0xFF0D59F2), RoundedCornerShape(8.dp))
+                                .padding(vertical = 10.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Add, null, tint = Color(0xFF0D59F2), modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Add as Viewer", color = Color(0xFF0D59F2), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
 
                     // Invite as Collaborator
@@ -1704,22 +1709,39 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
                         }
                         
                         // Role Selector Toggle
-                        Box(
-                            modifier = Modifier
-                                .clickable {
-                                    val newRole = if (user.role == "collaborator") "viewer" else "collaborator"
-                                    viewModel.updateInvitedUserRole(user.email, newRole)
-                                }
-                                .background(if (user.role == "collaborator") Color(0xFF00D972).copy(alpha = 0.2f) else Color(0xFF0D59F2).copy(alpha = 0.2f), RoundedCornerShape(12.dp))
-                                .border(1.dp, if (user.role == "collaborator") Color(0xFF00D972) else Color(0xFF0D59F2), RoundedCornerShape(12.dp))
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = if (user.role == "collaborator") "Collaborator" else "Viewer",
-                                color = if (user.role == "collaborator") Color(0xFF00D972) else Color(0xFF0D59F2),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                        if (!isPublic) {
+                            Box(
+                                modifier = Modifier
+                                    .clickable {
+                                        val newRole = if (user.role == "collaborator") "viewer" else "collaborator"
+                                        viewModel.updateInvitedUserRole(user.email, newRole)
+                                    }
+                                    .background(if (user.role == "collaborator") Color(0xFF00D972).copy(alpha = 0.2f) else Color(0xFF0D59F2).copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                                    .border(1.dp, if (user.role == "collaborator") Color(0xFF00D972) else Color(0xFF0D59F2), RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = if (user.role == "collaborator") "Collaborator" else "Viewer",
+                                    color = if (user.role == "collaborator") Color(0xFF00D972) else Color(0xFF0D59F2),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        } else {
+                            // If public, lock to Collaborator only
+                            Box(
+                                modifier = Modifier
+                                    .background(Color(0xFF00D972).copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                                    .border(1.dp, Color(0xFF00D972), RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = "Collaborator",
+                                    color = Color(0xFF00D972),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                         
                         Spacer(modifier = Modifier.width(12.dp))

@@ -87,6 +87,7 @@ fun NotificationScreen(
             onRefresh = {
                 scope.launch {
                     isRefreshing = true
+                    viewModel.refresh()
                     kotlinx.coroutines.delay(500)
                     isRefreshing = false
                 }

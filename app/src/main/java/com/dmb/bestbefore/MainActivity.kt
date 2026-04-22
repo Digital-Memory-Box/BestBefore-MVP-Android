@@ -9,6 +9,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.dmb.bestbefore.ui.navigation.AppNavigation
 import com.dmb.bestbefore.ui.theme.BestBeforeTheme
+import com.dmb.bestbefore.utils.JoinLinkParser
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.remember
 
@@ -84,49 +85,15 @@ class MainActivity : ComponentActivity() {
         val data = intent?.data
 
         if (data != null) {
-            val scheme = data.scheme
-            val host = data.host
-            val path = data.path ?: ""
-
+            val parsed = JoinLinkParser.parseIntentData(data)
             when {
-                // ── HTTPS App Links (cross-platform, opened from browser or iOS share) ─────
-                scheme == "https" && host == "bestbefore.up.railway.app" -> {
-                    when {
-                        // https://bestbefore.up.railway.app/join/{roomId}
-                        path.startsWith("/join/") -> {
-                            val roomId = path.removePrefix("/join/").trim('/')
-                            if (roomId.isNotEmpty()) {
-                                pendingQRRoomId = roomId
-                                android.util.Log.d("MainActivity", "HTTPS App Link: join room $roomId")
-                            }
-                        }
-                        // https://bestbefore.up.railway.app/invite-join/{token}
-                        path.startsWith("/invite-join/") -> {
-                            val token = path.removePrefix("/invite-join/").trim('/')
-                            if (token.isNotEmpty()) {
-                                pendingInviteToken = token
-                                android.util.Log.d("MainActivity", "HTTPS App Link: invite token $token")
-                            }
-                        }
-                    }
+                !parsed?.roomId.isNullOrEmpty() -> {
+                    _pendingQRRoomIdFlow.value = parsed?.roomId
+                    android.util.Log.d("MainActivity", "Deep link room join: ${parsed?.roomId}")
                 }
-
-                // ── Custom scheme: invite token (bestbefore://invite/{token}) ──────────────
-                scheme == "bestbefore" && host == "invite" -> {
-                    val token = data.pathSegments?.firstOrNull()
-                    if (!token.isNullOrEmpty()) {
-                        pendingInviteToken = token
-                        android.util.Log.d("MainActivity", "Custom scheme invite token: $token")
-                    }
-                }
-
-                // ── Custom scheme: direct room open (bestbefore://room/{roomId}) ──────────
-                scheme == "bestbefore" && host == "room" -> {
-                    val roomId = data.pathSegments?.firstOrNull()
-                    if (!roomId.isNullOrEmpty()) {
-                        pendingQRRoomId = roomId
-                        android.util.Log.d("MainActivity", "Custom scheme room: $roomId")
-                    }
+                !parsed?.inviteToken.isNullOrEmpty() -> {
+                    _pendingInviteTokenFlow.value = parsed?.inviteToken
+                    android.util.Log.d("MainActivity", "Deep link invite token: ${parsed?.inviteToken}")
                 }
             }
             return
@@ -157,9 +124,13 @@ class MainActivity : ComponentActivity() {
         var pendingRoomName: String? = null
         var pendingInviteRoomId: String? = null
         var pendingInviteRoomName: String? = null
-        var pendingInviteToken: String? = null
-        /** Room ID received via QR scan or /join/{id} HTTPS App Link */
-        var pendingQRRoomId: String? = null
+        
+        // Reactive flows for join links
+        private val _pendingInviteTokenFlow = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+        val pendingInviteTokenFlow: kotlinx.coroutines.flow.StateFlow<String?> = _pendingInviteTokenFlow
+        
+        private val _pendingQRRoomIdFlow = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+        val pendingQRRoomIdFlow: kotlinx.coroutines.flow.StateFlow<String?> = _pendingQRRoomIdFlow
         
         fun clearPending() {
             pendingNavigateToNotifications = false
@@ -173,11 +144,11 @@ class MainActivity : ComponentActivity() {
         }
 
         fun clearPendingInviteToken() {
-            pendingInviteToken = null
+            _pendingInviteTokenFlow.value = null
         }
 
         fun clearPendingQRRoomId() {
-            pendingQRRoomId = null
+            _pendingQRRoomIdFlow.value = null
         }
     }
 }
