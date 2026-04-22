@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dmb.bestbefore.data.local.SessionManager
 import com.dmb.bestbefore.data.repository.AuthRepository
+import com.dmb.bestbefore.data.api.models.UserDto
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
@@ -248,7 +249,7 @@ class SignupViewModel(application: Application) : AndroidViewModel(application) 
                 )
                 // Proceed regardless of update success to keep flow smooth
                 val updatedDto = updateResult.getOrNull() ?: userDto
-                sessionManager.saveUser(updatedDto.id, updatedDto.name ?: "User", updatedDto.email)
+                sessionManager.saveUser(updatedDto)
                 _signupSuccess.emit(updatedDto.email)
             }
         }.onFailure { e ->

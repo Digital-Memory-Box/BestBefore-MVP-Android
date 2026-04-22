@@ -16,5 +16,8 @@ data class HallwayCard(
     val collaboratorCount: Int = 0,
     val collaborators: List<com.dmb.bestbefore.data.api.models.UserDto> = emptyList(),
     val location: String? = null,
-    val backgroundMusic: String? = null
+    val backgroundMusic: String? = null,
+    val isViewerOnly: Boolean = false,
+    val isOwnedByMe: Boolean = false,
+    val isCollaborator: Boolean = false
 )

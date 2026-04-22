@@ -5,11 +5,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
-import com.dmb.bestbefore.data.local.PreferencesManager
+import com.dmb.bestbefore.data.local.SessionManager
 
 /**
  * Global observable theme state that triggers recomposition across the entire app
- * when theme or accent color changes. Backed by PreferencesManager for persistence.
+ * when theme or accent color changes. Backed by SessionManager for persistence.
  */
 object ThemeState {
     var currentTheme by mutableStateOf(AppThemes.Default)
@@ -24,24 +24,26 @@ object ThemeState {
     var syncAccentWithRoom by mutableStateOf(false)
         private set
 
-    private var prefsManager: PreferencesManager? = null
-
     fun init(context: Context) {
-        if (prefsManager == null) {
-            prefsManager = PreferencesManager(context.applicationContext)
+        val sessionManager = SessionManager(context)
+        currentTheme = AppThemes.getThemeByName(sessionManager.getTheme())
+        val accentHex = sessionManager.getAccentColor()
+        try {
+            currentAccent = Color(android.graphics.Color.parseColor(accentHex))
+        } catch (e: Exception) {
+            currentAccent = Color(0xFF007AFF)
         }
-        currentTheme = AppThemes.getThemeByName(prefsManager!!.getTheme())
-        currentAccent = prefsManager!!.getAccentColor()
     }
 
-    fun selectTheme(theme: AppTheme) {
+    fun selectTheme(context: Context, theme: AppTheme) {
         currentTheme = theme
-        prefsManager?.saveTheme(theme.name)
+        SessionManager(context).saveTheme(theme.name)
     }
 
-    fun selectAccent(color: Color) {
+    fun selectAccent(context: Context, color: Color) {
         currentAccent = color
-        prefsManager?.saveAccentColor(color)
+        val hex = String.format("#%06X", (0xFFFFFF and color.toArgb()))
+        SessionManager(context).saveAccentColor(hex)
     }
 
     fun updateApplyAccentToAll(enabled: Boolean) {
@@ -50,9 +52,6 @@ object ThemeState {
 
     fun updateSyncAccentWithRoom(enabled: Boolean) {
         syncAccentWithRoom = enabled
-        if (!enabled) {
-            currentAccent = prefsManager?.getAccentColor() ?: currentAccent
-        }
     }
 
     fun syncAccent(color: Color) {
@@ -60,4 +59,12 @@ object ThemeState {
             currentAccent = color
         }
     }
+}
+
+// Extension to get argb from Color if not available
+private fun Color.toArgb(): Int {
+    return (this.alpha * 255.0f + 0.5f).toInt() shl 24 or
+           ((this.red * 255.0f + 0.5f).toInt() shl 16) or
+           ((this.green * 255.0f + 0.5f).toInt() shl 8) or
+           (this.blue * 255.0f + 0.5f).toInt()
 }

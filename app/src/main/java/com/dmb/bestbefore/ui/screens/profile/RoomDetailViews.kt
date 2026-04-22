@@ -101,10 +101,13 @@ fun RoomDetailScreen(
     multiplePhotoPickerLauncher: androidx.activity.result.ActivityResultLauncher<String>,
     filePickerLauncher: androidx.activity.result.ActivityResultLauncher<Array<String>>,
     onAddToRooming: (() -> Unit)? = null,
+    onRemoveFromRooming: (() -> Unit)? = null,
+    isRoomInRooming: Boolean = false,
     onIgnoreRoom: (() -> Unit)? = null
 ) {
     val room by viewModel.selectedRoom.collectAsState()
     val roomMedia by viewModel.roomMedia.collectAsState() // Persisted room media
+    val roomEmotions by viewModel.roomEmotions.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
     val isRecording by viewModel.isRecordingAudio.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
@@ -124,9 +127,9 @@ fun RoomDetailScreen(
     var show3DotMenu by remember { mutableStateOf(false) }
     var showRoomDetailsSheet by remember { mutableStateOf(false) }
     var showWriteNoteDialog by remember { mutableStateOf(false) }
+    var showDeleteRoomConfirm by remember { mutableStateOf(false) }
     var noteContent by remember { mutableStateOf("") }
     var showAllMediaGrid by remember { mutableStateOf(false) }
-    var isAddedToRooming by remember { mutableStateOf(false) }
     var isIgnored by remember { mutableStateOf(false) }
     
     var showMusicSelector by remember { mutableStateOf(false) }
@@ -168,185 +171,230 @@ fun RoomDetailScreen(
                     .verticalScroll(androidx.compose.foundation.rememberScrollState())
                     .padding(bottom = 32.dp)
             ) {
-                // Header: Back, Title, Grid/Menu Icon
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { viewModel.goBack() }
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
-                        Text("Back", color = Color.White, fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp))
-                    }
-                    
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                         // Grid Icon Removed
-                         
-                         // Music Note Button
-                         Icon(
-                             Icons.Default.MusicNote,
-                             "Music",
-                             tint = Color.White,
-                             modifier = Modifier
-                                 .size(24.dp)
-                                 .clickable { showMusicSelector = true }
-                         )
-                         Spacer(modifier = Modifier.width(16.dp))
+                val canContribute = room!!.isOwnedByMe || room!!.isCollaborator
+                val currentTime = System.currentTimeMillis()
+                val isLocked = room!!.unlockTime > currentTime
+                val isRoomClosed = room!!.scheduledClosureTime > 0L && currentTime >= room!!.scheduledClosureTime
+                val isViewer = !canContribute
+                val isArtistRoom = room!!.ownerUserType?.equals("artist", ignoreCase = true) == true
+                val selectedEmotion = roomEmotions[room!!.id]
 
-                         // QR Code Button
-                         Icon(
-                             Icons.Default.QrCode2,
-                             "QR Code",
-                             tint = Color.White,
-                             modifier = Modifier
-                                 .size(24.dp)
-                                 .clickable { showQrCode = true }
-                         )
-                         Spacer(modifier = Modifier.width(16.dp))
-                         
-                         // 3-Dot Menu
-                         Box {
-                             Icon(
-                                 Icons.Default.MoreHoriz,
-                                 "Menu",
-                                 tint = Color.White,
-                                 modifier = Modifier
-                                     .size(24.dp)
-                                     .clickable { show3DotMenu = true }
-                             )
-                             
-                             DropdownMenu(
-                                 expanded = show3DotMenu,
-                                 onDismissRequest = { show3DotMenu = false },
-                                 modifier = Modifier.background(Color(0xFF2C2C2E))
-                             ) {
-                                 DropdownMenuItem(
-                                     text = { Text("Room Details", color = Color.White) },
-                                     onClick = {
-                                         show3DotMenu = false
-                                         showRoomDetailsSheet = true
-                                     }
-                                 )
-                                 DropdownMenuItem(
-                                     text = { Text("Edit Room", color = Color.White) },
-                                     onClick = {
-                                         show3DotMenu = false
-                                         room?.let { viewModel.selectRoomForEditing(it) }
-                                     }
-                                 )
-                                 // Add to Rooming (only shown when callback is provided = from Hallway/Artists)
-                                 if (onAddToRooming != null) {
-                                     DropdownMenuItem(
-                                         text = {
-                                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                                 Icon(
-                                                     Icons.Default.Bookmark,
-                                                     null,
-                                                     tint = if (isAddedToRooming) Color(0xFF007AFF) else Color.White,
-                                                     modifier = Modifier.size(18.dp)
-                                                 )
-                                                 Spacer(modifier = Modifier.width(10.dp))
-                                                 Text(
-                                                     if (isAddedToRooming) "Added to Rooming ✓" else "Add to Rooming",
-                                                     color = if (isAddedToRooming) Color(0xFF007AFF) else Color.White
-                                                 )
-                                             }
-                                         },
-                                         onClick = {
-                                             if (!isAddedToRooming) {
-                                                 onAddToRooming()
-                                                 isAddedToRooming = true
-                                             }
-                                             show3DotMenu = false
-                                         }
-                                     )
-                                 }
-                                 DropdownMenuItem(
-                                     text = { Text("Delete Room", color = Color.Red) },
-                                     onClick = {
-                                         show3DotMenu = false
-                                         room?.let { viewModel.deleteRoom(context, it, fromInsideRoom = true) }
-                                     }
-                                 )
-                                 // Ignore This Room (only from Hallway/Artists, red)
-                                 if (onIgnoreRoom != null) {
-                                     HorizontalDivider(color = Color.White.copy(alpha = 0.08f), thickness = 0.5.dp)
-                                     DropdownMenuItem(
-                                         text = {
-                                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                                 Icon(
-                                                     Icons.Default.Block,
-                                                     null,
-                                                     tint = if (isIgnored) Color.Gray else Color(0xFFFF3B30),
-                                                     modifier = Modifier.size(18.dp)
-                                                 )
-                                                 Spacer(modifier = Modifier.width(10.dp))
-                                                 Text(
-                                                     if (isIgnored) "Room Ignored ✓" else "Ignore This Room",
-                                                     color = if (isIgnored) Color.Gray else Color(0xFFFF3B30),
-                                                     fontWeight = FontWeight.SemiBold
-                                                 )
-                                             }
-                                         },
-                                         onClick = {
-                                             if (!isIgnored) {
-                                                 onIgnoreRoom()
-                                                 isIgnored = true
-                                             }
-                                             show3DotMenu = false
-                                         }
-                                     )
-                                 }
-                             }
-                         }
-                     }
+                if (canContribute) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { viewModel.goBack() }
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
+                            Text("Back", color = Color.White, fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp))
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.MusicNote,
+                                "Music",
+                                tint = Color.White,
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clickable { showMusicSelector = true }
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Icon(
+                                Icons.Default.QrCode2,
+                                "QR Code",
+                                tint = Color.White,
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clickable { showQrCode = true }
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Box {
+                                Icon(
+                                    Icons.Default.MoreHoriz,
+                                    "Menu",
+                                    tint = Color.White,
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clickable { show3DotMenu = true }
+                                )
+                                DropdownMenu(
+                                    expanded = show3DotMenu,
+                                    onDismissRequest = { show3DotMenu = false },
+                                    modifier = Modifier.background(Color(0xFF2C2C2E))
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Room Details", color = Color.White) },
+                                        onClick = {
+                                            show3DotMenu = false
+                                            showRoomDetailsSheet = true
+                                        }
+                                    )
+                                    if (room?.isOwnedByMe == true) {
+                                        DropdownMenuItem(
+                                            text = { Text("Edit Room", color = Color.White) },
+                                            onClick = {
+                                                show3DotMenu = false
+                                                room?.let { viewModel.selectRoomForEditing(it) }
+                                            }
+                                        )
+                                    }
+                                    if (onAddToRooming != null) {
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(
+                                                        if (isRoomInRooming) Icons.Default.NotificationsOff else Icons.Default.Bookmark,
+                                                        null,
+                                                        tint = if (isRoomInRooming) Color(0xFFFF3B30) else Color.White,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                    Text(
+                                                        if (isRoomInRooming) "Remove from Rooming" else "Add to Rooming",
+                                                        color = if (isRoomInRooming) Color(0xFFFF3B30) else Color.White
+                                                    )
+                                                }
+                                            },
+                                            onClick = {
+                                                if (isRoomInRooming) onRemoveFromRooming?.invoke() else onAddToRooming()
+                                                show3DotMenu = false
+                                            }
+                                        )
+                                    }
+                                    if (room?.isOwnedByMe == true) {
+                                        DropdownMenuItem(
+                                            text = { Text("Delete Room", color = Color.Red) },
+                                            onClick = {
+                                                show3DotMenu = false
+                                                showDeleteRoomConfirm = true
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { viewModel.goBack() }
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
+                            Text("Back", color = Color.White, fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp))
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.Apps,
+                                contentDescription = "View all memories",
+                                tint = Color(0xFF007AFF),
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .clickable {
+                                        if (currentRoomMedia.isNotEmpty()) {
+                                            showAllMediaGrid = true
+                                        } else {
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                "No memories to show yet",
+                                                android.widget.Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }
+                            )
+                            Spacer(modifier = Modifier.width(20.dp))
+                            Box {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF2C2C2E))
+                                        .clickable { show3DotMenu = true },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Default.MoreHoriz,
+                                        "Menu",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = show3DotMenu,
+                                    onDismissRequest = { show3DotMenu = false },
+                                    modifier = Modifier.background(Color(0xFF2C2C2E))
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Room Details", color = Color.White) },
+                                        onClick = {
+                                            show3DotMenu = false
+                                            showRoomDetailsSheet = true
+                                        }
+                                    )
+                                    if (onIgnoreRoom != null) {
+                                        HorizontalDivider(color = Color.White.copy(alpha = 0.08f), thickness = 0.5.dp)
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(
+                                                        Icons.Default.Block,
+                                                        null,
+                                                        tint = if (isIgnored) Color.Gray else Color(0xFFFF3B30),
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                    Text(
+                                                        if (isIgnored) "Room Ignored ✓" else "Ignore This Room",
+                                                        color = if (isIgnored) Color.Gray else Color(0xFFFF3B30),
+                                                        fontWeight = FontWeight.SemiBold
+                                                    )
+                                                }
+                                            },
+                                            onClick = {
+                                                if (!isIgnored) {
+                                                    onIgnoreRoom()
+                                                    isIgnored = true
+                                                }
+                                                show3DotMenu = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-                
-                // Room Title
+
                 Text(
                     text = room!!.roomName,
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
-                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 32.dp)
-                )
-                
-                Text(
-                    text = "Memories",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(top = 4.dp, bottom = if (canContribute) 8.dp else 20.dp)
                 )
 
-                val currentTime = System.currentTimeMillis()
-                val isLocked = room!!.unlockTime > currentTime
-                val isRoomClosed = room!!.scheduledClosureTime > 0L && currentTime >= room!!.scheduledClosureTime
-                val isViewer = room!!.isViewerOnly
-
-                if (isViewer) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFF1E88E5).copy(alpha = 0.2f), RoundedCornerShape(12.dp))
-                            .border(1.dp, Color(0xFF1E88E5), RoundedCornerShape(12.dp))
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Explore, contentDescription = "Explorer Mode", tint = Color(0xFF1E88E5))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Explorer Mode (Viewer)", color = Color(0xFF1E88E5), fontWeight = FontWeight.Bold)
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(32.dp))
-                } else {
-                    // Grid of Actions
+                if (canContribute) {
+                    Text(
+                        text = "Memories",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -354,28 +402,23 @@ fun RoomDetailScreen(
                         userScrollEnabled = false,
                         modifier = Modifier.height(330.dp)
                     ) {
-                        // Item 1: Add Photo (Blue)
                         item { MemoryActionCard(Icons.Default.Image, "Add Photo", if (isRoomClosed) Color.Gray else Color(0xFF007AFF)) {
-                             if (isRoomClosed) android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
-                             else multiplePhotoPickerLauncher.launch("image/*")
-                         }}
-                        // Item 2: Write Note (Purple)
+                            if (isRoomClosed) android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
+                            else multiplePhotoPickerLauncher.launch("image/*")
+                        }}
                         item { MemoryActionCard(Icons.Default.Edit, "Write Note", if (isRoomClosed) Color.Gray else Color(0xFFAF52DE)) {
                             if (isRoomClosed) android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
                             else showWriteNoteDialog = true
                         }}
-                        // Item 3: Add Video (Orange)
                         item { MemoryActionCard(Icons.Default.Videocam, "Add Video", if (isRoomClosed) Color.Gray else Color(0xFFFF9500)) {
                             if (isRoomClosed) android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
                             else multiplePhotoPickerLauncher.launch("video/*")
                         }}
-                        // Item 4: Add Music (Red)
                         item { MemoryActionCard(Icons.Default.MusicNote, "Add Music", if (isRoomClosed) Color.Gray else Color(0xFFFF3B30)) {
                             if (isRoomClosed) android.widget.Toast.makeText(context, "This room is archived.", android.widget.Toast.LENGTH_SHORT).show()
                             else filePickerLauncher.launch(arrayOf("audio/*"))
                         }}
-                        // Item 5: Record Audio (Pink/Red)
-                        item { 
+                        item {
                             val label = if (isRecording) "Stop Recording" else "Record Audio"
                             val icon = if (isRecording) Icons.Default.Stop else Icons.Default.Mic
                             MemoryActionCard(icon, label, if (isRoomClosed) Color.Gray else Color(0xFFFF2D55)) {
@@ -385,7 +428,10 @@ fun RoomDetailScreen(
                                     if (isRecording) {
                                         viewModel.stopAudioRecordingAndUpload(context)
                                     } else {
-                                        val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                                        val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                                            context,
+                                            android.Manifest.permission.RECORD_AUDIO
+                                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
                                         if (hasPermission) {
                                             viewModel.startAudioRecording(context)
                                         } else {
@@ -395,7 +441,6 @@ fun RoomDetailScreen(
                                 }
                             }
                         }
-                        // Item 6: View All (Green) — shown when room is unlocked
                         item {
                             val isLockedLocal = System.currentTimeMillis() < room!!.unlockTime
                             if (!isLockedLocal) {
@@ -403,14 +448,74 @@ fun RoomDetailScreen(
                                     showAllMediaGrid = true
                                 }
                             } else {
-                                Box(modifier = Modifier.fillMaxWidth()) {} // empty placeholder to keep grid layout
+                                Box(modifier = Modifier.fillMaxWidth()) {}
                             }
                         }
                     }
-                    
-                    Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
+                } else {
+                    if (onAddToRooming != null) {
+                        RoomingPrimaryCta(
+                            inRooming = isRoomInRooming,
+                            onAdd = {
+                                onAddToRooming()
+                                android.widget.Toast.makeText(context, "Added to Rooming", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            onRemove = {
+                                onRemoveFromRooming?.invoke()
+                                android.widget.Toast.makeText(context, "Removed from Rooming", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                    if (isArtistRoom) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(22.dp))
+                                .padding(horizontal = 8.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ProfileViewModel.ARTIST_ROOM_EMOTIONS.forEach { emotion ->
+                                val isSelected = selectedEmotion == emotion
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(
+                                            if (isSelected) Color.White.copy(alpha = 0.16f)
+                                            else Color.Transparent
+                                        )
+                                        .border(
+                                            width = if (isSelected) 1.dp else 0.dp,
+                                            color = if (isSelected) Color.White.copy(alpha = 0.35f) else Color.Transparent,
+                                            shape = RoundedCornerShape(16.dp)
+                                        )
+                                        .clickable {
+                                            viewModel.setArtistRoomEmotion(
+                                                context = context,
+                                                roomId = room!!.id,
+                                                emotion = if (isSelected) null else emotion
+                                            )
+                                        }
+                                        .padding(vertical = 10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = emotion.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() },
+                                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.65f),
+                                        fontSize = 12.sp,
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                    ExplorerReadOnlyModeBanner()
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
-                
+
                 // Recent Drops Section
                 Text("Recent Drops", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 Spacer(modifier = Modifier.height(16.dp))
@@ -444,7 +549,7 @@ fun RoomDetailScreen(
                 } else if (isClosed) {
                     val sdf = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
                     Text(
-                        "ðŸ“¦ Archived â€” Closed on ${sdf.format(java.util.Date(room!!.scheduledClosureTime))}",
+                        "Archived — closed on ${sdf.format(java.util.Date(room!!.scheduledClosureTime))}",
                         color = Color(0xFF8E8E93), fontSize = 13.sp
                     )
                     Spacer(modifier = Modifier.height(16.dp))
@@ -473,17 +578,23 @@ fun RoomDetailScreen(
                 }
                 
                 if (displayMedia.isEmpty()) {
+                    val emptyMessage = if (isViewer) {
+                        "No memories in this room yet."
+                    } else {
+                        "No drops yet. Be the first to add a memory!"
+                    }
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(150.dp)
-                            .background(Color(0xFF1C1C1E), RoundedCornerShape(16.dp)),
+                            .background(Color(0xFF1C1C1E).copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                            .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(16.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Default.Inbox, null, tint = Color.Gray, modifier = Modifier.size(40.dp))
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("No drops yet. Be the first to add a memory!", color = Color.Gray, fontSize = 14.sp)
+                            Text(emptyMessage, color = Color.Gray, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 16.dp))
                         }
                     }
                 } else {
@@ -588,22 +699,27 @@ fun RoomDetailScreen(
 
                 // ─── CONNECTED ROOMS SECTION ────────────────────────────────
                 val connectedIds = room!!.connectedRooms
-                if (connectedIds.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(40.dp))
+                Spacer(modifier = Modifier.height(40.dp))
+                Text(
+                    "Connected Rooms",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                if (connectedIds.isEmpty()) {
                     Text(
-                        "Connected Rooms",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        modifier = Modifier.padding(bottom = 16.dp)
+                        "No connections yet.",
+                        color = Color(0xFF8E8E93),
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
                     )
-
+                } else {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         connectedIds.forEach { targetId ->
-                            // Resolve room name from ProfileViewModel's lists
                             val targetRoom = viewModel.createdRooms.value.find { it.id == targetId }
                                 ?: viewModel.getRoomByIdFromRemote(targetId)
 
@@ -902,9 +1018,175 @@ fun RoomDetailScreen(
                 }
             }
         }
+
+        if (showDeleteRoomConfirm) {
+            AlertDialog(
+                onDismissRequest = { showDeleteRoomConfirm = false },
+                containerColor = Color(0xFF1C1C1E),
+                title = {
+                    Text(
+                        text = "Delete Room?",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Text(
+                        text = "Do you want to delete room ${room?.roomName ?: ""}?",
+                        color = Color.LightGray
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showDeleteRoomConfirm = false
+                            room?.let { viewModel.deleteRoom(context, it, fromInsideRoom = true) }
+                        }
+                    ) {
+                        Text("Delete Room", color = Color.Red, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteRoomConfirm = false }) {
+                        Text("Cancel", color = Color.Gray)
+                    }
+                }
+            )
+        }
     }
 }
 
+@Composable
+private fun RoomingPrimaryCta(
+    inRooming: Boolean,
+    onAdd: () -> Unit,
+    onRemove: () -> Unit
+) {
+    if (inRooming) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color(0xFF1A0A0A))
+                .border(1.5.dp, Color(0xFFFF3B30), RoundedCornerShape(14.dp))
+                .clickable { onRemove() }
+                .padding(vertical = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.NotificationsOff,
+                    contentDescription = null,
+                    tint = Color(0xFFFF3B30),
+                    modifier = Modifier.size(22.dp)
+                )
+                Text(
+                    text = "Remove from Rooming",
+                    color = Color(0xFFFF3B30),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    } else {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color(0xFF2C2C2E))
+                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+                .clickable { onAdd() }
+                .padding(vertical = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.Bookmark,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
+                Text(
+                    text = "Add to Rooming",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExplorerReadOnlyModeBanner() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        Color(0xFF0D2A4A).copy(alpha = 0.95f),
+                        Color(0xFF0A1628).copy(alpha = 0.95f)
+                    )
+                ),
+                RoundedCornerShape(16.dp)
+            )
+            .border(1.dp, Color(0xFF1E88E5).copy(alpha = 0.7f), RoundedCornerShape(16.dp))
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color(0xFF1E88E5), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Public,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Column {
+                Text(
+                    text = "EXPLORER MODE",
+                    color = Color(0xFF64B5F6),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.8.sp
+                )
+                Text(
+                    text = "Viewing memories in this public space.",
+                    color = Color(0xFFB0BEC5),
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
+                )
+            }
+        }
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color(0xFF1565C0).copy(alpha = 0.45f))
+                .border(1.dp, Color(0xFF42A5F5), RoundedCornerShape(6.dp))
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Text(
+                text = "READ ONLY",
+                color = Color(0xFF90CAF9),
+                fontSize = 9.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 0.5.sp
+            )
+        }
+    }
+}
 
 
 @Composable

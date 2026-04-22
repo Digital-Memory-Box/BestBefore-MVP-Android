@@ -72,6 +72,9 @@ fun ProfileScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val currentStep by viewModel.currentStep.collectAsState()
     val createdRooms by viewModel.createdRooms.collectAsState()
+    val selectedRoom by viewModel.selectedRoom.collectAsState()
+    val savedRoomCards by hallwayViewModel.savedRoomCards.collectAsState()
+    val isRoomInRooming = selectedRoom?.let { r -> savedRoomCards.any { it.id == r.id } } == true
 
     val isAllMediaVisible by viewModel.isAllMediaVisible.collectAsState()
 
@@ -338,25 +341,25 @@ fun ProfileScreen(
                     }
                 },
                 onOpenRoom = { card ->
-                    viewModel.selectRoomFromHallway(
-                        cardId = card.id,
-                        cardTitle = card.title,
-                        capsuleDays = card.timeCapsuleDays
-                    )
+                    viewModel.selectRoomFromHallway(card)
                 },
                 onCreateRoomClick = {
                     viewModel.startCreateRoom(RoomCreationSource.HALLWAY)
                 },
                 onCameraClick = {
                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                        val file = java.io.File.createTempFile("camera_image_", ".jpg", context.cacheDir)
-                        val uri = androidx.core.content.FileProvider.getUriForFile(
-                            context,
-                            "${context.packageName}.fileprovider",
-                            file
-                        )
-                        cameraImageUri = uri
-                        cameraLauncher.launch(uri)
+                        try {
+                            val file = java.io.File.createTempFile("camera_image_", ".jpg", context.cacheDir)
+                            val uri = androidx.core.content.FileProvider.getUriForFile(
+                                context,
+                                "${context.packageName}.fileprovider",
+                                file
+                            )
+                            cameraImageUri = uri
+                            cameraLauncher.launch(uri)
+                        } catch (_: SecurityException) {
+                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                        }
                     } else {
                         cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                     }
@@ -440,6 +443,7 @@ fun ProfileScreen(
                         viewModel = viewModel,
                         multiplePhotoPickerLauncher = multiplePhotoPickerLauncher,
                         filePickerLauncher = filePickerLauncher,
+                        isRoomInRooming = isRoomInRooming,
                         onAddToRooming = {
                             val room = viewModel.selectedRoom.value
                             if (room != null) {
@@ -456,6 +460,9 @@ fun ProfileScreen(
                                     )
                                 )
                             }
+                        },
+                        onRemoveFromRooming = {
+                            selectedRoom?.id?.let { id -> hallwayViewModel.removeSavedRoom(id) }
                         },
                         onIgnoreRoom = {
                             val room = viewModel.selectedRoom.value

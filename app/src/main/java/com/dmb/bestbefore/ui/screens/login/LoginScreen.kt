@@ -31,9 +31,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 // ─── Login Mode ─────────────────────────────────────────────────────────────
-enum class LoginMode {
-    EVERYONE, ARTISTS
-}
+// (Removed redundant LoginMode enum - defined in LoginViewModel.kt)
 
 private enum class ArrowDirection {
     LEFT, RIGHT

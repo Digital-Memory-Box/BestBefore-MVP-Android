@@ -22,5 +22,8 @@ data class TimeCapsuleRoom(
     val music: String = "None",
     val rollingExpiration: String = "Never",
     val isViewerOnly: Boolean = false,
-    val connectedRooms: List<String> = emptyList()
+    val connectedRooms: List<String> = emptyList(),
+    val isOwnedByMe: Boolean = false,
+    val isCollaborator: Boolean = false,
+    val ownerUserType: String? = null
 )

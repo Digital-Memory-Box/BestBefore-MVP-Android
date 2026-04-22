@@ -558,6 +558,7 @@ private fun RoomingCard(
     val colors = LocalBestBeforeColors.current
     val themeColor = parseThemeColor(card.themeColorHex, fallback = colors.primary)
     val isLocked = card.timeCapsuleDays > 0
+    val isViewer = card.isViewerOnly
     var showRemoveConfirm by remember { mutableStateOf(false) }
 
     Box(
@@ -609,6 +610,70 @@ private fun RoomingCard(
                     tint = Color.White,
                     modifier = Modifier.size(16.dp)
                 )
+            }
+        }
+
+        // ── Explorer Mode banner (Viewer-only rooms) ──────────────────
+        if (isViewer) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(if (isSaved) PaddingValues(start = 14.dp, top = 54.dp) else PaddingValues(14.dp))
+                    .fillMaxWidth(0.92f)
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(Color(0xFF1565C0).copy(alpha = 0.92f), Color(0xFF0D47A1).copy(alpha = 0.92f))
+                        ),
+                        RoundedCornerShape(14.dp)
+                    )
+                    .border(1.dp, Color(0xFF42A5F5).copy(alpha = 0.6f), RoundedCornerShape(14.dp))
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Globe icon in accent circle
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .background(Color(0xFF1E88E5), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Explore,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "EXPLORER MODE",
+                        color = Color(0xFF90CAF9),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.8.sp
+                    )
+                    Text(
+                        "Viewing memories in this public space.",
+                        color = Color.White.copy(alpha = 0.75f),
+                        fontSize = 11.sp,
+                        lineHeight = 14.sp
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .background(Color(0xFF42A5F5).copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+                        .border(1.dp, Color(0xFF42A5F5), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        "READ ONLY",
+                        color = Color(0xFF90CAF9),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.6.sp
+                    )
+                }
             }
         }
 
@@ -779,7 +844,11 @@ private fun HallwayContent(
                     .weight(1f)
                     .fillMaxWidth()
             ) {
-                Column {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                ) {
                     // ── Room Name + Location ────────────────────────
                     Box(
                         modifier = Modifier
@@ -1240,23 +1309,36 @@ fun ActiveCardDetails(
 
             if (hasDescription || (hasTags && card.tags.size > 2)) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "See All",
-                        color = accentColor,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.clickable { onSeeAllClick() }
-                    )
+                    // "See All" — pill background for readability
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                accentColor.copy(alpha = 0.18f),
+                                RoundedCornerShape(20.dp)
+                            )
+                            .border(1.dp, accentColor.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
+                            .clickable { onSeeAllClick() }
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "See All",
+                            color = accentColor,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
 
                     if (!isSimilarMode) {
                         Text(
-                            text = "Show Similar Rooms",
+                            text = "Show Similar",
                             color = colors.textPrimary.copy(alpha = 0.7f),
-                            fontSize = 14.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.clickable { onShowSimilarRooms() }
                         )
@@ -1266,10 +1348,10 @@ fun ActiveCardDetails(
                             modifier = Modifier
                                 .background(accentColor, RoundedCornerShape(100.dp))
                                 .clickable { onConnectRoom() }
-                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                                .padding(horizontal = 14.dp, vertical = 6.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Icon(Icons.Default.Link, null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Link, null, tint = Color.Black, modifier = Modifier.size(14.dp))
                                 Text(
                                     text = "Connection",
                                     color = Color.Black,
@@ -1287,10 +1369,10 @@ fun ActiveCardDetails(
                         .align(Alignment.End)
                         .background(accentColor, RoundedCornerShape(100.dp))
                         .clickable { onConnectRoom() }
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .padding(horizontal = 14.dp, vertical = 6.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(Icons.Default.Link, null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Link, null, tint = Color.Black, modifier = Modifier.size(14.dp))
                         Text(
                             text = "Connection",
                             color = Color.Black,

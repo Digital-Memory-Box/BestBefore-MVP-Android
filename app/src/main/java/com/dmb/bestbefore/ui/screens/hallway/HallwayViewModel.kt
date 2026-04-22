@@ -86,6 +86,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
     val savedRoomCards: StateFlow<List<HallwayCard>> = _savedRoomCards.asStateFlow()
 
     fun saveRoomToRooming(card: HallwayCard) {
+        if (isRoomIgnored(card.id)) return
         if (_savedRoomCards.value.none { it.id == card.id }) {
             _savedRoomCards.value = _savedRoomCards.value + card
             persistSavedRooms()
@@ -117,8 +118,19 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
         if (!_ignoredRoomIds.value.contains(card.id)) {
             _ignoredRoomIds.value = _ignoredRoomIds.value + card.id
             _ignoredRoomCards.value = _ignoredRoomCards.value + card
-            persistIgnoredRooms()
-            // Re-filter current tab to remove it instantly
+            // Ignored rooms must not stay in Saved Rooming (Rooms tab)
+            if (_savedRoomCards.value.any { it.id == card.id }) {
+                _savedRoomCards.value = _savedRoomCards.value.filter { it.id != card.id }
+            }
+            // One PATCH keeps ignored + saved lists consistent on the server
+            viewModelScope.launch {
+                authRepository.updateMe(
+                    com.dmb.bestbefore.data.api.models.UpdateMeRequest(
+                        ignoredRoomIds = _ignoredRoomIds.value.toList(),
+                        savedRoomIds = _savedRoomCards.value.map { it.id }
+                    )
+                )
+            }
             filterCards(_currentTab.value)
         }
     }
@@ -235,7 +247,8 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                     }
 
                     val savedIds = userDto.savedRoomIds?.toSet() ?: emptySet()
-                    _savedRoomCards.value = allRooms.filter { savedIds.contains(it.id) }.map { room ->
+                    // Do not show ignored rooms under Saved (even if backend still lists them in savedRoomIds)
+                    _savedRoomCards.value = allRooms.filter { savedIds.contains(it.id) && !_ignoredRoomIds.value.contains(it.id) }.map { room ->
                         HallwayCard(
                             id = room.id,
                             title = room.name,
@@ -309,6 +322,26 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
         return room.isPublic == true || !room.isPrivate
     }
 
+    private fun isCollaborator(room: com.dmb.bestbefore.data.api.models.RoomDto, currentUserEmail: String): Boolean {
+        return room.collaborators?.any { element ->
+            if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
+                element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
+            } else {
+                false
+            }
+        } == true
+    }
+
+    private fun isViewer(room: com.dmb.bestbefore.data.api.models.RoomDto, currentUserEmail: String): Boolean {
+        return room.viewers?.any { element ->
+            if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
+                element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
+            } else {
+                false
+            }
+        } == true
+    }
+
     private fun filterCards(tab: BottomTab) {
         val currentUserEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
         val allAvailableRooms = (myRoomsList + discoverRoomsList).distinctBy { it.id }
@@ -336,25 +369,22 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 BottomTab.ROOMING -> {
                     myRoomsList.filter { room ->
                         val isOwner = room.ownerEmail?.equals(currentUserEmail, ignoreCase = true) == true
-                        val isCollaborator = room.collaborators?.any { element ->
-                            if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
-                                element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
-                            } else false
-                        } == true
-                        val isViewer = room.viewers?.any { element ->
-                            if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
-                                element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
-                            } else false
-                        } == true
+                        val isCollaborator = isCollaborator(room, currentUserEmail)
+                        val isViewer = isViewer(room, currentUserEmail)
                         val isPrivate = room.isPrivate
                         !isOwner && (isCollaborator || isViewer) && isPrivate
                     }
                 }
                 BottomTab.EVERYONE -> {
-                    allAvailableRooms.filter { isRoomPublic(it) && !_ignoredRoomIds.value.contains(it.id) }
+                    allAvailableRooms.filter {
+                        val isOwner = it.ownerEmail?.equals(currentUserEmail, ignoreCase = true) == true
+                        !isOwner && isRoomPublic(it) && !_ignoredRoomIds.value.contains(it.id)
+                    }
                 }
                 BottomTab.ARTISTS -> {
                     allAvailableRooms.filter {
+                        val isOwner = it.ownerEmail?.equals(currentUserEmail, ignoreCase = true) == true
+                        !isOwner &&
                         it.ownerUserType?.equals("artist", ignoreCase = true) == true &&
                         isRoomPublic(it) &&
                         !_ignoredRoomIds.value.contains(it.id)
@@ -364,6 +394,11 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
         }
 
         val mappedCards = filteredRooms.map { room ->
+            val currentUserEmail2 = FirebaseAuth.getInstance().currentUser?.email ?: ""
+            val isOwner = room.ownerEmail?.equals(currentUserEmail2, ignoreCase = true) == true
+            val isCollaborator = isCollaborator(room, currentUserEmail2)
+            val isViewer = isViewer(room, currentUserEmail2)
+            val isViewerOnly = !isOwner && !isCollaborator && (isViewer || isRoomPublic(room))
             HallwayCard(
                 id = room.id,
                 title = room.name,
@@ -386,7 +421,10 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                     } else null
                 } ?: emptyList(),
                 location = null, // Will fetch from DB if location is added to RoomDto later
-                backgroundMusic = room.backgroundMusic
+                backgroundMusic = room.backgroundMusic,
+                isViewerOnly = isViewerOnly,
+                isOwnedByMe = isOwner,
+                isCollaborator = isCollaborator
             )
         }
         _cards.value = mappedCards

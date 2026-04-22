@@ -25,8 +25,12 @@ import androidx.compose.ui.graphics.Color
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.EmailAuthProvider
 import com.dmb.bestbefore.data.api.models.UserDto
+import com.dmb.bestbefore.data.api.models.UpdateMeRequest
 
 class ProfileViewModel : ViewModel() {
+    companion object {
+        val ARTIST_ROOM_EMOTIONS = listOf("warmed", "moved", "soothed", "struck", "stayed")
+    }
 
     private val _currentStep = MutableStateFlow(ProfileStep.NONE)
     val currentStep: StateFlow<ProfileStep> = _currentStep.asStateFlow()
@@ -91,6 +95,9 @@ class ProfileViewModel : ViewModel() {
 
     private val _profileImageUri = MutableStateFlow<Uri?>(null)
     val profileImageUri: StateFlow<Uri?> = _profileImageUri.asStateFlow()
+
+    private val _roomEmotions = MutableStateFlow<Map<String, String>>(emptyMap())
+    val roomEmotions: StateFlow<Map<String, String>> = _roomEmotions.asStateFlow()
 
     
     private val _userName = MutableStateFlow("User") 
@@ -404,12 +411,14 @@ class ProfileViewModel : ViewModel() {
     // Helper context for DB init (Simple MVP approach)
     fun initDatabase(context: Context) {
         val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
+        val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
         val savedName = sessionManager.getUserName()
         val savedMusic = sessionManager.getProfileMusic()
         val savedProfilePhotoUri = sessionManager.getProfilePhotoUri()
         _userName.value = if (!savedName.isNullOrEmpty()) savedName else "User"
         _profileMusic.value = if (!savedMusic.isNullOrEmpty()) savedMusic else "None"
         _profileImageUri.value = savedProfilePhotoUri?.let { Uri.parse(it) }
+        _roomEmotions.value = sessionManager.getRoomEmotions(currentUserId)
 
         viewModelScope.launch {
             try {
@@ -420,11 +429,15 @@ class ProfileViewModel : ViewModel() {
                     if (!userDto.bio.isNullOrEmpty()) {
                         _bio.value = userDto.bio
                     } else {
-                        // User has no bio yet, default
-                        _bio.value = "Digital artist focusing on surreal landscapes and vibrant color theory."
+                        // User has no bio yet, clear placeholder so field is blank
+                        _bio.value = ""
                     }
                     if (!userDto.profileImageUrl.isNullOrEmpty()) {
                         _profileImageUri.value = Uri.parse(userDto.profileImageUrl)
+                    }
+                    // Load profile tags from backend
+                    if (!userDto.tags.isNullOrEmpty()) {
+                        _profileTags.value = userDto.tags
                     }
                 }
             } catch (e: Exception) {
@@ -570,6 +583,12 @@ class ProfileViewModel : ViewModel() {
                     element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
                 } else false
             } == true
+            val isOwnedByMe = dto.ownerEmail?.equals(currentUserEmail, ignoreCase = true) == true
+            val isCollaborator = dto.collaborators?.any { element ->
+                if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
+                    element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
+                } else false
+            } == true
 
             TimeCapsuleRoom(
                 id = dto.id,
@@ -593,7 +612,10 @@ class ProfileViewModel : ViewModel() {
                 music = dto.backgroundMusic ?: "None",
                 rollingExpiration = rollingString,
                 isViewerOnly = isViewerOnly,
-                connectedRooms = dto.connectedRooms ?: emptyList()
+                connectedRooms = dto.connectedRooms ?: emptyList(),
+                isOwnedByMe = isOwnedByMe,
+                isCollaborator = isCollaborator,
+                ownerUserType = dto.ownerUserType
             )
         }
     }
@@ -706,7 +728,9 @@ class ProfileViewModel : ViewModel() {
             tags = _roomTags.value,
             description = _roomDescription.value,
             music = _selectedMusic.value,
-            rollingExpiration = _rollingExpiration.value
+            rollingExpiration = _rollingExpiration.value,
+            isOwnedByMe = true,
+            isCollaborator = false
         )
         // Create Room via API
         viewModelScope.launch {
@@ -751,7 +775,7 @@ class ProfileViewModel : ViewModel() {
                  val realId = result.getOrNull()
                  Log.d("ProfileViewModel", "Room created with id=$realId")
                  if (realId != null) {
-                     newRoom.copy(id = realId)
+                     newRoom.copy(id = realId, isOwnedByMe = true, isCollaborator = false)
                  } else {
                      newRoom
                  }
@@ -793,7 +817,7 @@ class ProfileViewModel : ViewModel() {
             // Calendar event creation in User's calendar is now handled via Backend-App integration if desired,
             // or we simply trust the user to have it.
             // Since we deleted local CalendarHelper and user said "move to backend",
-            // we skip local creation here. Backend could potentially create it if we added that endpoint.
+            // we skip local calendar write logic. Backend could potentially create it if we added that endpoint.
             // For now, removing local calendar write logic.
         }
     }
@@ -1242,17 +1266,26 @@ class ProfileViewModel : ViewModel() {
 
     /** Opens a room from the Hallway card stack. Finds the matching TimeCapsuleRoom from createdRooms
      *  or creates a lightweight placeholder so the detail screen can load memories from the backend. */
-    fun selectRoomFromHallway(cardId: String, cardTitle: String, capsuleDays: Int) {
-        val existing = _createdRooms.value.find { it.id == cardId }
+    fun selectRoomFromHallway(card: com.dmb.bestbefore.data.models.HallwayCard) {
+        val existing = _createdRooms.value.find { it.id == card.id }
         val room = existing ?: TimeCapsuleRoom(
-            id = cardId,
-            roomName = cardTitle,
-            capsuleDays = capsuleDays,
+            id = card.id,
+            roomName = card.title,
+            capsuleDays = card.timeCapsuleDays,
             capsuleHours = 0,
             capsuleMinutes = 0,
             notificationDays = 0,
             notificationHours = 0,
-            isPublic = true
+            isPublic = true,
+            description = card.description,
+            photos = card.photos,
+            theme = "Default",
+            tags = card.tags,
+            music = card.backgroundMusic ?: "None",
+            isViewerOnly = card.isViewerOnly,
+            isOwnedByMe = card.isOwnedByMe,
+            isCollaborator = card.isCollaborator,
+            ownerUserType = card.ownerUserType
         )
         selectRoom(room)
     }
@@ -1583,7 +1616,8 @@ class ProfileViewModel : ViewModel() {
                         com.dmb.bestbefore.data.api.models.UpdateMeRequest(
                             name = _userName.value,
                             bio = _bio.value,
-                            profileImageUrl = _profileImageUri.value?.toString()
+                            profileImageUrl = _profileImageUri.value?.toString(),
+                            tags = _profileTags.value.ifEmpty { null }
                         )
                     )
                     if (updateResult.isSuccess) {
@@ -1593,8 +1627,8 @@ class ProfileViewModel : ViewModel() {
                     }
                 }
             } catch (e: Exception) {
-                Log.e("ProfileViewModel", "Error saving public name", e)
-                Toast.makeText(context, "Error updating name", Toast.LENGTH_SHORT).show()
+                Log.e("ProfileViewModel", "Error saving profile", e)
+                Toast.makeText(context, "Error updating profile", Toast.LENGTH_SHORT).show()
             } finally {
                 _isUpdatingCredential.value = false
             }
@@ -1612,12 +1646,12 @@ class ProfileViewModel : ViewModel() {
     }
     
     fun selectTheme(context: Context, theme: AppTheme) {
-        com.dmb.bestbefore.ui.theme.ThemeState.selectTheme(theme)
+        com.dmb.bestbefore.ui.theme.ThemeState.selectTheme(context, theme)
         _selectedTheme.value = theme
     }
     
     fun selectAccentColor(context: Context, color: Color) {
-        com.dmb.bestbefore.ui.theme.ThemeState.selectAccent(color)
+        com.dmb.bestbefore.ui.theme.ThemeState.selectAccent(context, color)
         _accentColor.value = color
     }
     
@@ -1644,7 +1678,7 @@ class ProfileViewModel : ViewModel() {
                 user.reauthenticate(credential).addOnCompleteListener { reAuthTask ->
                     if (reAuthTask.isSuccessful) {
                         // Update email in Firebase
-                        user.updateEmail(newEmail).addOnCompleteListener { updateTask ->
+                        user.verifyBeforeUpdateEmail(newEmail).addOnCompleteListener { updateTask ->
                             if (updateTask.isSuccessful) {
                                 // Update email in backend MongoDB via PATCH /auth/me
                                 viewModelScope.launch {
@@ -1656,7 +1690,7 @@ class ProfileViewModel : ViewModel() {
                                                 com.dmb.bestbefore.data.api.models.UpdateMeRequest(email = newEmail)
                                             )
                                             if (updateResult.isSuccess) {
-                                                _credentialUpdateSuccess.value = "Email updated successfully!"
+                                                _credentialUpdateSuccess.value = "Verification email sent to $newEmail. Please verify to complete the change."
                                                 val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
                                                 sessionManager.saveUserEmail(newEmail)
                                             } else {
@@ -1753,6 +1787,29 @@ class ProfileViewModel : ViewModel() {
         _userName.value = "User"
         _createdRooms.value = emptyList()
         _profileImageUri.value = null
+        _roomEmotions.value = emptyMap()
+    }
+
+    fun setArtistRoomEmotion(context: Context, roomId: String, emotion: String?) {
+        if (emotion != null && emotion !in ARTIST_ROOM_EMOTIONS) return
+        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        val current = _roomEmotions.value.toMutableMap()
+        if (emotion == null) current.remove(roomId) else current[roomId] = emotion
+        _roomEmotions.value = current
+        com.dmb.bestbefore.data.local.SessionManager(context).saveRoomEmotions(uid, current)
+
+        // Best-effort backend signal so artists can later aggregate emotional responses.
+        if (emotion != null) {
+            viewModelScope.launch {
+                roomRepository.trackInteraction(
+                    roomId = roomId,
+                    dwellTimeSeconds = 0,
+                    type = "EMOTION_${emotion.uppercase()}",
+                    lat = null,
+                    lon = null
+                )
+            }
+        }
     }
 
     suspend fun getAuthToken(context: Context): String? {

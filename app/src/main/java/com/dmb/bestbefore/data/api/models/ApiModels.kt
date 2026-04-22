@@ -19,7 +19,8 @@ data class UserDto(
     val bio: String? = null,
     val profileImageUrl: String? = null,
     val ignoredRoomIds: List<String>? = emptyList(),
-    val savedRoomIds: List<String>? = emptyList()
+    val savedRoomIds: List<String>? = emptyList(),
+    val tags: List<String>? = emptyList()
 )
 
 data class UpdateMeRequest(
@@ -33,7 +34,8 @@ data class UpdateMeRequest(
     val bio: String? = null,
     val profileImageUrl: String? = null,
     val ignoredRoomIds: List<String>? = null,
-    val savedRoomIds: List<String>? = null
+    val savedRoomIds: List<String>? = null,
+    val tags: List<String>? = null
 )
 
 // Room Models — field names aligned to backend roomController.js
@@ -60,9 +62,9 @@ data class CreateRoomResponse(
 )
 
 data class RoomDto(
-    @SerializedName("_id") val id: String,
+    @SerializedName(value = "_id", alternate = ["id"]) val id: String,
     val name: String,
-    val ownerId: String,
+    val ownerId: String = "",
     val ownerName: String? = null,
     val ownerEmail: String?,
     val ownerUserType: String? = null,

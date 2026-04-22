@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dmb.bestbefore.data.local.SessionManager
 import com.dmb.bestbefore.data.repository.AuthRepository
+import com.dmb.bestbefore.data.api.models.UserDto
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import kotlinx.coroutines.flow.*
@@ -14,6 +16,10 @@ enum class LoginState {
     INITIAL,
     EMAIL_INPUT,
     PASSWORD_INPUT
+}
+
+enum class LoginMode {
+    EVERYONE, ARTISTS
 }
 
 class LoginViewModel(application: Application) : AndroidViewModel(application) {
@@ -92,7 +98,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     return@onSuccess
                 }
                 
-                sessionManager.saveUser(user.id, user.name ?: "User", user.email)
+                sessionManager.saveUser(user)
                 onSuccess()
             }.onFailure { e ->
                 _errorMessage.value = when (e) {

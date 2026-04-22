@@ -1569,24 +1569,49 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable {
-                                viewModel.addInvitedUser(ProfileViewModel.InvitedUser(
-                                    email = user.email,
-                                    name = user.name
-                                ))
-                                searchInput = ""
-                                viewModel.searchUsers("") // Clear search
-                            }
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(Icons.Default.Person, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(12.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             if (user.name != null) {
                                 Text(user.name, color = Color.White, fontWeight = FontWeight.Medium)
                             }
                             Text(user.email, color = Color.Gray, fontSize = 12.sp)
+                        }
+                        
+                        // Explicit Role Invite Buttons
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .clickable {
+                                        viewModel.addInvitedUser(ProfileViewModel.InvitedUser(
+                                            email = user.email, name = user.name, role = "viewer"
+                                        ))
+                                        searchInput = ""; viewModel.searchUsers("")
+                                    }
+                                    .background(Color(0xFF0D59F2).copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                                    .border(1.dp, Color(0xFF0D59F2), RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                            ) {
+                                Text("Viewer", color = Color(0xFF0D59F2), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            
+                            Box(
+                                modifier = Modifier
+                                    .clickable {
+                                        viewModel.addInvitedUser(ProfileViewModel.InvitedUser(
+                                            email = user.email, name = user.name, role = "collaborator"
+                                        ))
+                                        searchInput = ""; viewModel.searchUsers("")
+                                    }
+                                    .background(Color(0xFF00D972).copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                                    .border(1.dp, Color(0xFF00D972), RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                            ) {
+                                Text("Collaborator", color = Color(0xFF00D972), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
@@ -1594,25 +1619,66 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
         } else if (searchInput.isNotBlank() && searchResults.isEmpty()) {
             // Allow inviting raw email if no user found
             Spacer(modifier = Modifier.height(8.dp))
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(CardDarkBg, RoundedCornerShape(12.dp))
-                    .clickable {
-                        if (android.util.Patterns.EMAIL_ADDRESS.matcher(searchInput).matches()) {
-                            viewModel.addInvitedUser(ProfileViewModel.InvitedUser(email = searchInput.trim()))
-                            searchInput = ""
-                            viewModel.searchUsers("")
-                        } else {
-                            android.widget.Toast.makeText(context, "Enter a valid email", android.widget.Toast.LENGTH_SHORT).show()
-                        }
-                    }
                     .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(Icons.Default.Add, null, tint = Color(0xFF0D59F2), modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(12.dp))
-                Text("Invite \"$searchInput\" via email", color = Color.White)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Email, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(searchInput, color = Color.White)
+                }
+                
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Invite as Viewer
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                if (android.util.Patterns.EMAIL_ADDRESS.matcher(searchInput).matches()) {
+                                    viewModel.addInvitedUser(ProfileViewModel.InvitedUser(email = searchInput.trim(), role = "viewer"))
+                                    searchInput = ""; viewModel.searchUsers("")
+                                } else {
+                                    android.widget.Toast.makeText(context, "Enter a valid email", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            .background(Color(0xFF0D59F2).copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                            .border(1.dp, Color(0xFF0D59F2), RoundedCornerShape(8.dp))
+                            .padding(vertical = 10.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Add, null, tint = Color(0xFF0D59F2), modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Add as Viewer", color = Color(0xFF0D59F2), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    // Invite as Collaborator
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                if (android.util.Patterns.EMAIL_ADDRESS.matcher(searchInput).matches()) {
+                                    viewModel.addInvitedUser(ProfileViewModel.InvitedUser(email = searchInput.trim(), role = "collaborator"))
+                                    searchInput = ""; viewModel.searchUsers("")
+                                } else {
+                                    android.widget.Toast.makeText(context, "Enter a valid email", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            .background(Color(0xFF00D972).copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                            .border(1.dp, Color(0xFF00D972), RoundedCornerShape(8.dp))
+                            .padding(vertical = 10.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Add, null, tint = Color(0xFF00D972), modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Add as Collab", color = Color(0xFF00D972), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
 

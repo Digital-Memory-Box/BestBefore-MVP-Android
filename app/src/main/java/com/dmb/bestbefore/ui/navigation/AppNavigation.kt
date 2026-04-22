@@ -182,7 +182,8 @@ fun AppNavigation() {
                 RoomDetailScreen(
                     viewModel = profileViewModel,
                     multiplePhotoPickerLauncher = multiplePhotoPickerLauncher,
-                    filePickerLauncher = filePickerLauncher
+                    filePickerLauncher = filePickerLauncher,
+                    isRoomInRooming = false
                 )
                 
                 // Override the internal goBack from ProfileViewModel to pop back stack directly

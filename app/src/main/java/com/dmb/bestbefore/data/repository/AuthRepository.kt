@@ -1,17 +1,15 @@
 package com.dmb.bestbefore.data.repository
 
 import android.content.Context
-import android.content.SharedPreferences
-import androidx.core.content.edit
 import com.dmb.bestbefore.data.api.RetrofitClient
 import com.dmb.bestbefore.data.api.models.UpdateMeRequest
 import com.dmb.bestbefore.data.api.models.UserDto
+import com.dmb.bestbefore.data.local.SessionManager
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.tasks.await
 
 class AuthRepository(context: Context) {
-    private val prefs: SharedPreferences =
-        context.getSharedPreferences("BestBeforePrefs", Context.MODE_PRIVATE)
+    private val sessionManager = SessionManager(context)
     private val api = RetrofitClient.apiService
     private val firebaseAuth = FirebaseAuth.getInstance()
 
@@ -80,8 +78,8 @@ class AuthRepository(context: Context) {
             val response = api.syncAuth("Bearer $firebaseIdToken")
             if (response.isSuccessful && response.body() != null) {
                 val user = response.body()!!.user
-                saveUser(user)
-                saveToken(firebaseIdToken)
+                sessionManager.saveUser(user)
+                sessionManager.saveAuthToken(firebaseIdToken)
                 Result.success(user)
             } else {
                 Result.failure(Exception("Backend sync failed: ${response.code()} ${response.message()}"))
@@ -98,7 +96,7 @@ class AuthRepository(context: Context) {
             val response = api.updateMe("Bearer $token", updates)
             if (response.isSuccessful && response.body() != null) {
                 val user = response.body()!!.user
-                saveUser(user)
+                sessionManager.saveUser(user)
                 Result.success(user)
             } else {
                 Result.failure(Exception("Update failed: ${response.code()}"))
@@ -117,7 +115,7 @@ class AuthRepository(context: Context) {
             val response = api.getMe("Bearer $token")
             if (response.isSuccessful && response.body() != null) {
                 val user = response.body()!!.user
-                saveUser(user)
+                sessionManager.saveUser(user)
                 Result.success(user)
             } else {
                 Result.failure(Exception("Failed to fetch user data: ${response.code()}"))
@@ -129,24 +127,8 @@ class AuthRepository(context: Context) {
 
     /** Sign out from Firebase and clear local session. */
     fun logout() {
-        firebaseAuth.signOut()
-        prefs.edit { clear() }
+        sessionManager.clearSession()
     }
 
-    // ── Local cache helpers ────────────────────────────────────────────────────
-
-    fun saveToken(token: String) {
-        prefs.edit { putString("auth_token", token) }
-    }
-
-    fun getCachedToken(): String? = prefs.getString("auth_token", null)
-
-    fun saveUser(user: UserDto) {
-        prefs.edit {
-            putString("user_id", user.id)
-            putString("user_name", user.name)
-            putString("user_email", user.email)
-            putString("profile_music", user.profileMusic)
-        }
-    }
+    fun getCachedToken(): String? = sessionManager.getToken()
 }
