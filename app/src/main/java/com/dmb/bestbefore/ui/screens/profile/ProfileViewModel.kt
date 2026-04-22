@@ -521,34 +521,7 @@ class ProfileViewModel : ViewModel() {
                     Log.e("ProfileViewModel", "getRooms failed: ${e.message}")
                 }
 
-                // Fetch memories for each room
-                val mediaMap = mutableMapOf<String, List<Uri>>()
-                var totalLoadedMemories = 0
-
-                allRooms.forEach { room ->
-                    val memoriesUrls = mutableListOf<String>()
-                    val memoriesResult = roomRepository.getMemoriesByRoom(room.id)
-                    memoriesResult.onSuccess { memories ->
-                        memories.forEach { memory ->
-                            val content = memory["content"] as? String
-                            val type = memory["type"] as? String
-                            val title = memory["title"] as? String
-                            if (content != null) {
-                                when {
-                                    type == "audio" -> memoriesUrls.add("data:audio/mp4;base64,$content")
-                                    type == "note" -> memoriesUrls.add("NOTE:${title ?: ""}:$content")
-                                    content.startsWith("http") -> memoriesUrls.add(content)
-                                    content.length > 100 -> memoriesUrls.add("data:image/jpeg;base64,$content")
-                                }
-                            }
-                        }
-                    }
-                    mediaMap[room.id] = memoriesUrls.map { Uri.parse(it) }
-                    totalLoadedMemories += memoriesUrls.size
-                }
-
-                _roomMedia.value = mediaMap
-                _totalMemories.value = totalLoadedMemories
+                // Room memories are fetched lazily when a room is opened to avoid unnecessary network calls
                 refreshRoomLists(allRooms)
 
                 // Fetch tags
@@ -697,7 +670,8 @@ class ProfileViewModel : ViewModel() {
         // Update Stats
         _totalRooms.value = active.size
         _totalMemories.value = active.sumOf { room -> 
-            _roomMedia.value[room.id]?.size ?: 0 
+            val media = _roomMedia.value[room.id]
+            media?.size ?: room.photos.size 
         }
     }
     
@@ -1012,10 +986,10 @@ class ProfileViewModel : ViewModel() {
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
-    fun refreshRoomMemories() {
+    fun refreshRoomMemories(showRefreshIndicator: Boolean = true) {
         val currentRoomId = _selectedRoom.value?.id ?: return
         viewModelScope.launch {
-            _isRefreshing.value = true
+            if (showRefreshIndicator) _isRefreshing.value = true
             try {
                 val memoriesUrls = mutableListOf<String>()
                 val memoriesResult = roomRepository.getMemoriesByRoom(currentRoomId)
@@ -1042,7 +1016,7 @@ class ProfileViewModel : ViewModel() {
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "refreshRoomMemories failed", e)
             } finally {
-                _isRefreshing.value = false
+                if (showRefreshIndicator) _isRefreshing.value = false
             }
         }
     }
@@ -1352,6 +1326,9 @@ class ProfileViewModel : ViewModel() {
         _selectedRoom.value = room
         _currentStep.value = ProfileStep.ROOM_DETAIL
         
+        // Fetch memories for the newly selected room without triggering the pull-to-refresh UI
+        refreshRoomMemories(showRefreshIndicator = false)
+        
         // check for unlock
         checkRoomUnlockStatus(room)
     }
@@ -1619,7 +1596,10 @@ class ProfileViewModel : ViewModel() {
                 
                 // Refresh top stats after local deletion
                 _totalRooms.value = _createdRooms.value.size
-                _totalMemories.value = _createdRooms.value.sumOf { r -> _roomMedia.value[r.id]?.size ?: 0 }
+                _totalMemories.value = _createdRooms.value.sumOf { r -> 
+                    val media = _roomMedia.value[r.id]
+                    media?.size ?: r.photos.size 
+                }
                 
                 dismissUnlockDialog()
                 if (fromInsideRoom) {

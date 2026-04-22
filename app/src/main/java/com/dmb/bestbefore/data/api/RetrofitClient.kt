@@ -18,7 +18,7 @@ object RetrofitClient {
 
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY // Increase logging to see payloads
+        level = HttpLoggingInterceptor.Level.NONE // Increase logging to see payloads
     }
 
     private val client = OkHttpClient.Builder()
