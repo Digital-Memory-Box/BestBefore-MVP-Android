@@ -582,7 +582,7 @@ class ProfileViewModel : ViewModel() {
         }
         return parsedTags
     }
-    }
+
 
     private fun mapDtosToRooms(dtos: List<com.dmb.bestbefore.data.api.models.RoomDto>, isSaved: Boolean): List<TimeCapsuleRoom> {
         val currentUserEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
