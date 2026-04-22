@@ -865,7 +865,7 @@ private fun HallwayContent(
                 end = if (isOrbMenuVisible) 84.dp else 40.dp
             )
             val configuration = LocalConfiguration.current
-            val cardHeight = (configuration.screenHeightDp * 0.40f).dp
+            val cardHeight = (configuration.screenHeightDp * 0.35f).dp.coerceAtMost(340.dp)
             val cardWidthFraction = 0.9f
             val cdButtonEndPadding = if (isOrbMenuVisible) 68.dp else 60.dp
 
@@ -968,18 +968,20 @@ private fun HallwayContent(
                 }
 
                 // ── CD Button ───────────────────────────────────────
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(end = cdButtonEndPadding, top = 46.dp)
-                        .size(44.dp)
-                        .background(Color.Black.copy(alpha = 0.34f), CircleShape)
-                        .border(1.dp, themeColor.copy(alpha = 0.45f), CircleShape)
-                        .clip(CircleShape)
-                        .clickable { onShowSoundCloud() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    CdGlyph(size = 24.dp)
+                if (!activeCard.backgroundMusic.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(end = cdButtonEndPadding, top = 46.dp)
+                            .size(44.dp)
+                            .background(Color.Black.copy(alpha = 0.34f), CircleShape)
+                            .border(1.dp, themeColor.copy(alpha = 0.45f), CircleShape)
+                            .clip(CircleShape)
+                            .clickable { onShowSoundCloud() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CdGlyph(size = 24.dp)
+                    }
                 }
             }
         }
@@ -1763,17 +1765,19 @@ private fun ExpandedDescriptionOverlay(
                         .padding(end = 62.dp)
                 )
 
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.36f))
-                        .border(1.dp, themeColor.copy(alpha = 0.55f), CircleShape)
-                        .clickable { onShowSoundCloud() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    CdGlyph(size = 28.dp)
+                if (!card.backgroundMusic.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.36f))
+                            .border(1.dp, themeColor.copy(alpha = 0.55f), CircleShape)
+                            .clickable { onShowSoundCloud() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CdGlyph(size = 28.dp)
+                    }
                 }
             }
 

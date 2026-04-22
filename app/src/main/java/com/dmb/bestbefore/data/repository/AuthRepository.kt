@@ -5,8 +5,10 @@ import com.dmb.bestbefore.data.api.RetrofitClient
 import com.dmb.bestbefore.data.api.models.UpdateMeRequest
 import com.dmb.bestbefore.data.api.models.UserDto
 import com.dmb.bestbefore.data.local.SessionManager
+import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
 
 class AuthRepository(context: Context) {
@@ -30,7 +32,7 @@ class AuthRepository(context: Context) {
     suspend fun login(email: String, password: String): Result<UserDto> {
         return try {
             // 1. Firebase sign-in
-            val authResult = firebaseAuth.signInWithEmailAndPassword(email, password).await()
+            val authResult = signInWithRetry(email, password)
             val firebaseUser = authResult.user
                 ?: return Result.failure(Exception("Firebase sign-in returned no user"))
 
@@ -43,6 +45,24 @@ class AuthRepository(context: Context) {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private suspend fun signInWithRetry(email: String, password: String): com.google.firebase.auth.AuthResult {
+        var lastError: Exception? = null
+        repeat(2) { attempt ->
+            try {
+                return firebaseAuth.signInWithEmailAndPassword(email, password).await()
+            } catch (e: Exception) {
+                lastError = e
+                val isTransientNetwork = e is FirebaseNetworkException ||
+                    (e.message?.contains("network error", ignoreCase = true) == true)
+                if (!isTransientNetwork || attempt == 1) {
+                    throw e
+                }
+                delay(700)
+            }
+        }
+        throw lastError ?: Exception("Sign in failed")
     }
 
     /**

@@ -34,26 +34,25 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val typeStr = remoteMessage.data["type"]
         val roomId = remoteMessage.data["roomId"]
         val roomName = remoteMessage.data["roomName"]
-        val requesterEmail = remoteMessage.data["requesterEmail"] // present for join requests
+        val requesterEmail = remoteMessage.data["requesterEmail"]
 
         if (roomId != null && roomName != null) {
             val notifType = when (typeStr) {
                 "INVITATION" -> NotificationType.INVITATION
-                // Owner-side join requests (from QR scan or invite link)
-                "QR_JOIN_REQUESTED", "INVITE_REQUESTED" -> NotificationType.JOIN_REQUEST
+                "QR_JOIN_REQUESTED", "INVITE_REQUESTED", "JOIN_REQUEST" -> NotificationType.JOIN_REQUEST
                 else -> NotificationType.GENERAL
             }
 
-            val appNotification = AppNotification(
-                title = title,
-                message = body,
-                type = notifType,
-                relatedRoomId = roomId,
-                relatedRoomName = roomName,
-                requesterEmail = requesterEmail
+            NotificationRepository(applicationContext).addNotification(
+                AppNotification(
+                    title = title,
+                    message = body,
+                    type = notifType,
+                    relatedRoomId = roomId,
+                    relatedRoomName = roomName,
+                    requesterEmail = requesterEmail
+                )
             )
-            val repo = NotificationRepository(applicationContext)
-            repo.addNotification(appNotification)
 
             // Show Android system notification
             val isJoinRequest = typeStr == "QR_JOIN_REQUESTED" || typeStr == "INVITE_REQUESTED"

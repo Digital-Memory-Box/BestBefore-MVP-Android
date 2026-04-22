@@ -1,6 +1,8 @@
 package com.dmb.bestbefore.ui.screens.login
 
 import android.app.Application
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dmb.bestbefore.data.local.SessionManager
@@ -9,8 +11,10 @@ import com.dmb.bestbefore.data.api.models.UserDto
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.FirebaseNetworkException
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.io.IOException
 
 enum class LoginState {
     INITIAL,
@@ -77,6 +81,11 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
+        if (!hasValidatedNetwork()) {
+            _errorMessage.value = "No internet connection. Please check your network and try again."
+            return
+        }
+
         _email.value = emailParam.lowercase()
         _password.value = passwordParam
 
@@ -107,10 +116,19 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                         "Incorrect email or password. Please try again."
                     is FirebaseAuthInvalidUserException ->
                         "No account found with this email."
+                    is FirebaseNetworkException, is IOException ->
+                        "Network issue while signing in (Firebase/Recaptcha). Please retry in a moment."
                     else -> e.message ?: "Login failed. Please try again."
                 }
             }
         }
+    }
+
+    private fun hasValidatedNetwork(): Boolean {
+        val cm = getApplication<Application>().getSystemService(ConnectivityManager::class.java) ?: return false
+        val network = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(network) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
     fun attemptLogin() {

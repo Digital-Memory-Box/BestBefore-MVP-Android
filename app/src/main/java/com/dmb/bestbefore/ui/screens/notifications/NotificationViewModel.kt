@@ -6,9 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.dmb.bestbefore.data.models.AppNotification
 import com.dmb.bestbefore.data.repository.NotificationRepository
 import com.dmb.bestbefore.data.repository.RoomRepository
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class NotificationViewModel(application: Application) : AndroidViewModel(application) {
@@ -17,11 +15,10 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     private val roomRepository = RoomRepository()
 
     val notifications: StateFlow<List<AppNotification>> = notificationRepository.notifications
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+
+    init {
+        refresh()
+    }
 
     fun removeNotification(id: String) {
         notificationRepository.removeNotification(id)
@@ -76,8 +73,8 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     fun refresh() {
         viewModelScope.launch {
             val result = notificationRepository.getNotifications()
-            result.onSuccess { list ->
-                notificationRepository.mergeNotifications(list)
+            result.onSuccess { remote ->
+                notificationRepository.mergeNotifications(remote)
             }
         }
     }

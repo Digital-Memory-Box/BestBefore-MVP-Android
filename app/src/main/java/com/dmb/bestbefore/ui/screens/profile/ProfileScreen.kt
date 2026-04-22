@@ -59,6 +59,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.statusBars
 import com.dmb.bestbefore.ui.screens.hallway.HallwayScreen
 import com.dmb.bestbefore.ui.theme.LocalBestBeforeColors
+import com.dmb.bestbefore.utils.JoinLinkParser
 import androidx.core.content.ContextCompat
 
 @Composable
@@ -129,29 +130,11 @@ fun ProfileScreen(
     ) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK) {
             val scannedValue = result.data?.getStringExtra("SCAN_RESULT") ?: ""
-            // Handle both HTTPS format and legacy custom-scheme format
-            val roomId = when {
-                // https://bestbefore.up.railway.app/join/{roomId}
-                scannedValue.startsWith("https://bestbefore.up.railway.app/join/") ->
-                    scannedValue.removePrefix("https://bestbefore.up.railway.app/join/").trim('/')
-                // legacy: bestbefore:room:{roomId}
-                scannedValue.startsWith("bestbefore:room:") ->
-                    scannedValue.removePrefix("bestbefore:room:")
-                // bestbefore://room/{roomId}
-                scannedValue.startsWith("bestbefore://room/") ->
-                    scannedValue.removePrefix("bestbefore://room/")
-                else -> null
-            }
-            if (roomId != null) {
-                viewModel.joinRoomViaQR(context, roomId)
-            } else if (scannedValue.startsWith("https://bestbefore.up.railway.app/invite-join/")) {
-                val token = scannedValue.removePrefix("https://bestbefore.up.railway.app/invite-join/").trim('/')
-                viewModel.joinRoomViaToken(context, token)
-            } else if (scannedValue.startsWith("bestbefore://invite/")) {
-                val token = scannedValue.removePrefix("bestbefore://invite/")
-                viewModel.joinRoomViaToken(context, token)
-            } else {
-                android.widget.Toast.makeText(context, "Invalid QR code", android.widget.Toast.LENGTH_SHORT).show()
+            val parsed = JoinLinkParser.parseScannedText(scannedValue)
+            when {
+                !parsed?.roomId.isNullOrEmpty() -> viewModel.joinRoomViaQR(context, parsed?.roomId.orEmpty())
+                !parsed?.inviteToken.isNullOrEmpty() -> viewModel.joinRoomViaToken(context, parsed?.inviteToken.orEmpty())
+                else -> android.widget.Toast.makeText(context, "Invalid QR code", android.widget.Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -260,7 +243,25 @@ fun ProfileScreen(
 
 
 
-    // Check for Deep Link from Notification
+    // Observe Deep Links Reactively
+    val pendingQRRoom by com.dmb.bestbefore.MainActivity.pendingQRRoomIdFlow.collectAsState()
+    val pendingToken by com.dmb.bestbefore.MainActivity.pendingInviteTokenFlow.collectAsState()
+
+    LaunchedEffect(pendingQRRoom) {
+        if (pendingQRRoom != null) {
+            viewModel.joinRoomViaQR(context, pendingQRRoom!!)
+            com.dmb.bestbefore.MainActivity.clearPendingQRRoomId()
+        }
+    }
+
+    LaunchedEffect(pendingToken) {
+        if (pendingToken != null) {
+            viewModel.joinRoomViaToken(context, pendingToken!!)
+            com.dmb.bestbefore.MainActivity.clearPendingInviteToken()
+        }
+    }
+
+    // Check for Deep Link from Notification (Static FCM intents)
     LaunchedEffect(Unit) {
         val pendingId = com.dmb.bestbefore.MainActivity.pendingRoomId
         if (pendingId != null) {
@@ -273,20 +274,6 @@ fun ProfileScreen(
         if (pendingInviteId != null && pendingInviteName != null) {
             viewModel.showInviteDialog(pendingInviteId, pendingInviteName)
             com.dmb.bestbefore.MainActivity.clearPendingInvite()
-        }
-
-        // Handle invite token deep link (bestbefore://invite/{token} or /invite-join/{token} HTTPS)
-        val pendingToken = com.dmb.bestbefore.MainActivity.pendingInviteToken
-        if (pendingToken != null) {
-            viewModel.joinRoomViaToken(context, pendingToken)
-            com.dmb.bestbefore.MainActivity.clearPendingInviteToken()
-        }
-
-        // Handle QR room join — /join/{roomId} HTTPS App Link or bestbefore://room/{roomId}
-        val pendingQRRoom = com.dmb.bestbefore.MainActivity.pendingQRRoomId
-        if (pendingQRRoom != null) {
-            viewModel.joinRoomViaQR(context, pendingQRRoom)
-            com.dmb.bestbefore.MainActivity.clearPendingQRRoomId()
         }
     }
 
