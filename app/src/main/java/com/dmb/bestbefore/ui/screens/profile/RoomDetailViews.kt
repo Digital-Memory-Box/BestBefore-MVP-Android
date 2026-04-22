@@ -93,6 +93,18 @@ fun AsyncBase64Image(
     }
 }
 
+private fun isAudioMemoryUri(uri: Uri): Boolean {
+    val value = uri.toString().lowercase()
+    return value.startsWith("data:audio") ||
+        value.endsWith(".mp3") ||
+        value.endsWith(".m4a") ||
+        value.endsWith(".wav") ||
+        value.endsWith(".aac") ||
+        value.endsWith(".ogg")
+}
+
+private fun isNoteMemoryUri(uri: Uri): Boolean = uri.toString().startsWith("NOTE:")
+
 // --- ROOM DETAIL SCREEN ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -622,8 +634,8 @@ fun RoomDetailScreen(
                                         }
                                 ) {
                                     val itemStr = item1.toString()
-                                    val isAudio1 = itemStr.startsWith("data:audio")
-                                    val isNote1 = itemStr.startsWith("NOTE:")
+                                    val isAudio1 = isAudioMemoryUri(item1)
+                                    val isNote1 = isNoteMemoryUri(item1)
                                     if (isNote1) {
                                         val parts = itemStr.removePrefix("NOTE:").split(":", limit = 2)
                                         val noteTitle = parts.getOrElse(0) { "Note" }
@@ -638,8 +650,14 @@ fun RoomDetailScreen(
                                             }
                                         }
                                     } else if (isAudio1) {
-                                        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)), contentAlignment = Alignment.Center) {
-                                            Icon(Icons.Default.Mic, null, tint = Color.White, modifier = Modifier.size(48.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(Color(0xFF2C2C2E))
+                                                .clickable { viewModel.playAudio(context, item1.toString()) },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Default.PlayCircle, null, tint = Color.White, modifier = Modifier.size(52.dp))
                                         }
                                     } else {
                                         AsyncBase64Image(
@@ -662,8 +680,8 @@ fun RoomDetailScreen(
                                             }
                                     ) {
                                         val item2Str = item2.toString()
-                                        val isAudio2 = item2Str.startsWith("data:audio")
-                                        val isNote2 = item2Str.startsWith("NOTE:")
+                                        val isAudio2 = isAudioMemoryUri(item2)
+                                        val isNote2 = isNoteMemoryUri(item2)
                                         if (isNote2) {
                                             val parts = item2Str.removePrefix("NOTE:").split(":", limit = 2)
                                             val noteTitle2 = parts.getOrElse(0) { "Note" }
@@ -678,8 +696,14 @@ fun RoomDetailScreen(
                                                 }
                                             }
                                         } else if (isAudio2) {
-                                            Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)), contentAlignment = Alignment.Center) {
-                                                Icon(Icons.Default.Mic, null, tint = Color.White, modifier = Modifier.size(48.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(Color(0xFF2C2C2E))
+                                                    .clickable { viewModel.playAudio(context, item2.toString()) },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(Icons.Default.PlayCircle, null, tint = Color.White, modifier = Modifier.size(52.dp))
                                             }
                                         } else {
                                             AsyncBase64Image(
@@ -814,13 +838,13 @@ fun RoomDetailScreen(
                                 .clickable { viewModel.openGalleryViewer(currentRoomMedia, index) }
                         ) {
                             val itemStr = item.toString()
-                            if (itemStr.startsWith("NOTE:")) {
+                            if (isNoteMemoryUri(item)) {
                                 Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)).padding(4.dp), contentAlignment = Alignment.Center) {
                                     Icon(Icons.Default.StickyNote2, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(32.dp))
                                 }
-                            } else if (itemStr.startsWith("data:audio")) {
+                            } else if (isAudioMemoryUri(item)) {
                                 Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)), contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.Mic, null, tint = Color.White, modifier = Modifier.size(32.dp))
+                                    Icon(Icons.Default.PlayCircle, null, tint = Color.White, modifier = Modifier.size(34.dp))
                                 }
                             } else {
                                 AsyncBase64Image(
@@ -1233,10 +1257,7 @@ fun ProfileGalleryViewer(viewModel: ProfileViewModel) {
     
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = startIndex) { media.size }
     
-    // Sync pager changes back to VM if needed, or just let it slide
-    
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        com.dmb.bestbefore.ui.components.AnimatedBackgroundView()
         androidx.compose.foundation.pager.HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
              var scale by remember { mutableStateOf(1f) }
              var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
@@ -1252,15 +1273,31 @@ fun ProfileGalleryViewer(viewModel: ProfileViewModel) {
              }
              
              Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                 val isAudio = media[page].toString().startsWith("data:audio")
+                 val isAudio = isAudioMemoryUri(media[page])
+                 val isNote = isNoteMemoryUri(media[page])
                  if (isAudio) {
                      val context = androidx.compose.ui.platform.LocalContext.current
                      Column(horizontalAlignment = Alignment.CenterHorizontally) {
                          Icon(Icons.Default.PlayCircle, null, tint = Color.White, modifier = Modifier.size(80.dp).clickable {
-                             viewModel.playBase64Audio(context, media[page].toString())
+                             viewModel.playAudio(context, media[page].toString())
                          })
                          Spacer(modifier = Modifier.height(16.dp))
                          Text("Tap to Play Audio", color = Color.White, fontSize = 16.sp)
+                     }
+                 } else if (isNote) {
+                     val parts = media[page].toString().removePrefix("NOTE:").split(":", limit = 2)
+                     val noteTitle = parts.getOrElse(0) { "Note" }
+                     val noteBody = parts.getOrElse(1) { "" }
+                     Column(
+                         modifier = Modifier
+                             .fillMaxWidth()
+                             .padding(24.dp)
+                             .background(Color(0xFF1C1C1E), RoundedCornerShape(16.dp))
+                             .padding(20.dp)
+                     ) {
+                         Text(noteTitle, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                         Spacer(modifier = Modifier.height(12.dp))
+                         Text(noteBody, color = Color(0xFFD0D0D0), fontSize = 16.sp, lineHeight = 22.sp)
                      }
                  } else {
                      AsyncBase64Image(
@@ -1285,6 +1322,15 @@ fun ProfileGalleryViewer(viewModel: ProfileViewModel) {
                  }
              }
         }
+
+        Text(
+            text = "${pagerState.currentPage + 1} / ${media.size}",
+            color = Color.White,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(top = 12.dp)
+        )
         
         // Close Button
         IconButton(

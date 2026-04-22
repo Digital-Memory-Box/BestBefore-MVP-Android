@@ -72,10 +72,9 @@ object AppThemes {
         return when (name) {
             "Glass" -> Glass
             "Midnight" -> Midnight
-            "Vibrant" -> Vibrant
             else -> Default
         }
     }
 
-    fun getAllThemes() = listOf(Default, Glass, Midnight, Vibrant)
+    fun getAllThemes() = listOf(Default, Glass, Midnight)
 }

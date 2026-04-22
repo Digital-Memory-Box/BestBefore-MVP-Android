@@ -241,6 +241,7 @@ fun ProfileScreen(
     ) { uris ->
         if (uris.isNotEmpty()) {
             viewModel.updateSelectedMedia(uris)
+            viewModel.uploadMedia(context)
         }
     }
 

@@ -1,5 +1,9 @@
 package com.dmb.bestbefore.data.api
 
+import com.dmb.bestbefore.BuildConfig
+import com.dmb.bestbefore.data.api.models.RoomDto
+import com.dmb.bestbefore.data.api.models.RoomDtoJsonDeserializer
+import com.google.gson.GsonBuilder
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -8,8 +12,8 @@ import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
     // --- SERVER URL CONFIGURATION ---
-    // Production Backend on Railway
-    internal const val BASE_URL = "https://bestbefore.up.railway.app/" 
+    // Debug: local backend (10.0.2.2), Release: Railway
+    internal const val BASE_URL = BuildConfig.API_BASE_URL
 
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
@@ -24,11 +28,15 @@ object RetrofitClient {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
+    private val gson = GsonBuilder()
+        .registerTypeAdapter(RoomDto::class.java, RoomDtoJsonDeserializer())
+        .create()
+
     val apiService: ApiService by lazy {
         Retrofit.Builder()
             .baseUrl(BASE_URL)
             .client(client)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
             .create(ApiService::class.java)
     }

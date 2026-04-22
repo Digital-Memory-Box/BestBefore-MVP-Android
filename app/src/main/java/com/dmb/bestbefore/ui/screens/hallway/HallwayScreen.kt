@@ -84,7 +84,9 @@ fun HallwayScreen(
     val savedRoomCards by viewModel.savedRoomCards.collectAsState()
     val similarModeSource by viewModel.similarModeSource.collectAsState()
     val roomingFilter by viewModel.roomingFilter.collectAsState()
-    val orbWidth = 420.dp // En güncel Swift tasarımı için daha büyük çap
+    // Responsive orb diameter to avoid collapse/clipping on narrow phones.
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val orbWidth = (screenWidthDp * 0.82f).dp.coerceIn(300.dp, 420.dp)
     val contentEndInset = 0.dp
 
     // Refresh rooms data every time screen enters composition

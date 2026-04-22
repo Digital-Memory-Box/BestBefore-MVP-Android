@@ -1617,7 +1617,7 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
                 }
             }
         } else if (searchInput.isNotBlank() && searchResults.isEmpty()) {
-            // Allow inviting raw email if no user found
+            // Allow inviting by raw identifier (email or name) if no user found
             Spacer(modifier = Modifier.height(8.dp))
             Column(
                 modifier = Modifier
@@ -1627,7 +1627,7 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Email, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Default.Person, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(searchInput, color = Color.White)
                 }
@@ -1638,11 +1638,10 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
                         modifier = Modifier
                             .weight(1f)
                             .clickable {
-                                if (android.util.Patterns.EMAIL_ADDRESS.matcher(searchInput).matches()) {
-                                    viewModel.addInvitedUser(ProfileViewModel.InvitedUser(email = searchInput.trim(), role = "viewer"))
+                                val identifier = searchInput.trim()
+                                if (identifier.isNotEmpty()) {
+                                    viewModel.addInvitedUser(ProfileViewModel.InvitedUser(email = identifier, role = "viewer"))
                                     searchInput = ""; viewModel.searchUsers("")
-                                } else {
-                                    android.widget.Toast.makeText(context, "Enter a valid email", android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             }
                             .background(Color(0xFF0D59F2).copy(alpha = 0.2f), RoundedCornerShape(8.dp))
@@ -1661,11 +1660,10 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
                         modifier = Modifier
                             .weight(1f)
                             .clickable {
-                                if (android.util.Patterns.EMAIL_ADDRESS.matcher(searchInput).matches()) {
-                                    viewModel.addInvitedUser(ProfileViewModel.InvitedUser(email = searchInput.trim(), role = "collaborator"))
+                                val identifier = searchInput.trim()
+                                if (identifier.isNotEmpty()) {
+                                    viewModel.addInvitedUser(ProfileViewModel.InvitedUser(email = identifier, role = "collaborator"))
                                     searchInput = ""; viewModel.searchUsers("")
-                                } else {
-                                    android.widget.Toast.makeText(context, "Enter a valid email", android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             }
                             .background(Color(0xFF00D972).copy(alpha = 0.2f), RoundedCornerShape(8.dp))

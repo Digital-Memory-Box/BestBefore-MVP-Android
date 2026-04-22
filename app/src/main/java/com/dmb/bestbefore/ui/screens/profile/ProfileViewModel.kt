@@ -888,36 +888,49 @@ class ProfileViewModel : ViewModel() {
                         val inputStream = context.contentResolver.openInputStream(uri) ?: return@forEach
                         val bytes = inputStream.readBytes()
                         inputStream.close()
+                        val mimeType = (context.contentResolver.getType(uri) ?: "").lowercase()
+                        if (mimeType.startsWith("audio/")) {
+                            val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                            val memoryData: Map<String, Any> = mapOf(
+                                "type" to "audio",
+                                "title" to "Audio Drop",
+                                "content" to base64,
+                                "metadata" to mapOf("mimeType" to mimeType)
+                            )
+                            val result = roomRepository.addMemoryToRoom(currentRoomId, memoryData)
+                            result.onSuccess {
+                                uploadedDataUris.add("data:$mimeType;base64,$base64")
+                            }
+                        } else {
+                            // Downsample image payloads for safer upload and render.
+                            val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
 
-                        // Downsample the image to avoid OutOfMemory errors and reduce payload size
-                        val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
-                        
-                        var inSampleSize = 1
-                        while (options.outWidth / inSampleSize > 1024 || options.outHeight / inSampleSize > 1024) {
-                            inSampleSize *= 2
-                        }
-                        
-                        options.inJustDecodeBounds = false
-                        options.inSampleSize = inSampleSize
-                        val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
-                        
-                        val bos = java.io.ByteArrayOutputStream()
-                        bitmap?.compress(android.graphics.Bitmap.CompressFormat.JPEG, 60, bos)
-                        val compressed = bos.toByteArray()
-                        val base64 = android.util.Base64.encodeToString(compressed, android.util.Base64.NO_WRAP)
+                            var inSampleSize = 1
+                            while (options.outWidth / inSampleSize > 1024 || options.outHeight / inSampleSize > 1024) {
+                                inSampleSize *= 2
+                            }
 
-                        // Save to MongoDB Memories collection via POST /rooms/{roomId}/memories
-                        val memoryData: Map<String, Any> = mapOf(
-                            "type" to "photo",
-                            "title" to "Photo Drop",
-                            "content" to base64,
-                            "metadata" to emptyMap<String, Any>()
-                        )
-                        val result = roomRepository.addMemoryToRoom(currentRoomId, memoryData)
-                        result.onSuccess {
-                            // data URI so Coil can display it immediately without another network round-trip
-                            uploadedDataUris.add("data:image/jpeg;base64,$base64")
+                            options.inJustDecodeBounds = false
+                            options.inSampleSize = inSampleSize
+                            val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                            if (bitmap == null) return@forEach
+
+                            val bos = java.io.ByteArrayOutputStream()
+                            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 60, bos)
+                            val compressed = bos.toByteArray()
+                            val base64 = android.util.Base64.encodeToString(compressed, android.util.Base64.NO_WRAP)
+
+                            val memoryData: Map<String, Any> = mapOf(
+                                "type" to "photo",
+                                "title" to "Photo Drop",
+                                "content" to base64,
+                                "metadata" to emptyMap<String, Any>()
+                            )
+                            val result = roomRepository.addMemoryToRoom(currentRoomId, memoryData)
+                            result.onSuccess {
+                                uploadedDataUris.add("data:image/jpeg;base64,$base64")
+                            }
                         }
                     } catch (e: Exception) {
                         Log.e("ProfileViewModel", "Upload failed for uri=$uri", e)
@@ -964,9 +977,12 @@ class ProfileViewModel : ViewModel() {
                         val content = memory["content"] as? String
                         val type = memory["type"] as? String
                         val title = memory["title"] as? String
+                        @Suppress("UNCHECKED_CAST")
+                        val metadata = memory["metadata"] as? Map<String, Any?>
+                        val mimeType = metadata?.get("mimeType") as? String
                         if (content != null) {
                             when {
-                                type == "audio" -> memoriesUrls.add("data:audio/mp4;base64,$content")
+                                type == "audio" -> memoriesUrls.add("data:${mimeType ?: "audio/mp4"};base64,$content")
                                 type == "note" -> memoriesUrls.add("NOTE:${title ?: ""}:$content")
                                 content.startsWith("http") -> memoriesUrls.add(content)
                                 content.length > 100 -> memoriesUrls.add("data:image/jpeg;base64,$content")
@@ -1144,24 +1160,52 @@ class ProfileViewModel : ViewModel() {
     fun playBase64Audio(context: Context, dataUri: String) {
         try {
             mediaPlayer?.release()
-            
+
             val base64String = dataUri.substringAfter("base64,")
             val decodedBytes = android.util.Base64.decode(base64String, android.util.Base64.DEFAULT)
-            
-            val tempFile = java.io.File.createTempFile("playing_audio", ".m4a", context.cacheDir)
+
+            val extension = when {
+                dataUri.startsWith("data:audio/mpeg") -> ".mp3"
+                dataUri.startsWith("data:audio/wav") -> ".wav"
+                dataUri.startsWith("data:audio/ogg") -> ".ogg"
+                else -> ".m4a"
+            }
+            val tempFile = java.io.File.createTempFile("playing_audio", extension, context.cacheDir)
             tempFile.writeBytes(decodedBytes)
-            
+
             mediaPlayer = android.media.MediaPlayer().apply {
                 setDataSource(tempFile.absolutePath)
-                prepare()
-                start()
-                setOnCompletionListener { 
+                setOnPreparedListener { it.start() }
+                setOnCompletionListener {
                     it.release()
                     mediaPlayer = null
                 }
+                prepareAsync()
             }
         } catch (e: Exception) {
             Log.e("ProfileViewModel", "Failed to play audio", e)
+            Toast.makeText(context, "Error playing audio", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun playAudio(context: Context, source: String) {
+        if (source.startsWith("data:audio")) {
+            playBase64Audio(context, source)
+            return
+        }
+        try {
+            mediaPlayer?.release()
+            mediaPlayer = android.media.MediaPlayer().apply {
+                setDataSource(context, Uri.parse(source))
+                setOnPreparedListener { it.start() }
+                setOnCompletionListener {
+                    it.release()
+                    mediaPlayer = null
+                }
+                prepareAsync()
+            }
+        } catch (e: Exception) {
+            Log.e("ProfileViewModel", "Failed to play uri audio", e)
             Toast.makeText(context, "Error playing audio", Toast.LENGTH_SHORT).show()
         }
     }
@@ -1617,7 +1661,9 @@ class ProfileViewModel : ViewModel() {
                             name = _userName.value,
                             bio = _bio.value,
                             profileImageUrl = _profileImageUri.value?.toString(),
-                            tags = _profileTags.value.ifEmpty { null }
+                            tags = _profileTags.value.ifEmpty { null },
+                            theme = _selectedTheme.value.name,
+                            accentColor = colorToHex(_accentColor.value)
                         )
                     )
                     if (updateResult.isSuccess) {
@@ -1633,6 +1679,17 @@ class ProfileViewModel : ViewModel() {
                 _isUpdatingCredential.value = false
             }
         }
+    }
+
+    private fun colorToHex(color: Color): String {
+        return String.format(
+            "#%06X",
+            0xFFFFFF and android.graphics.Color.rgb(
+                (color.red * 255f).toInt().coerceIn(0, 255),
+                (color.green * 255f).toInt().coerceIn(0, 255),
+                (color.blue * 255f).toInt().coerceIn(0, 255)
+            )
+        )
     }
 
     // ========== THEME & CUSTOMIZATION FUNCTIONS ==========
