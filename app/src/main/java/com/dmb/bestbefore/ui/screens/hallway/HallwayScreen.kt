@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dmb.bestbefore.ui.screens.notifications.NotificationViewModel
 import com.dmb.bestbefore.data.models.HallwayCard
 import com.dmb.bestbefore.ui.components.OrbMenu
 import com.dmb.bestbefore.ui.theme.LocalBestBeforeColors
@@ -85,13 +86,18 @@ fun HallwayScreen(
     val similarModeSource by viewModel.similarModeSource.collectAsState()
     val roomingFilter by viewModel.roomingFilter.collectAsState()
     val isInitialLoading by viewModel.isInitialLoading.collectAsState()
+    val notificationViewModel: NotificationViewModel = viewModel()
+    val notificationCount by notificationViewModel.notifications.collectAsState()
     // Responsive orb diameter to avoid collapse/clipping on narrow phones.
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val orbWidth = (screenWidthDp * 0.82f).dp.coerceIn(300.dp, 420.dp)
     val contentEndInset = 0.dp
 
     // Refresh rooms data every time screen enters composition
-    LaunchedEffect(Unit) { viewModel.refreshRooms() }
+    LaunchedEffect(Unit) {
+        viewModel.refreshRooms()
+        notificationViewModel.refresh()
+    }
 
     Box(
         modifier = Modifier
@@ -161,7 +167,7 @@ fun HallwayScreen(
                             onSearchQueryChange = viewModel::setSearchQuery,
                             currentTab = currentTab,
                             selectedFilterTag = selectedFilterTag,
-                            onFilterTagSelected = { viewModel.setSelectedFilterTag(it) },
+                            onFilterTagSelected = viewModel::setSelectedFilterTag,
                             onNavigateToNotifications = onNavigateToNotifications,
                             onMusicClick = onRoomingMusicClick,
                             onShowSoundCloud = { viewModel.setSoundCloudModalVisible(true) },
@@ -172,15 +178,16 @@ fun HallwayScreen(
                             selectedCardIndex = selectedCardIndex,
                             cardImageIndices = cardImageIndices,
                             areCollaboratorsExpanded = areCollaboratorsExpanded,
-                            onToggleCollaborators = { viewModel.toggleCollaboratorsExpanded() },
-                            onCollapseCollaborators = { viewModel.collapseCollaborators() },
+                            onToggleCollaborators = viewModel::toggleCollaboratorsExpanded,
+                            onCollapseCollaborators = viewModel::collapseCollaborators,
                             onOpenRoom = onOpenRoom,
-                            onImageIndexChange = { cardId, index -> viewModel.setCardImageIndex(cardId, index) },
-                            onPagerPageChanged = { viewModel.setActivePagerPage(it) },
+                            onImageIndexChange = viewModel::setCardImageIndex,
+                            onPagerPageChanged = viewModel::setActivePagerPage,
                             similarModeSource = similarModeSource,
-                            onEnterSimilarMode = { viewModel.enterSimilarMode(it) },
-                            onExitSimilarMode = { viewModel.exitSimilarMode() },
-                            onConnectRoom = { viewModel.connectRoom(it) },
+                            onEnterSimilarMode = viewModel::enterSimilarMode,
+                            onExitSimilarMode = viewModel::exitSimilarMode,
+                            onConnectRoom = viewModel::connectRoom,
+                            notificationCount = notificationCount.size,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -794,6 +801,7 @@ private fun HallwayContent(
     onEnterSimilarMode: (HallwayCard) -> Unit = {},
     onExitSimilarMode: () -> Unit = {},
     onConnectRoom: (HallwayCard) -> Unit = {},
+    notificationCount: Int,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalBestBeforeColors.current
@@ -806,7 +814,8 @@ private fun HallwayContent(
         HallwayHeader(
             title = if (currentTab == BottomTab.EVERYONE) "Hallway" else "Artists",
             onMusicClick = onMusicClick,
-            onNavigateToNotifications = onNavigateToNotifications
+            onNavigateToNotifications = onNavigateToNotifications,
+            notificationCount = notificationCount
         )
 
         // ── Search + Tags ───────────────────────────────────────────
@@ -1518,7 +1527,8 @@ fun TagChip(label: String, color: Color) {
 fun HallwayHeader(
     title: String,
     onMusicClick: () -> Unit,
-    onNavigateToNotifications: () -> Unit
+    onNavigateToNotifications: () -> Unit,
+    notificationCount: Int
 ) {
     val colors = LocalBestBeforeColors.current
     Row(
@@ -1537,10 +1547,30 @@ fun HallwayHeader(
                 tint = colors.textPrimary,
                 modifier = Modifier.clickable { onMusicClick() }
             )
-            Icon(
-                Icons.Default.Notifications, null, tint = colors.textPrimary,
-                modifier = Modifier.clickable { onNavigateToNotifications() }
-            )
+            Box {
+                Icon(
+                    Icons.Default.Notifications,
+                    contentDescription = "Notifications",
+                    tint = colors.textPrimary,
+                    modifier = Modifier.clickable { onNavigateToNotifications() }
+                )
+                if (notificationCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = 6.dp, y = (-6).dp)
+                            .background(Color(0xFFFF3B30), CircleShape)
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = if (notificationCount > 99) "99+" else notificationCount.toString(),
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
         }
     }
 }

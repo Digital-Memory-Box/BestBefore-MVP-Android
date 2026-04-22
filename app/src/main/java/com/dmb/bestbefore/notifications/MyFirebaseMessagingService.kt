@@ -13,12 +13,8 @@ import com.dmb.bestbefore.R
 import com.dmb.bestbefore.data.models.AppNotification
 import com.dmb.bestbefore.data.models.NotificationType
 import com.dmb.bestbefore.data.repository.NotificationRepository
-import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 class MyFirebaseMessagingService : FirebaseMessagingService() {
 

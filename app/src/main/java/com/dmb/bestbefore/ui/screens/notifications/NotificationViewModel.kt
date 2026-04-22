@@ -74,7 +74,11 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun refresh() {
-        // Notifications are stored locally via SharedPreferences and already reactive via StateFlow.
-        // A pull-to-refresh simply triggers a no-op read; the flow will emit the latest value.
+        viewModelScope.launch {
+            val result = notificationRepository.getNotifications()
+            result.onSuccess { list ->
+                notificationRepository.mergeNotifications(list)
+            }
+        }
     }
 }

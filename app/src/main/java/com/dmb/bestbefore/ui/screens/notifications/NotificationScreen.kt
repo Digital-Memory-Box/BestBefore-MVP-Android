@@ -44,6 +44,10 @@ fun NotificationScreen(
 ) {
     val notifications by viewModel.notifications.collectAsState()
 
+    LaunchedEffect(Unit) {
+        viewModel.refresh()
+    }
+
     Scaffold(
         containerColor = Color.Black,
         topBar = {
@@ -87,6 +91,7 @@ fun NotificationScreen(
             onRefresh = {
                 scope.launch {
                     isRefreshing = true
+                    viewModel.refresh()
                     kotlinx.coroutines.delay(500)
                     isRefreshing = false
                 }

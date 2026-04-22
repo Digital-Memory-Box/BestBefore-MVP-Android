@@ -827,14 +827,15 @@ class ProfileViewModel : ViewModel() {
              
              // Save Room Created notification to in-app Notification Center
              context?.let { ctx ->
-                 val appNotification = com.dmb.bestbefore.data.models.AppNotification(
-                     title = "Room Created",
-                     message = "You successfully created the room \"${finalRoom.roomName}\"",
-                     type = com.dmb.bestbefore.data.models.NotificationType.ROOM_CREATED,
-                     relatedRoomId = finalRoom.id
-                 )
-                 com.dmb.bestbefore.data.repository.NotificationRepository(ctx).addNotification(appNotification)
-             }
+                val appNotification = com.dmb.bestbefore.data.models.AppNotification(
+                    title = "Room Created",
+                    message = "You successfully created the room \"${finalRoom.roomName}\"",
+                    type = com.dmb.bestbefore.data.models.NotificationType.ROOM_CREATED,
+                    relatedRoomId = finalRoom.id
+                )
+                // Persisting to backend is not available here; update local state for immediate UI feedback.
+                _notifications.value = listOf(appNotification) + _notifications.value
+            }
         }
 
         // Schedule notification (Fixed: Added back)
