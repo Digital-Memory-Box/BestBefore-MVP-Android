@@ -32,6 +32,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.foundation.verticalScroll
@@ -158,7 +161,17 @@ fun DashboardTab(
     createdRooms: List<TimeCapsuleRoom>
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val isRefreshing by viewModel.isLoading.collectAsState()
+    val isRefreshing by viewModel.isLoading.collectAsState(initial = false)
+    
+    val userName by viewModel.userName.collectAsState(initial = "")
+    val bio by viewModel.bio.collectAsState(initial = "")
+    val accentColor by viewModel.accentColor.collectAsState(initial = Color(0xFF007AFF))
+    val totalRooms by viewModel.totalRooms.collectAsState(initial = 0)
+    val totalMemories by viewModel.totalMemories.collectAsState(initial = 0)
+    val roomingCount by viewModel.roomingCount.collectAsState(initial = 0)
+    val roomersCount by viewModel.roomersCount.collectAsState(initial = 0)
+    val profileImageUri by viewModel.profileImageUri.collectAsState(initial = null as Uri?)
+    val preferredTags by viewModel.preferredTags.collectAsState(initial = emptyList<String>())
 
     androidx.compose.material3.pulltorefresh.PullToRefreshBox(
         isRefreshing = isRefreshing,
@@ -171,16 +184,6 @@ fun DashboardTab(
         ) {
         // Stats Cards
         item {
-            val userName by viewModel.userName.collectAsState()
-            val bio by viewModel.bio.collectAsState()
-            val accentColor by viewModel.accentColor.collectAsState()
-            val totalRooms by viewModel.totalRooms.collectAsState()
-            val totalMemories by viewModel.totalMemories.collectAsState()
-            val roomingCount by viewModel.roomingCount.collectAsState()
-            val roomersCount by viewModel.roomersCount.collectAsState()
-            val profileImageUri by viewModel.profileImageUri.collectAsState()
-            val profileTags by viewModel.profileTags.collectAsState()
-
             com.dmb.bestbefore.ui.components.SharedUserCard(
                 name = if (userName.startsWith("@")) userName else "@$userName",
                 biography = bio,
@@ -189,7 +192,7 @@ fun DashboardTab(
                 accentColor = accentColor,
                 privacyStatus = com.dmb.bestbefore.ui.components.UserPrivacyStatus.NONE,
                 profileImageUri = profileImageUri,
-                tags = profileTags
+                tags = preferredTags
             )
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -342,7 +345,7 @@ fun DashboardTab(
         item {
             Text("Recent Activity", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
             Spacer(modifier = Modifier.height(12.dp))
-            val activities by viewModel.recentActivities.collectAsState()
+            val activities by viewModel.recentActivities.collectAsState(initial = emptyList())
             
             if (activities.isEmpty()) {
                 Text("No recent activity", color = Color.Gray, fontSize = 14.sp)
@@ -397,11 +400,17 @@ fun CustomizationTab(
     musicViewModel: com.dmb.bestbefore.ui.components.MusicViewModel
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val selectedTheme by viewModel.selectedTheme.collectAsState()
-    val accentColor by viewModel.accentColor.collectAsState()
+    val selectedTheme by viewModel.selectedTheme.collectAsState(initial = com.dmb.bestbefore.ui.theme.AppThemes.Default)
+    val accentColor by viewModel.accentColor.collectAsState(initial = Color(0xFF007AFF))
     val applyAccentToAll by viewModel.applyAccentToAll.collectAsState(initial = false)
     val syncAccent by viewModel.syncAccentWithRoom.collectAsState(initial = false)
-    val profileImageUri by viewModel.profileImageUri.collectAsState()
+    val profileImageUri by viewModel.profileImageUri.collectAsState(initial = null as Uri?)
+    
+    val userName by viewModel.userName.collectAsState(initial = "")
+    val bioText by viewModel.bio.collectAsState(initial = "")
+    val preferredTags by viewModel.preferredTags.collectAsState(initial = emptyList<String>())
+    val accentColorTags by viewModel.accentColor.collectAsState(initial = Color(0xFF007AFF))
+
     val colors = LocalBestBeforeColors.current
 
     val updatePhotoLauncher = rememberLauncherForActivityResult(
@@ -429,7 +438,6 @@ fun CustomizationTab(
         // BB-UI-14: Public Name
         Text(text = "Public Name", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
-        val userName by viewModel.userName.collectAsState()
         BasicTextField(
             value = userName,
             onValueChange = { viewModel.updateUserName(it) },
@@ -448,7 +456,6 @@ fun CustomizationTab(
         // BB-UI-14: Biography
         Text(text = "Biography", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
-        val bioText by viewModel.bio.collectAsState()
         BasicTextField(
             value = bioText,
             onValueChange = { viewModel.updateBio(it) },
@@ -466,9 +473,7 @@ fun CustomizationTab(
         Spacer(modifier = Modifier.height(20.dp))
 
         // ── Profile Tags ──────────────────────────────────────────────
-        val profileTags by viewModel.profileTags.collectAsState()
         var tagInput by remember { mutableStateOf("") }
-        val accentColorTags by viewModel.accentColor.collectAsState()
 
         Text(
             text = "Profile Tags",
@@ -479,14 +484,14 @@ fun CustomizationTab(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Tag chips display (scrollable)
-        if (profileTags.isNotEmpty()) {
+        if (preferredTags.isNotEmpty()) {
             androidx.compose.foundation.lazy.LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 10.dp)
             ) {
-                items(profileTags) { tag ->
+                items(preferredTags) { tag ->
                     Row(
                         modifier = Modifier
                             .background(
@@ -735,8 +740,8 @@ fun CustomizationTab(
         Text(text = "Profile Music", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
 
-        val selectedMusic by viewModel.profileMusic.collectAsState()
-        val musicTracks by musicViewModel.tracks.collectAsState()
+        val selectedMusic by viewModel.profileMusic.collectAsState(initial = "None")
+        val musicTracks by musicViewModel.tracks.collectAsState(initial = emptyList())
 
         Column(
             modifier = Modifier
@@ -808,7 +813,7 @@ fun SettingsTab(
     var newEmail by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var showIgnoredRooms by remember { mutableStateOf(false) }
-    val ignoredRoomCards by hallwayViewModel.ignoredRoomCards.collectAsState()
+    val ignoredRoomCards by hallwayViewModel.ignoredRoomCards.collectAsState(initial = emptyList())
 
     // ── Ignored Rooms Full-Screen Overlay ─────────────────────────────────────
     if (showIgnoredRooms) {

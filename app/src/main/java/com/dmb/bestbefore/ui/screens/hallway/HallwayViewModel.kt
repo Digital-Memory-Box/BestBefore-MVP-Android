@@ -108,7 +108,10 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
     private fun persistSavedRooms() {
         viewModelScope.launch {
             val ids = _savedRoomCards.value.map { it.id }
-            authRepository.updateMe(com.dmb.bestbefore.data.api.models.UpdateMeRequest(savedRoomIds = ids))
+            val result = authRepository.updateMe(com.dmb.bestbefore.data.api.models.UpdateMeRequest(savedRoomIds = ids))
+            if (result.isFailure) {
+                Log.e("HallwayViewModel", "Failed to persist saved rooms: ${result.exceptionOrNull()?.message}")
+            }
         }
     }
 
@@ -127,12 +130,15 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
             }
             // One PATCH keeps ignored + saved lists consistent on the server
             viewModelScope.launch {
-                authRepository.updateMe(
+                val result = authRepository.updateMe(
                     com.dmb.bestbefore.data.api.models.UpdateMeRequest(
                         ignoredRoomIds = _ignoredRoomIds.value.toList(),
                         savedRoomIds = _savedRoomCards.value.map { it.id }
                     )
                 )
+                if (result.isFailure) {
+                    Log.e("HallwayViewModel", "Failed to sync ignore/save state: ${result.exceptionOrNull()?.message}")
+                }
             }
             filterCards(_currentTab.value)
         }
@@ -147,7 +153,10 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
 
     private fun persistIgnoredRooms() {
         viewModelScope.launch {
-            authRepository.updateMe(com.dmb.bestbefore.data.api.models.UpdateMeRequest(ignoredRoomIds = _ignoredRoomIds.value.toList()))
+            val result = authRepository.updateMe(com.dmb.bestbefore.data.api.models.UpdateMeRequest(ignoredRoomIds = _ignoredRoomIds.value.toList()))
+            if (result.isFailure) {
+                Log.e("HallwayViewModel", "Failed to persist ignored rooms: ${result.exceptionOrNull()?.message}")
+            }
         }
     }
 

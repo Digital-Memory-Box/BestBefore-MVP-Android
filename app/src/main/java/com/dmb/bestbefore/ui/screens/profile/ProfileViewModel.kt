@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -459,74 +460,78 @@ class ProfileViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
-                val meDeferred = async { authRepo.getMe() }
-                val roomsDeferred = async { roomRepository.getRooms() }
-                val notificationsDeferred = async { fetchNotifications() }
-                val tagsDeferred = async { fetchTagsLocally(context) }
                 
-                val meResult = meDeferred.await()
-                val roomsResult = roomsDeferred.await()
-                notificationsDeferred.await()
-                val tagsList = tagsDeferred.await()
-                _availableTags.value = tagsList
+                // Use coroutineScope for structured concurrency and proper async resolution
+                kotlinx.coroutines.coroutineScope {
+                    val meDeferred = async { authRepo.getMe() }
+                    val roomsDeferred = async { roomRepository.getRooms() }
+                    val notificationsDeferred = async { fetchNotifications() }
+                    val tagsDeferred = async { fetchTagsLocally(context) }
+                    
+                    val meResult: Result<UserDto> = meDeferred.await()
+                    val roomsResult: Result<List<com.dmb.bestbefore.data.api.models.RoomDto>> = roomsDeferred.await()
+                    notificationsDeferred.await()
+                    val tagsList: List<String> = tagsDeferred.await()
+                    _availableTags.value = tagsList
 
-                if (meResult.isSuccess) {
-                    val userDto = meResult.getOrThrow()
-                    if (!userDto.name.isNullOrEmpty()) _userName.value = userDto.name
-                    if (!userDto.bio.isNullOrEmpty()) {
-                        _bio.value = userDto.bio
-                    } else {
-                        _bio.value = ""
-                    }
-                    if (!userDto.profileImageUrl.isNullOrEmpty()) {
-                        _profileImageUri.value = Uri.parse(userDto.profileImageUrl)
-                    }
-                    // Load profile tags from backend
-                    if (!userDto.preferredTags.isNullOrEmpty()) {
-                        _preferredTags.value = userDto.preferredTags!!
-                    }
-                }
-
-                val allRooms = mutableListOf<TimeCapsuleRoom>()
-                if (roomsResult.isSuccess) {
-                    val apiRooms = roomsResult.getOrThrow()
-                    Log.d("ProfileViewModel", "Fetched ${apiRooms.size} rooms from backend")
-                    val currentUserEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
-                    
-                    val myCreatedRoomsDtos = apiRooms.filter { room ->
-                        room.ownerEmail?.equals(currentUserEmail, ignoreCase = true) == true
-                    }
-                    
-                    val myJoinedRoomsDtos = apiRooms.filter { room ->
-                        room.ownerEmail?.equals(currentUserEmail, ignoreCase = true) != true &&
-                        room.collaborators?.any { element ->
-                            if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
-                                element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
-                            } else false
-                        } == true
-                    }
-                    
-                    val uniqueRoomers = mutableSetOf<String>()
-                    myCreatedRoomsDtos.forEach { room ->
-                        room.collaborators?.forEach { element ->
-                            if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
-                                uniqueRoomers.add(element.asJsonObject.get("email").asString)
-                            }
+                    if (meResult.isSuccess) {
+                        val userDto: UserDto = meResult.getOrThrow()
+                        if (userDto.name != null && userDto.name.isNotBlank()) _userName.value = userDto.name
+                        if (userDto.bio != null) {
+                            _bio.value = userDto.bio
+                        } else {
+                            _bio.value = ""
+                        }
+                        if (userDto.profileImageUrl != null && userDto.profileImageUrl.isNotBlank()) {
+                            _profileImageUri.value = Uri.parse(userDto.profileImageUrl)
+                        }
+                        // Load profile tags from backend
+                        if (userDto.preferredTags != null) {
+                            _preferredTags.value = userDto.preferredTags
                         }
                     }
-                    
-                    _roomingCount.value = myJoinedRoomsDtos.size
-                    _roomersCount.value = uniqueRoomers.size
-                    
-                    allRooms.addAll(mapDtosToRooms(myCreatedRoomsDtos, isSaved = false))
-                } else {
-                    val e = roomsResult.exceptionOrNull()
-                    Log.e("ProfileViewModel", "getRooms failed: ${e?.message}")
-                }
 
-                // Memories will be fetched lazily when a room is selected or specifically refreshed.
-                _totalMemories.value = allRooms.sumOf { it.photos?.size ?: 0 } // Estimate from photo count
-                refreshRoomLists(allRooms)
+                    val allRooms = mutableListOf<TimeCapsuleRoom>()
+                    if (roomsResult.isSuccess) {
+                        val apiRooms = roomsResult.getOrThrow()
+                        Log.d("ProfileViewModel", "Fetched ${apiRooms.size} rooms from backend")
+                        val currentUserEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
+                        
+                        val myCreatedRoomsDtos = apiRooms.filter { room ->
+                            room.ownerEmail?.equals(currentUserEmail, ignoreCase = true) == true
+                        }
+                        
+                        val myJoinedRoomsDtos = apiRooms.filter { room ->
+                            room.ownerEmail?.equals(currentUserEmail, ignoreCase = true) != true &&
+                            room.collaborators?.any { element ->
+                                if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
+                                    element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
+                                } else false
+                            } == true
+                        }
+                        
+                        val uniqueRoomers = mutableSetOf<String>()
+                        myCreatedRoomsDtos.forEach { room ->
+                            room.collaborators?.forEach { element ->
+                                if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
+                                    uniqueRoomers.add(element.asJsonObject.get("email").asString)
+                                }
+                            }
+                        }
+                        
+                        _roomingCount.value = myJoinedRoomsDtos.size
+                        _roomersCount.value = uniqueRoomers.size
+                        
+                        allRooms.addAll(mapDtosToRooms(myCreatedRoomsDtos, isSaved = false))
+                    } else {
+                        val e = roomsResult.exceptionOrNull()
+                        Log.e("ProfileViewModel", "getRooms failed: ${e?.message}")
+                    }
+
+                    // Memories will be fetched lazily when a room is selected or specifically refreshed.
+                    _totalMemories.value = allRooms.sumOf { it.photos?.size ?: 0 } // Estimate from photo count
+                    refreshRoomLists(allRooms)
+                }
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "initDatabase failed", e)
             }
@@ -1697,6 +1702,7 @@ class ProfileViewModel : ViewModel() {
                 val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
                 val firebaseToken = authRepo.getFirebaseIdToken(false)
                 if (firebaseToken != null) {
+                    val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
                     val rawProfileImageUri = _profileImageUri.value?.toString()
                     val profileImageUrlForBackend = if (
                         rawProfileImageUri != null &&
@@ -1704,23 +1710,29 @@ class ProfileViewModel : ViewModel() {
                             rawProfileImageUri.startsWith("https://") ||
                             rawProfileImageUri.startsWith("data:image"))
                     ) rawProfileImageUri else null
+                    
                     val profileImageBase64 = _profileImageUri.value?.let { uri ->
-                        encodeProfileImageBase64(context, uri)
+                        if (profileImageUrlForBackend == null) encodeProfileImageBase64(context, uri) else null
                     }
+                    
                     val updateResult = authRepo.updateMe(
                         com.dmb.bestbefore.data.api.models.UpdateMeRequest(
                             name = _userName.value,
                             bio = _bio.value,
                             profileImageUrl = profileImageUrlForBackend,
                             profileImageBase64 = profileImageBase64,
-                            preferredTags = _preferredTags.value.ifEmpty { null },
+                            preferredTags = _preferredTags.value, // send empty list instead of null to be safe
                             theme = _selectedTheme.value.name,
-                            accentColor = colorToHex(_accentColor.value)
+                            accentColor = colorToHex(_accentColor.value),
+                            savedRoomIds = sessionManager.getSavedRoomIds(),
+                            ignoredRoomIds = sessionManager.getIgnoredRoomIds()
                         )
                     )
                     if (updateResult.isSuccess) {
                         Toast.makeText(context, "Profile updated!", Toast.LENGTH_SHORT).show()
                     } else {
+                        val errorMsg = updateResult.exceptionOrNull()?.message ?: "Unknown error"
+                        Log.e("ProfileViewModel", "Update failed: $errorMsg")
                         Toast.makeText(context, "Failed to update profile", Toast.LENGTH_SHORT).show()
                     }
                 }

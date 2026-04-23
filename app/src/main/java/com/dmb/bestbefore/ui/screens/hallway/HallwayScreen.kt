@@ -52,6 +52,7 @@ import com.dmb.bestbefore.ui.components.OrbMenu
 import com.dmb.bestbefore.ui.theme.LocalBestBeforeColors
 import com.dmb.bestbefore.ui.theme.ThemeState
 import androidx.core.graphics.toColorInt
+import com.dmb.bestbefore.ui.components.VideoPlayer
 import kotlin.math.absoluteValue
 
 
@@ -1142,17 +1143,30 @@ fun HallwayActiveCard(
             contentAlignment = Alignment.BottomCenter
         ) {
             if (hasRealPhotos) {
-                // Native VerticalPager for smooth up/down photo scrolling
+                // Native VerticalPager for smooth up/down photo/video scrolling
                 VerticalPager(
                     state = verticalPagerState,
                     modifier = Modifier.fillMaxSize()
                 ) { page ->
-                    coil.compose.AsyncImage(
-                        model = actualPhotos[page],
-                        contentDescription = "Room Photo ${page + 1}",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                    )
+                    val mediaUrl = actualPhotos[page]
+                    val isVideo = mediaUrl.endsWith(".mp4", ignoreCase = true) || 
+                                  mediaUrl.endsWith(".mov", ignoreCase = true) || 
+                                  mediaUrl.endsWith(".webm", ignoreCase = true) ||
+                                  mediaUrl.contains("/video/", ignoreCase = true)
+
+                    if (isVideo) {
+                        VideoPlayer(
+                            videoUrl = mediaUrl,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        coil.compose.AsyncImage(
+                            model = mediaUrl,
+                            contentDescription = "Room Media ${page + 1}",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        )
+                    }
                 }
             }
 

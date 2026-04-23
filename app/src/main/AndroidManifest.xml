@@ -36,6 +36,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.BestBeforeMVP"
         android:usesCleartextTraffic="true"
+        android:hardwareAccelerated="true"
+        android:largeHeap="true"
         >
 
         <activity

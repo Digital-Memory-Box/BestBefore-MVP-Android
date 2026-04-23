@@ -46,7 +46,9 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
 
     private var countdownJob: Job? = null
     
-    // --- Dynamic Analytics State ---
+    private val _memories = MutableStateFlow<List<Map<String, Any>>>(emptyList())
+    val memories: StateFlow<List<Map<String, Any>>> = _memories.asStateFlow()
+
     private var entryTime: Long = 0
 
     fun initialize(roomId: String, roomName: String) {
@@ -55,6 +57,31 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
         
         // Track entry for dwell time
         entryTime = System.currentTimeMillis()
+        
+        fetchMemories()
+    }
+
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    private fun fetchMemories() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _errorMessage.value = null
+            val result = repository.getMemoriesByRoom(_roomId.value)
+            if (result.isSuccess) {
+                val data = result.getOrDefault(emptyList())
+                _memories.value = data
+            } else {
+                val errorMsg = result.exceptionOrNull()?.message ?: "Unknown error"
+                _errorMessage.value = errorMsg
+                android.util.Log.e("RoomViewModel", "Failed to fetch memories: $errorMsg")
+            }
+            _isLoading.value = false
+        }
     }
 
     /**

@@ -24,14 +24,14 @@ interface ApiService {
         @Header("Authorization") token: String
     ): Response<SyncAuthResponse>
 
-    // GET /auth/me — fetch current user profile
-    @GET("auth/me")
+    // GET /me — fetch current user profile
+    @GET("me")
     suspend fun getMe(
         @Header("Authorization") token: String
     ): Response<SyncAuthResponse>
 
-    // PATCH /auth/me — update user profile fields
-    @PATCH("auth/me")
+    // PATCH /me — update user profile fields
+    @PATCH("me")
     suspend fun updateMe(
         @Header("Authorization") token: String,
         @Body request: UpdateMeRequest

@@ -45,6 +45,8 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.Image
+import com.dmb.bestbefore.ui.components.VideoPlayer
+import com.dmb.bestbefore.ui.components.MusicPlayer
 
 
 import androidx.compose.foundation.Image
@@ -663,8 +665,7 @@ fun RoomDetailScreen(
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxSize()
-                                                .background(Color(0xFF2C2C2E))
-                                                .clickable { viewModel.playAudio(context, item1.toString()) },
+                                                .background(Color(0xFF2C2C2E)),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Icon(Icons.Default.PlayCircle, null, tint = Color.White, modifier = Modifier.size(52.dp))
@@ -719,8 +720,7 @@ fun RoomDetailScreen(
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxSize()
-                                                    .background(Color(0xFF2C2C2E))
-                                                    .clickable { viewModel.playAudio(context, item2.toString()) },
+                                                    .background(Color(0xFF2C2C2E)),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(Icons.Default.PlayCircle, null, tint = Color.White, modifier = Modifier.size(52.dp))
@@ -1290,10 +1290,20 @@ fun ProfileGalleryViewer(viewModel: ProfileViewModel) {
     
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = startIndex) { media.size }
     
+    var isPagerScrollEnabled by remember { mutableStateOf(true) }
+    
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        androidx.compose.foundation.pager.HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+        androidx.compose.foundation.pager.HorizontalPager(
+            state = pagerState, 
+            modifier = Modifier.fillMaxSize(),
+            userScrollEnabled = isPagerScrollEnabled
+        ) { page ->
              var scale by remember { mutableStateOf(1f) }
              var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+             
+             LaunchedEffect(scale) {
+                 isPagerScrollEnabled = scale == 1f
+             }
              val state = rememberTransformableState { zoomChange, panChange, rotationChange ->
                  scale = (scale * zoomChange).coerceIn(1f, 5f)
                  
@@ -1310,14 +1320,10 @@ fun ProfileGalleryViewer(viewModel: ProfileViewModel) {
                  val isNote = isNoteMemoryUri(media[page])
                  val isVideo = isVideoMemoryUri(media[page])
                  if (isAudio) {
-                     val context = androidx.compose.ui.platform.LocalContext.current
-                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                         Icon(Icons.Default.PlayCircle, null, tint = Color.White, modifier = Modifier.size(80.dp).clickable {
-                             viewModel.playAudio(context, media[page].toString())
-                         })
-                         Spacer(modifier = Modifier.height(16.dp))
-                         Text("Tap to Play Audio", color = Color.White, fontSize = 16.sp)
-                     }
+                      MusicPlayer(
+                          audioUrl = media[page].toString(),
+                          modifier = Modifier.align(Alignment.Center)
+                      )
                  } else if (isNote) {
                      val parts = media[page].toString().removePrefix("NOTE:").split(":", limit = 2)
                      val noteTitle = parts.getOrElse(0) { "Note" }
@@ -1334,13 +1340,18 @@ fun ProfileGalleryViewer(viewModel: ProfileViewModel) {
                          Text(noteBody, color = Color(0xFFD0D0D0), fontSize = 16.sp, lineHeight = 22.sp)
                      }
                  } else if (isVideo) {
-                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                         Icon(Icons.Default.Videocam, null, tint = Color.White, modifier = Modifier.size(80.dp))
-                         Spacer(modifier = Modifier.height(16.dp))
-                         Text("Video Playback", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                         Spacer(modifier = Modifier.height(8.dp))
-                         Text("Video playback is not yet supported in this version.", color = Color.Gray, fontSize = 14.sp)
-                     }
+                      Box(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .height(400.dp)
+                              .padding(16.dp),
+                          contentAlignment = Alignment.Center
+                      ) {
+                          VideoPlayer(
+                              videoUrl = media[page].toString(),
+                              modifier = Modifier.fillMaxSize()
+                          )
+                      }
                  } else {
                      AsyncBase64Image(
                          itemData = media[page],
@@ -1353,7 +1364,13 @@ fun ProfileGalleryViewer(viewModel: ProfileViewModel) {
                                  translationX = offset.x,
                                  translationY = offset.y
                              )
-                             .transformable(state)
+                             .then(
+                                 if (scale > 1f) {
+                                     Modifier.transformable(state)
+                                 } else {
+                                     Modifier
+                                 }
+                             )
                              .pointerInput(page) {
                                  detectTapGestures(onDoubleTap = {
                                      scale = if (scale > 1f) 1f else 2.5f

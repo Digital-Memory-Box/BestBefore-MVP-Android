@@ -29,6 +29,10 @@ import com.dmb.bestbefore.data.models.CalendarEvent
 import java.text.SimpleDateFormat
 import java.util.*
 
+import coil.compose.AsyncImage
+import com.dmb.bestbefore.ui.components.VideoPlayer
+import com.dmb.bestbefore.ui.components.MusicPlayer
+
 @Composable
 fun RoomScreen(
     roomId: String,
@@ -44,8 +48,7 @@ fun RoomScreen(
     val lockEndTime by viewModel.lockEndTime.collectAsState()
     val countdownText by viewModel.countdownText.collectAsState()
     val calendarEvents by viewModel.calendarEvents.collectAsState()
-
-
+    val memories by viewModel.memories.collectAsState()
 
     val calendarPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -55,20 +58,59 @@ fun RoomScreen(
         }
     }
 
-
-
     LaunchedEffect(roomId) {
         viewModel.initialize(roomId, roomName)
     }
 
+    val isLoading by viewModel.isLoading.collectAsState()
+    
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF1F1F1F))
     ) {
-        // Simplified 3D view placeholder
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("3D Room View", color = Color.White, fontSize = 24.sp)
+        // Main Content: Scrollable list of memories
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(top = 80.dp, bottom = 100.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            if (isLoading && memories.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(400.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = Color.White)
+                    }
+                }
+            } else if (memories.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(400.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Default.CloudQueue,
+                                contentDescription = null,
+                                tint = Color.Gray,
+                                modifier = Modifier.size(64.dp)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text("This room is currently empty", color = Color.Gray)
+                        }
+                    }
+                }
+            } else {
+                items(memories) { memory ->
+                    MemoryItem(memory)
+                }
+            }
         }
 
         // Top bar icons
@@ -278,6 +320,71 @@ fun CalendarEventsDialog(events: List<CalendarEvent>, onDismiss: () -> Unit, onE
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
+}
+
+
+@Composable
+fun MemoryItem(memory: Map<String, Any>) {
+    val type = memory["type"] as? String ?: "photo"
+    val title = memory["title"] as? String ?: ""
+    val content = memory["content"] as? String ?: ""
+    
+    android.util.Log.d("RoomScreen", "Rendering MemoryItem: title=$title, type=$type")
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.05f)),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = title,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            when (type) {
+                "video" -> {
+                    VideoPlayer(videoUrl = content)
+                }
+                "photo" -> {
+                    AsyncImage(
+                        model = content,
+                        contentDescription = title,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(250.dp)
+                            .background(Color.Black, RoundedCornerShape(8.dp)),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                }
+                "note" -> {
+                    Text(
+                        text = content,
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 16.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(8.dp))
+                            .padding(16.dp)
+                    )
+                }
+                "audio" -> {
+                    MusicPlayer(
+                        audioUrl = content,
+                        title = "Voice Memory"
+                    )
+                }
+                else -> {
+                    Text("Unsupported memory type: $type", color = Color.Gray)
+                }
+            }
+        }
+    }
 }
 
 @Composable

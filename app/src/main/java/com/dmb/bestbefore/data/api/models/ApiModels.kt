@@ -20,12 +20,7 @@ data class UserDto(
     val profileImageUrl: String? = null,
     val ignoredRoomIds: List<String>? = emptyList(),
     val savedRoomIds: List<String>? = emptyList(),
-    val preferredTags: List<String>? = emptyList(),
-    val preferenceTagWeights: Map<String, Double>? = emptyMap(),
-    val preferenceEmbedding: List<Double>? = emptyList(),
-    val preferenceInteractions: List<com.google.gson.JsonElement>? = emptyList(),
-    val preferenceRoomTypes: List<String>? = emptyList(),
-    val preferenceUpdatedAt: String? = null
+    val preferredTags: List<String>? = emptyList()
 )
 
 data class UpdateMeRequest(
@@ -41,12 +36,7 @@ data class UpdateMeRequest(
     val profileImageBase64: String? = null,
     val ignoredRoomIds: List<String>? = null,
     val savedRoomIds: List<String>? = null,
-    val preferredTags: List<String>? = null,
-    val preferenceTagWeights: Map<String, Double>? = null,
-    val preferenceEmbedding: List<Double>? = null,
-    val preferenceInteractions: List<com.google.gson.JsonElement>? = null,
-    val preferenceRoomTypes: List<String>? = null,
-    val preferenceUpdatedAt: String? = null
+    val preferredTags: List<String>? = null
 )
 
 // Room Models — field names aligned to backend roomController.js

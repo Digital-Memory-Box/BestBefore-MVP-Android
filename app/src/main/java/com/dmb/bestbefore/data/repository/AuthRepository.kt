@@ -103,9 +103,12 @@ class AuthRepository(context: Context) {
                 sessionManager.saveAuthToken(firebaseIdToken)
                 Result.success(user)
             } else {
+                val errorBody = response.errorBody()?.string()
+                android.util.Log.e("AuthRepository", "Sync failed: ${response.code()} - $errorBody")
                 Result.failure(Exception("Backend sync failed: ${response.code()} ${response.message()}"))
             }
         } catch (e: Exception) {
+            android.util.Log.e("AuthRepository", "Sync exception", e)
             Result.failure(e)
         }
     }
@@ -120,9 +123,12 @@ class AuthRepository(context: Context) {
                 sessionManager.saveUser(user)
                 Result.success(user)
             } else {
+                val errorBody = response.errorBody()?.string()
+                android.util.Log.e("AuthRepository", "Update failed: ${response.code()} - $errorBody")
                 Result.failure(Exception("Update failed: ${response.code()}"))
             }
         } catch (e: Exception) {
+            android.util.Log.e("AuthRepository", "Update exception", e)
             Result.failure(e)
         }
     }
@@ -139,9 +145,12 @@ class AuthRepository(context: Context) {
                 sessionManager.saveUser(user)
                 Result.success(user)
             } else {
+                val errorBody = response.errorBody()?.string()
+                android.util.Log.e("AuthRepository", "getMe failed: ${response.code()} - $errorBody")
                 Result.failure(Exception("Failed to fetch user data: ${response.code()}"))
             }
         } catch (e: Exception) {
+            android.util.Log.e("AuthRepository", "getMe exception", e)
             Result.failure(e)
         }
     }

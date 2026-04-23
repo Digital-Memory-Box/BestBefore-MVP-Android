@@ -18,15 +18,16 @@ object RetrofitClient {
 
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.NONE // Increase logging to see payloads
+        level = HttpLoggingInterceptor.Level.HEADERS // Log headers to see payload size and status
     }
 
     private val client = OkHttpClient.Builder()
         .addInterceptor(loggingInterceptor)
         // Temporarily bypassing local AppCheck to resolve attestation failures directly connecting to backend
         // .addInterceptor(AppCheckInterceptor())
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
     private val gson = GsonBuilder()
