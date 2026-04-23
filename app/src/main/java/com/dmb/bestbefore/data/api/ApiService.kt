@@ -112,13 +112,17 @@ interface ApiService {
     @GET("rooms/{roomId}/memories")
     suspend fun getMemoriesByRoom(
         @Header("Authorization") token: String,
-        @Path("roomId") roomId: String
+        @Path("roomId") roomId: String,
+        @Query("limit") limit: Int? = null,
+        @Query("offset") offset: Int? = null
     ): Response<List<Map<String, @JvmSuppressWildcards Any>>>
 
     @GET("rooms/{roomId}/memories")
     suspend fun getMemoriesByRoomRaw(
         @Header("Authorization") token: String,
-        @Path("roomId") roomId: String
+        @Path("roomId") roomId: String,
+        @Query("limit") limit: Int? = null,
+        @Query("offset") offset: Int? = null
     ): Response<okhttp3.ResponseBody>
 
     @GET("rooms/{roomId}/memories/archived")

@@ -25,9 +25,10 @@ object RetrofitClient {
         .addInterceptor(loggingInterceptor)
         // Temporarily bypassing local AppCheck to resolve attestation failures directly connecting to backend
         // .addInterceptor(AppCheckInterceptor())
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(120, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
+        .writeTimeout(120, TimeUnit.SECONDS)
+        .callTimeout(120, TimeUnit.SECONDS)
         .build()
 
     private val gson = GsonBuilder()

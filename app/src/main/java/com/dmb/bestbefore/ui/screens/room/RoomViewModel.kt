@@ -71,7 +71,7 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
-            val result = repository.getMemoriesByRoom(_roomId.value)
+            val result = repository.getMemoriesByRoom(_roomId.value, limit = 20)
             if (result.isSuccess) {
                 val data = result.getOrDefault(emptyList())
                 _memories.value = data

@@ -196,9 +196,9 @@ class RoomRepository {
 
     // ── Memories ──────────────────────────────────────────────────────────────
 
-    suspend fun getMemoriesByRoom(roomId: String): Result<List<Map<String, Any>>> {
+    suspend fun getMemoriesByRoom(roomId: String, limit: Int? = null, offset: Int? = null): Result<List<Map<String, Any>>> {
         return try {
-            val response = api.getMemoriesByRoomRaw(freshBearer(), roomId)
+            val response = api.getMemoriesByRoomRaw(freshBearer(), roomId, limit, offset)
             if (response.isSuccessful && response.body() != null) {
                 val reader = response.body()!!.charStream()
                 val listType = object : TypeToken<List<Map<String, Any>>>() {}.type
