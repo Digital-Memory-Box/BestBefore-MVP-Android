@@ -20,7 +20,13 @@ data class UserDto(
     val profileImageUrl: String? = null,
     val ignoredRoomIds: List<String>? = emptyList(),
     val savedRoomIds: List<String>? = emptyList(),
-    val preferredTags: List<String>? = emptyList()
+    val preferredTags: List<String>? = emptyList(),
+    // AI Preference fields (matches iOS + backend schema)
+    val preferenceTagWeights: Map<String, Double>? = null,
+    val preferenceRoomTypes: List<String>? = null,
+    val preferenceUpdatedAt: String? = null,
+    val lastLat: Double? = null,
+    val lastLon: Double? = null
 )
 
 data class UpdateMeRequest(
@@ -36,7 +42,13 @@ data class UpdateMeRequest(
     val profileImageBase64: String? = null,
     val ignoredRoomIds: List<String>? = null,
     val savedRoomIds: List<String>? = null,
-    val preferredTags: List<String>? = null
+    val preferredTags: List<String>? = null,
+    // AI Preference fields
+    val preferenceTagWeights: Map<String, Double>? = null,
+    val preferenceRoomTypes: List<String>? = null,
+    val preferenceUpdatedAt: String? = null,
+    val lastLat: Double? = null,
+    val lastLon: Double? = null
 )
 
 // Room Models — field names aligned to backend roomController.js

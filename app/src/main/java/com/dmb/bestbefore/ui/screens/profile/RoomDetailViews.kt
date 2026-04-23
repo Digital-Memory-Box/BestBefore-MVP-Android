@@ -134,6 +134,7 @@ fun RoomDetailScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val isRecording by viewModel.isRecordingAudio.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val isUploading by viewModel.isUploading.collectAsState()
 
     val recordAudioPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
@@ -1109,6 +1110,21 @@ fun RoomDetailScreen(
                     }
                 }
             )
+        }
+
+        if (isUploading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.6f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = Color(0xFF007AFF), strokeWidth = 3.dp)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Uploading memory...", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
         }
     }
 }

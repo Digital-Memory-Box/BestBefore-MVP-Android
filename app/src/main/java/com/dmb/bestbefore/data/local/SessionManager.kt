@@ -27,6 +27,7 @@ class SessionManager(context: Context) {
         private const val KEY_IGNORED_ROOMS = "ignored_room_ids"
         private const val KEY_SAVED_ROOMS = "saved_room_ids"
         private const val KEY_ROOM_EMOTIONS_PREFIX = "room_emotions_"
+        private const val KEY_PROFILE_IMAGE_URL = "profile_image_url" // from backend
     }
 
     fun saveAuthToken(token: String) {
@@ -47,6 +48,10 @@ class SessionManager(context: Context) {
             putString(KEY_BIO, user.bio)
             putString(KEY_IGNORED_ROOMS, gson.toJson(user.ignoredRoomIds))
             putString(KEY_SAVED_ROOMS, gson.toJson(user.savedRoomIds))
+            // Persist profileImageUrl from backend so it survives app restarts
+            if (!user.profileImageUrl.isNullOrBlank()) {
+                putString(KEY_PROFILE_IMAGE_URL, user.profileImageUrl)
+            }
         }
     }
 
@@ -55,6 +60,7 @@ class SessionManager(context: Context) {
     fun getUserEmail(): String? = prefs.getString(KEY_USER_EMAIL, null)
     fun getProfileMusic(): String? = prefs.getString(KEY_PROFILE_MUSIC, null)
     fun getProfilePhotoUri(): String? = prefs.getString(KEY_PROFILE_PHOTO_URI, null)
+    fun getProfileImageUrl(): String? = prefs.getString(KEY_PROFILE_IMAGE_URL, null)
     fun getTheme(): String = prefs.getString(KEY_THEME, "Default") ?: "Default"
     fun getAccentColor(): String = prefs.getString(KEY_ACCENT_COLOR, "#007AFF") ?: "#007AFF"
     fun getUserType(): String = prefs.getString(KEY_USER_TYPE, "normal") ?: "normal"

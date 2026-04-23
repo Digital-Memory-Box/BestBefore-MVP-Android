@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -55,6 +57,24 @@ class ProfileViewModel : ViewModel() {
     // RoomRepository — no token arg; fetches fresh Firebase token per request (matches iOS pattern)
     private val roomRepository = com.dmb.bestbefore.data.repository.RoomRepository()
     private val notificationRepository = com.dmb.bestbefore.data.repository.NotificationRepository()
+
+    // ── AI Service integration ────────────────────────────────────────────────
+    private val aiRepository = com.dmb.bestbefore.data.ai.AiRepository()
+
+    /** Last UserDto fetched from the backend – used to supply preference context to AI calls. */
+    private var _cachedUserDto: com.dmb.bestbefore.data.api.models.UserDto? = null
+
+    /** AI-powered personalised room suggestions (sorted by combined similarity). */
+    private val _aiSuggestions = MutableStateFlow<List<com.dmb.bestbefore.data.ai.AiRoomSuggestion>>(emptyList())
+    val aiSuggestions: StateFlow<List<com.dmb.bestbefore.data.ai.AiRoomSuggestion>> = _aiSuggestions.asStateFlow()
+
+    private val _isLoadingAiSuggestions = MutableStateFlow(false)
+    val isLoadingAiSuggestions: StateFlow<Boolean> = _isLoadingAiSuggestions.asStateFlow()
+
+    /** AI-generated description text for the room creation wizard. */
+    private val _aiGeneratedDescription = MutableStateFlow<String?>(null)
+    val aiGeneratedDescription: StateFlow<String?> = _aiGeneratedDescription.asStateFlow()
+    // ─────────────────────────────────────────────────────────────────────────
     
     private val _notifications = MutableStateFlow<List<com.dmb.bestbefore.data.models.AppNotification>>(emptyList())
     val notifications: StateFlow<List<com.dmb.bestbefore.data.models.AppNotification>> = _notifications.asStateFlow()
@@ -77,6 +97,9 @@ class ProfileViewModel : ViewModel() {
     
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _isUploading = MutableStateFlow(false)
+    val isUploading: StateFlow<Boolean> = _isUploading.asStateFlow()
 
     private val _isRecordingAudio = MutableStateFlow(false)
     val isRecordingAudio: StateFlow<Boolean> = _isRecordingAudio.asStateFlow()
@@ -452,9 +475,15 @@ class ProfileViewModel : ViewModel() {
         val savedName = sessionManager.getUserName()
         val savedMusic = sessionManager.getProfileMusic()
         val savedProfilePhotoUri = sessionManager.getProfilePhotoUri()
+        val savedProfileImageUrl = sessionManager.getProfileImageUrl()
         _userName.value = if (!savedName.isNullOrEmpty()) savedName else "User"
         _profileMusic.value = if (!savedMusic.isNullOrEmpty()) savedMusic else "None"
-        _profileImageUri.value = savedProfilePhotoUri?.let { Uri.parse(it) }
+        // Prefer the backend-persisted URL (survives app restarts); fall back to local file URI
+        _profileImageUri.value = when {
+            !savedProfileImageUrl.isNullOrBlank() -> Uri.parse(savedProfileImageUrl)
+            !savedProfilePhotoUri.isNullOrBlank() -> Uri.parse(savedProfilePhotoUri)
+            else -> null
+        }
         _roomEmotions.value = sessionManager.getRoomEmotions(currentUserId)
 
         viewModelScope.launch {
@@ -476,6 +505,7 @@ class ProfileViewModel : ViewModel() {
 
                     if (meResult.isSuccess) {
                         val userDto: UserDto = meResult.getOrThrow()
+                        _cachedUserDto = userDto  // cache for AI calls
                         if (userDto.name != null && userDto.name.isNotBlank()) _userName.value = userDto.name
                         if (userDto.bio != null) {
                             _bio.value = userDto.bio
@@ -531,6 +561,13 @@ class ProfileViewModel : ViewModel() {
                     // Memories will be fetched lazily when a room is selected or specifically refreshed.
                     _totalMemories.value = allRooms.sumOf { it.photos?.size ?: 0 } // Estimate from photo count
                     refreshRoomLists(allRooms)
+
+                    // AI: fetch personalised suggestions after rooms and user profile are loaded
+                    val userForAi = _cachedUserDto
+                    val allApiRooms = roomsResult.getOrNull() ?: emptyList()
+                    if (userForAi != null && allApiRooms.isNotEmpty()) {
+                        launch { fetchAiSuggestions(userForAi, allApiRooms) }
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "initDatabase failed", e)
@@ -852,14 +889,107 @@ class ProfileViewModel : ViewModel() {
     fun sortRoomsByDateCreated() {
         _createdRooms.value = _createdRooms.value.sortedByDescending { it.dateCreated }
     }
-    
+
+    // ── AI Service Functions ──────────────────────────────────────────────────
+
+    /**
+     * Fetch personalised room suggestions from the AI service.
+     * Called automatically after [initDatabase] finishes loading rooms.
+     * Results are exposed via [aiSuggestions].
+     */
+    private suspend fun fetchAiSuggestions(
+        user: com.dmb.bestbefore.data.api.models.UserDto,
+        candidateRooms: List<com.dmb.bestbefore.data.api.models.RoomDto>
+    ) {
+        _isLoadingAiSuggestions.value = true
+        try {
+            aiRepository.getPersonalisedSuggestions(
+                user = user,
+                candidateRooms = candidateRooms
+            ).onSuccess { response ->
+                _aiSuggestions.value = response.suggestions
+                Log.d("ProfileViewModel", "AI returned ${response.count} suggestions")
+            }.onFailure { e ->
+                Log.w("ProfileViewModel", "AI suggestions failed: ${e.message}")
+            }
+        } finally {
+            _isLoadingAiSuggestions.value = false
+        }
+    }
+
+    /**
+     * Track a LIKE interaction for the currently selected room.
+     * Call this when the user taps the "Like" / heart button on a room.
+     */
+    fun trackLikeForCurrentRoom() {
+        val room = _selectedRoom.value ?: return
+        val userDto = _cachedUserDto ?: return
+        viewModelScope.launch {
+            val candidateDto = com.dmb.bestbefore.data.api.models.RoomDto(
+                id = room.id,
+                name = room.roomName,
+                ownerEmail = null,
+                createdAt = null,
+                isPrivate = !room.isPublic,
+                isTimeCapsule = room.isCollaboration,
+                tags = room.tags
+            )
+            aiRepository.trackRoomInteraction(
+                user = userDto,
+                room = candidateDto,
+                interactionType = "LIKE"
+            ).onSuccess { updatedPrefs ->
+                Log.d("ProfileViewModel", "AI LIKE tracked. Top tags: ${updatedPrefs.preferredTags.take(5)}")
+            }
+        }
+    }
+
+    /**
+     * Generate an AI description for the room currently being created in the wizard.
+     * Result is stored in [aiGeneratedDescription] and can be auto-filled into the description field.
+     */
+    fun generateRoomDescriptionWithAi() {
+        viewModelScope.launch {
+            val name = _roomName.value.ifBlank { return@launch }
+            aiRepository.generateRoomDescription(
+                roomName = name,
+                tags = _roomTags.value,
+                isPrivate = !_isPublic.value,
+                isTimeCapsule = _isTimeCapsuleEnabled.value
+            ).onSuccess { description ->
+                _aiGeneratedDescription.value = description
+                // Auto-fill if the description field is still empty
+                if (_roomDescription.value.isBlank()) {
+                    _roomDescription.value = description
+                }
+            }.onFailure { e ->
+                Log.w("ProfileViewModel", "AI description generation failed: ${e.message}")
+            }
+        }
+    }
+
+    /** Clear the AI-generated description (e.g. when wizard is reset). */
+    fun clearAiGeneratedDescription() {
+        _aiGeneratedDescription.value = null
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
     // Media Persistence (Room ID -> List of Uris)
 
     fun uploadNote(context: Context, noteContent: String) {
         val currentRoomId = _selectedRoom.value?.id ?: return
+        
+        // Text size limit: 5MB
+        val bytesSize = noteContent.toByteArray().size
+        if (bytesSize > 5 * 1024 * 1024) {
+            Toast.makeText(context, "Note exceeds 5MB limit", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
         viewModelScope.launch {
             try {
-                _isLoading.value = true
+                _isUploading.value = true
                 val memoryData: Map<String, Any> = mapOf(
                     "type" to "note",
                     "title" to "Written Note",
@@ -888,7 +1018,7 @@ class ProfileViewModel : ViewModel() {
                 Log.e("ProfileViewModel", "Failed to upload note", e)
                 Toast.makeText(context, "Error saving note", Toast.LENGTH_SHORT).show()
             } finally {
-                _isLoading.value = false
+                _isUploading.value = false
             }
         }
     }
@@ -908,6 +1038,7 @@ class ProfileViewModel : ViewModel() {
             val currentRoomId = _selectedRoom.value?.id
 
             if (currentSelection.isNotEmpty() && currentRoomId != null) {
+                _isUploading.value = true
                 val uploadedDataUris = mutableListOf<String>()
 
                 currentSelection.forEach { uri ->
@@ -915,7 +1046,22 @@ class ProfileViewModel : ViewModel() {
                         val inputStream = context.contentResolver.openInputStream(uri) ?: return@forEach
                         val bytes = inputStream.readBytes()
                         inputStream.close()
+                        
                         val mimeType = (context.contentResolver.getType(uri) ?: "").lowercase()
+                        
+                        // Check limits based on requested bounds
+                        val byteSize = bytes.size
+                        if (mimeType.startsWith("audio/") && byteSize > 15 * 1024 * 1024) {
+                            withContext(Dispatchers.Main) { Toast.makeText(context, "Audio exceeds 15MB limit", Toast.LENGTH_SHORT).show() }
+                            return@forEach
+                        } else if (mimeType.startsWith("video/") && byteSize > 100 * 1024 * 1024) {
+                            withContext(Dispatchers.Main) { Toast.makeText(context, "Video exceeds 100MB limit", Toast.LENGTH_SHORT).show() }
+                            return@forEach
+                        } else if (mimeType.startsWith("image/") && byteSize > 25 * 1024 * 1024) {
+                            withContext(Dispatchers.Main) { Toast.makeText(context, "Photo exceeds 25MB limit", Toast.LENGTH_SHORT).show() }
+                            return@forEach
+                        }
+
                         if (mimeType.startsWith("audio/")) {
                             val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
                             val memoryData: Map<String, Any> = mapOf(
@@ -996,6 +1142,8 @@ class ProfileViewModel : ViewModel() {
                 } else {
                     Toast.makeText(context, "Upload failed – check connection", Toast.LENGTH_SHORT).show()
                 }
+                
+                _isUploading.value = false
             }
         }
     }
@@ -1343,12 +1491,34 @@ class ProfileViewModel : ViewModel() {
     fun selectRoom(room: TimeCapsuleRoom) {
         _selectedRoom.value = room
         _currentStep.value = ProfileStep.ROOM_DETAIL
-        
+
         // Fetch memories for the newly selected room without triggering the pull-to-refresh UI
         refreshRoomMemories(showRefreshIndicator = false)
-        
+
         // check for unlock
         checkRoomUnlockStatus(room)
+
+        // AI: track VIEW interaction for preference learning (fire-and-forget)
+        viewModelScope.launch {
+            val userDto = _cachedUserDto ?: return@launch
+            // Find matching RoomDto from rooms if available for tag/type context
+            val candidateDto = com.dmb.bestbefore.data.api.models.RoomDto(
+                id = room.id,
+                name = room.roomName,
+                ownerEmail = null,
+                createdAt = null,
+                isPrivate = !room.isPublic,
+                isTimeCapsule = room.isCollaboration,
+                tags = room.tags
+            )
+            aiRepository.trackRoomInteraction(
+                user = userDto,
+                room = candidateDto,
+                interactionType = "VIEW"
+            ).onSuccess { updatedPrefs ->
+                Log.d("ProfileViewModel", "AI VIEW tracked. Top tags: ${updatedPrefs.preferredTags.take(5)}")
+            }
+        }
     }
 
     /** Opens a room from the Hallway card stack. Finds the matching TimeCapsuleRoom from createdRooms
