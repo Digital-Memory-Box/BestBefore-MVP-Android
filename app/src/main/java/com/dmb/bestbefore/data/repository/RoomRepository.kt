@@ -6,6 +6,8 @@ import com.dmb.bestbefore.data.api.models.*
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.tasks.await
 import java.io.IOException
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 /**
  * RoomRepository — handles Room data and dynamic analytics/recommendations.
@@ -196,14 +198,20 @@ class RoomRepository {
 
     suspend fun getMemoriesByRoom(roomId: String): Result<List<Map<String, Any>>> {
         return try {
-            val response = api.getMemoriesByRoom(freshBearer(), roomId)
+            val response = api.getMemoriesByRoomRaw(freshBearer(), roomId)
             if (response.isSuccessful && response.body() != null) {
-                @Suppress("UNCHECKED_CAST")
-                Result.success(response.body()!! as List<Map<String, Any>>)
+                val reader = response.body()!!.charStream()
+                val listType = object : TypeToken<List<Map<String, Any>>>() {}.type
+                val body: List<Map<String, Any>> = Gson().fromJson(reader, listType)
+                
+                android.util.Log.d("RoomRepository", "Successfully fetched ${body.size} memories via stream. Status: ${response.code()}")
+                Result.success(body)
             } else {
+                android.util.Log.e("RoomRepository", "Failed to fetch memories. Status: ${response.code()}, Error: ${response.errorBody()?.string()}")
                 Result.failure(Exception("Failed to fetch memories: ${response.code()}"))
             }
         } catch (e: Exception) {
+            android.util.Log.e("RoomRepository", "Exception fetching memories via stream", e)
             Result.failure(e)
         }
     }

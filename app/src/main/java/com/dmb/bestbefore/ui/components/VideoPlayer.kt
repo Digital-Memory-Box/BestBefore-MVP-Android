@@ -62,6 +62,16 @@ fun VideoPlayer(
                 player = exoPlayer
                 useController = true
                 setBackgroundColor(android.graphics.Color.BLACK)
+                
+                // Attempt to set surface type to TextureView (2) via reflection to resolve libpenguin issues
+                // while avoiding 'unresolved reference' compilation errors.
+                try {
+                    val setSurfaceTypeMethod = this.javaClass.getMethod("setSurfaceType", Int::class.javaPrimitiveType)
+                    setSurfaceTypeMethod.invoke(this, 2)
+                    android.util.Log.d("VideoPlayer", "Successfully set surface type to TextureView via reflection")
+                } catch (e: Exception) {
+                    android.util.Log.w("VideoPlayer", "Could not set surface type via reflection, falling back to default: ${e.message}")
+                }
             }
         },
         modifier = modifier

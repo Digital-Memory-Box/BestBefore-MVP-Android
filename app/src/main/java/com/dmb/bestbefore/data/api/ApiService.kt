@@ -115,6 +115,12 @@ interface ApiService {
         @Path("roomId") roomId: String
     ): Response<List<Map<String, @JvmSuppressWildcards Any>>>
 
+    @GET("rooms/{roomId}/memories")
+    suspend fun getMemoriesByRoomRaw(
+        @Header("Authorization") token: String,
+        @Path("roomId") roomId: String
+    ): Response<okhttp3.ResponseBody>
+
     @GET("rooms/{roomId}/memories/archived")
     suspend fun getArchivedMemoriesByRoom(
         @Header("Authorization") token: String,
