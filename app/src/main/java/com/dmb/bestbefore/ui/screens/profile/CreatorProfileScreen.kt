@@ -8,8 +8,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.*
+import androidx.compose.ui.text.style.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -113,29 +113,11 @@ fun CreatorProfileScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     // Profile Photo
-                    Box(
-                        modifier = Modifier
-                            .size(100.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF2C2C2E))
-                            .border(2.dp, Color.White.copy(alpha = 0.1f), CircleShape)
-                    ) {
-                        if (!p.profileImageUrl.isNullOrEmpty()) {
-                            AsyncImage(
-                                model = p.profileImageUrl,
-                                contentDescription = "Profile Pic",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            Icon(
-                                Icons.Default.AccountCircle,
-                                contentDescription = null,
-                                tint = Color.Gray,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                    }
+                    ProfileAvatar(
+                        imageUri = p.profileImageUrl,
+                        size = 100.dp,
+                        accentColor = Color.White
+                    )
                     
                     Spacer(modifier = Modifier.height(16.dp))
                     
@@ -313,12 +295,21 @@ fun PublicRoomCard(room: PublicRoomDto, onClick: () -> Unit) {
                 .clickable { onClick() },
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Default.AutoAwesome,
-                contentDescription = null,
-                tint = Color(0xFF42A5F5), // Small star icon in center like screenshot
-                modifier = Modifier.size(20.dp)
-            )
+            if (room.photos.isNotEmpty()) {
+                AsyncImage(
+                    model = room.photos.first(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = Color(0xFF42A5F5),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
         
         Spacer(modifier = Modifier.height(6.dp))

@@ -1264,31 +1264,12 @@ fun ActiveCardDetails(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Avatar
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .background(Color(0xFF2C2C2E), CircleShape)
-                            .border(1.5.dp, Color.White.copy(alpha = 0.15f), CircleShape)
-                            .clip(CircleShape)
-                            .clickable { card.ownerId?.let { onNavigateToCreatorProfile(it) } },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (!card.ownerProfilePic.isNullOrEmpty()) {
-                            coil.compose.AsyncImage(
-                                model = card.ownerProfilePic,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                            )
-                        } else {
-                            Icon(
-                                Icons.Default.AccountCircle,
-                                contentDescription = null,
-                                tint = Color.Gray.copy(alpha = 0.8f),
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
-                    }
+                    ProfileAvatar(
+                        imageUri = card.ownerProfilePic,
+                        size = 44.dp,
+                        accentColor = Color.White,
+                        onClick = { card.ownerId?.let { onNavigateToCreatorProfile(it) } }
+                    )
 
                     // Username
                     Text(
@@ -1483,20 +1464,13 @@ fun ActiveCardDetails(
                                 )
                                 .padding(horizontal = 8.dp, vertical = 6.dp)
                         ) {
-                            // Small avatar with dark bg
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .background(themeColor, CircleShape),
-                                    contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Icons.Default.Person,
-                                    contentDescription = null,
-                                    tint = Color.Black,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
+                            // Profile Avatar
+                            ProfileAvatar(
+                                imageUri = collaborator.profileImageUrl,
+                                size = 32.dp,
+                                accentColor = themeColor
+                            )
+
                             Text(
                                 text = collaborator.name ?: collaborator.email.substringBefore("@"),
                                 color = colors.textPrimary,

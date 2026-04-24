@@ -192,6 +192,11 @@ class ProfileViewModel : ViewModel() {
         return try {
             val result = roomRepository.getRoomById(id)
             result.getOrNull()?.let { dto ->
+                val myEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
+                val isOwner = dto.ownerEmail?.equals(myEmail, ignoreCase = true) == true
+                val isCollab = isCollaborator(dto, myEmail)
+                val isView = isViewer(dto, myEmail)
+                
                 TimeCapsuleRoom(
                     id = dto.id,
                     roomName = dto.name,
@@ -202,14 +207,15 @@ class ProfileViewModel : ViewModel() {
                     notificationHours = 0,
                     isPublic = !dto.isPrivate,
                     isCollaboration = dto.isTimeCapsule,
-                    unlockTime = dto.unlockTime,
-                    scheduledClosureTime = dto.expirationDate ?: 0L,
-                    theme = dto.theme,
+                    unlockTime = dto.unlockDate?.let { parseISO8601(it) } ?: 0L,
+                    scheduledClosureTime = dto.expirationDate?.let { parseISO8601(it) } ?: 0L,
+                    theme = dto.theme ?: "Default",
                     description = dto.description,
-                    music = dto.backgroundMusic,
-                    connectedRooms = dto.connectedRooms,
-                    isOwnedByMe = dto.isOwnedByMe,
-                    isCollaborator = dto.isCollaborator,
+                    music = dto.backgroundMusic ?: "None",
+                    connectedRooms = dto.connectedRooms ?: emptyList(),
+                    isOwnedByMe = isOwner,
+                    isCollaborator = isCollab,
+                    isViewerOnly = !isOwner && !isCollab && (isView || !dto.isPrivate),
                     ownerUserType = dto.ownerUserType
                 )
             }
@@ -2176,6 +2182,46 @@ class ProfileViewModel : ViewModel() {
     suspend fun getAuthToken(context: Context): String? {
         val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
         return authRepo.getFirebaseIdToken(false)
+    }
+    private fun isCollaborator(room: com.dmb.bestbefore.data.api.models.RoomDto, currentUserEmail: String): Boolean {
+        if (currentUserEmail.isBlank()) return false
+        return room.collaborators?.any { element ->
+            if (element.isJsonPrimitive) {
+                element.asString.equals(currentUserEmail, ignoreCase = true)
+            } else if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
+                element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
+            } else {
+                false
+            }
+        } == true
+    }
+
+    private fun isViewer(room: com.dmb.bestbefore.data.api.models.RoomDto, currentUserEmail: String): Boolean {
+        if (currentUserEmail.isBlank()) return false
+        return room.viewers?.any { element ->
+            if (element.isJsonPrimitive) {
+                element.asString.equals(currentUserEmail, ignoreCase = true)
+            } else if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
+                element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
+            } else {
+                false
+            }
+        } == true
+    }
+
+    private fun parseISO8601(dateString: String?): Long {
+        if (dateString == null) return 0L
+        return try {
+            val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+            sdf.timeZone = TimeZone.getTimeZone("UTC")
+            sdf.parse(dateString)?.time ?: 0L
+        } catch (_: Exception) {
+            try {
+                val sdf2 = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+                sdf2.timeZone = TimeZone.getTimeZone("UTC")
+                sdf2.parse(dateString)?.time ?: 0L
+            } catch (__: Exception) { 0L }
+        }
     }
 }
 
