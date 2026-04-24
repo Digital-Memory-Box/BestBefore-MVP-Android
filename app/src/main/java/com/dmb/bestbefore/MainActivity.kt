@@ -13,7 +13,9 @@ import com.dmb.bestbefore.utils.JoinLinkParser
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.remember
 
-class MainActivity : ComponentActivity() {
+import androidx.appcompat.app.AppCompatActivity
+
+class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Handle deep link from notification

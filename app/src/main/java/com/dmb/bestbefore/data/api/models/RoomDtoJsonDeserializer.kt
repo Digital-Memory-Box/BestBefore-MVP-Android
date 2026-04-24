@@ -38,6 +38,7 @@ class RoomDtoJsonDeserializer : JsonDeserializer<RoomDto> {
             pendingViewers = readStringList(obj, "pendingViewers"),
             rollingExpiryDays = readInt(obj, "rollingExpiryDays"),
             description = readFlexibleString(obj, "description"),
+            generatedDescription = readFlexibleString(obj, "generatedDescription"),
             tags = readStringList(obj, "tags"),
             backgroundMusic = readFlexibleString(obj, "backgroundMusic"),
             connectedRooms = readStringList(obj, "connectedRooms")

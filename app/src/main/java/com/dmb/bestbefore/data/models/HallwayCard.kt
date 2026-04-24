@@ -9,6 +9,7 @@ data class HallwayCard(
     val photos: List<String> = emptyList(),
     val themeColorHex: String? = null,
     val tags: List<String> = emptyList(),
+    val ownerId: String? = null,
     val ownerEmail: String? = null,
     val ownerName: String? = null,
     val ownerUserType: String? = null,

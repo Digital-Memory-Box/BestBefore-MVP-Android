@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.dmb.bestbefore.data.api.models.PublicProfileDto
@@ -85,7 +86,17 @@ fun CreatorProfileScreen(
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Color(0xFF007AFF))
             }
-        } else if (profile != null) {
+        } else if (profile == null) {
+            val errorMsg by viewModel.error.collectAsState()
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = errorMsg ?: "Failed to load profile.",
+                    color = Color.Red,
+                    fontSize = 16.sp,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+        } else {
             val p = profile!!
             
             Column(
@@ -181,7 +192,8 @@ fun CreatorProfileScreen(
                                     model = p.profileImageUrl,
                                     contentDescription = "Profile Pic",
                                     modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
+                                    contentScale = ContentScale.Crop,
+                                    error = androidx.compose.ui.res.painterResource(android.R.drawable.ic_menu_report_image)
                                 )
                             } else {
                                 Icon(
@@ -319,6 +331,17 @@ fun PublicRoomCard(room: PublicRoomDto, onClick: () -> Unit) {
             fontWeight = FontWeight.Bold,
             maxLines = 1
         )
+        
+        if (!room.description.isNullOrEmpty()) {
+            Text(
+                text = room.description,
+                color = Color.Gray,
+                fontSize = 11.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
     }
 }
 

@@ -844,7 +844,8 @@ private fun HallwayContent(
             }
         } else {
             val pagerState = rememberPagerState(pageCount = { cards.size })
-            val activeCard = cards[pagerState.currentPage]
+            val safeIndex = pagerState.currentPage.coerceIn(0, maxOf(0, cards.size - 1))
+            val activeCard = cards[safeIndex]
             val themeColor = parseThemeColor(activeCard.themeColorHex)
 
             LaunchedEffect(selectedCardIndex, cards.size) {

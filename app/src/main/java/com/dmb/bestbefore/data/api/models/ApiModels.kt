@@ -99,6 +99,7 @@ data class RoomDto(
     val pendingViewers: List<String>? = null,
     val rollingExpiryDays: Int = 0,
     val description: String? = null,
+    val generatedDescription: String? = null,
     val tags: List<String>? = null,
     val backgroundMusic: String? = null,
     val connectedRooms: List<String>? = null

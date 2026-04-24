@@ -11,7 +11,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import android.content.ContextWrapper
 
+tailrec fun android.content.Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
 /**
  * CompositionLocal providing the current BestBefore app theme palette.
  * Any composable in the tree can access `LocalBestBeforeColors.current` for theme colors.
@@ -82,9 +88,11 @@ fun BestBeforeTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as Activity).window
-            window.statusBarColor = appTheme.backgroundColor.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+            val window = view.context.findActivity()?.window
+            if (window != null) {
+                window.statusBarColor = appTheme.backgroundColor.toArgb()
+                WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+            }
         }
     }
 
