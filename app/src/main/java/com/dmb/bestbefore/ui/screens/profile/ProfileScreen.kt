@@ -67,6 +67,7 @@ fun ProfileScreen(
     onNavigateBack: () -> Unit,
     onLogout: () -> Unit,
     onNavigateToNotifications: () -> Unit,
+    onNavigateToCreatorProfile: (String) -> Unit = {},
     viewModel: ProfileViewModel = viewModel(),
     hallwayViewModel: HallwayViewModel = viewModel()
 ) {
@@ -319,6 +320,7 @@ fun ProfileScreen(
         ) {
             HallwayScreen(
                 onNavigateToProfile = { viewModel.openProfileMenu() },
+                onNavigateToCreatorProfile = onNavigateToCreatorProfile,
                 onNavigateToNotifications = onNavigateToNotifications,
                 onRoomingMusicClick = { showMusicSelector = true },
                 onRoomingScanClick = {

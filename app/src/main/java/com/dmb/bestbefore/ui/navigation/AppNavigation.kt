@@ -135,8 +135,20 @@ fun AppNavigation() {
                 onNavigateToNotifications = {
                     navController.navigate(Routes.NOTIFICATIONS)
                 },
+                onNavigateToCreatorProfile = { userId ->
+                    navController.navigate("creator_profile/$userId")
+                },
                 viewModel = profileViewModel,
                 hallwayViewModel = hallwayViewModel
+            )
+        }
+
+        composable("creator_profile/{userId}") { backStackEntry ->
+            val userId = backStackEntry.arguments?.getString("userId") ?: ""
+            com.dmb.bestbefore.ui.screens.profile.CreatorProfileScreen(
+                userId = userId,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToRoom = { roomId -> navController.navigate("room_detail/$roomId") }
             )
         }
 

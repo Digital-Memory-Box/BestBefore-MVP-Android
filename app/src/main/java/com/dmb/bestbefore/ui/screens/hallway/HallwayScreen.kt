@@ -63,6 +63,7 @@ import kotlin.math.absoluteValue
 @Composable
 fun HallwayScreen(
     onNavigateToProfile: () -> Unit,
+    onNavigateToCreatorProfile: (String) -> Unit = {},
     onNavigateToNotifications: () -> Unit,
     onRoomingMusicClick: () -> Unit = {},
     onRoomingScanClick: () -> Unit = {},
@@ -169,6 +170,7 @@ fun HallwayScreen(
                             currentTab = currentTab,
                             selectedFilterTag = selectedFilterTag,
                             onFilterTagSelected = viewModel::setSelectedFilterTag,
+                            onNavigateToCreatorProfile = onNavigateToCreatorProfile,
                             onNavigateToNotifications = onNavigateToNotifications,
                             onMusicClick = onRoomingMusicClick,
                             onShowSoundCloud = { viewModel.setSoundCloudModalVisible(true) },
@@ -783,6 +785,7 @@ private fun HallwayContent(
     currentTab: BottomTab,
     selectedFilterTag: String?,
     onFilterTagSelected: (String?) -> Unit,
+    onNavigateToCreatorProfile: (String) -> Unit = {},
     onNavigateToNotifications: () -> Unit,
     onMusicClick: () -> Unit,
     onShowSoundCloud: () -> Unit,
@@ -962,6 +965,7 @@ private fun HallwayContent(
                         onToggleCollaborators = onToggleCollaborators,
                         onDismissCollaborators = onCollapseCollaborators,
                         onSeeAllClick = onExpandDescription,
+                        onNavigateToCreatorProfile = onNavigateToCreatorProfile,
                         onShowSimilarRooms = { onEnterSimilarMode(activeCard) },
                         isSimilarMode = similarModeSource != null,
                         onConnectRoom = { onConnectRoom(activeCard) }
@@ -1223,6 +1227,7 @@ fun ActiveCardDetails(
     onToggleCollaborators: () -> Unit,
     onDismissCollaborators: () -> Unit,
     onSeeAllClick: () -> Unit,
+    onNavigateToCreatorProfile: (String) -> Unit = {},
     onShowSimilarRooms: () -> Unit = {},
     isSimilarMode: Boolean = false,
     onConnectRoom: () -> Unit = {}
@@ -1261,7 +1266,8 @@ fun ActiveCardDetails(
                         modifier = Modifier
                             .size(40.dp)
                             .background(themeColor, CircleShape)
-                            .clip(CircleShape),
+                            .clip(CircleShape)
+                            .clickable { card.ownerId?.let { onNavigateToCreatorProfile(it) } },
                         contentAlignment = Alignment.Center
                     ) {
                         if (!card.ownerProfilePic.isNullOrEmpty()) {

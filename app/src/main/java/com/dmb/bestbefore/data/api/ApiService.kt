@@ -257,6 +257,12 @@ interface ApiService {
         @retrofit2.http.Query("q") query: String
     ): Response<List<UserDto>>
 
+    @GET("users/{id}/profile")
+    suspend fun getPublicProfile(
+        @Header("Authorization") token: String,
+        @Path("id") userId: String
+    ): Response<PublicProfileDto>
+
     // ── Direct External ──────────────────────────────────────────────────────────
     @GET
     suspend fun searchSoundCloudDirect(

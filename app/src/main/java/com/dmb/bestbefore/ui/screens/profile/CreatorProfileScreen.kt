@@ -1,0 +1,340 @@
+package com.dmb.bestbefore.ui.screens.profile
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import com.dmb.bestbefore.data.api.models.PublicProfileDto
+import com.dmb.bestbefore.data.api.models.PublicRoomDto
+import java.text.DecimalFormat
+
+@Composable
+fun CreatorProfileScreen(
+    userId: String,
+    onNavigateBack: () -> Unit,
+    onNavigateToRoom: (String) -> Unit,
+    viewModel: CreatorProfileViewModel = viewModel()
+) {
+    val context = LocalContext.current
+    val profile by viewModel.profileState.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+
+    LaunchedEffect(userId) {
+        viewModel.loadProfile(context, userId)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .statusBarsPadding()
+    ) {
+        // Top Bar
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = "Back",
+                tint = Color.White,
+                modifier = Modifier
+                    .size(28.dp)
+                    .clickable { onNavigateBack() }
+            )
+            
+            Text(
+                text = "Creator Profile",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 28.dp), // Balance out the back icon
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+        }
+
+        if (isLoading && profile == null) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color(0xFF007AFF))
+            }
+        } else if (profile != null) {
+            val p = profile!!
+            
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+            ) {
+                // User Card
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF1C1C1E), RoundedCornerShape(24.dp))
+                        .padding(20.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            // Name and Artist tag
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                val nameText = if (p.name?.startsWith("@") == true) p.name else "@${p.name ?: "user"}"
+                                Text(
+                                    text = nameText,
+                                    color = Color.White,
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                
+                                if (p.userType?.lowercase() == "artist") {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .background(Color(0xFF333333), RoundedCornerShape(6.dp))
+                                            .padding(horizontal = 6.dp, vertical = 3.dp)
+                                    ) {
+                                        Text(
+                                            text = "Artist",
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            Spacer(modifier = Modifier.height(12.dp))
+                            
+                            // Stats Row
+                            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                                Column {
+                                    Text(text = "Rooming", color = Color.Gray, fontSize = 12.sp)
+                                    Text(
+                                        text = formatCount(p.roomingCount),
+                                        color = Color.White,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Column {
+                                    Text(text = "Roomers", color = Color.Gray, fontSize = 12.sp)
+                                    Text(
+                                        text = formatCount(p.roomersCount),
+                                        color = Color.White,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            
+                            Spacer(modifier = Modifier.height(16.dp))
+                            
+                            // Bio
+                            if (!p.bio.isNullOrEmpty()) {
+                                Text(
+                                    text = p.bio,
+                                    color = Color(0xFFCCCCCC),
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                        
+                        // Profile Pic
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .background(Color(0xFF007AFF).copy(alpha = 0.2f), CircleShape)
+                                .clip(CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (!p.profileImageUrl.isNullOrEmpty()) {
+                                AsyncImage(
+                                    model = p.profileImageUrl,
+                                    contentDescription = "Profile Pic",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = Color(0xFF007AFF),
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Info Cards (Rooms / Memories)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Rooms Card
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(Color(0xFF1C1C1E), RoundedCornerShape(20.dp))
+                            .padding(16.dp)
+                    ) {
+                        Column {
+                            Icon(Icons.Default.Home, null, tint = Color(0xFF007AFF), modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = p.publicRooms.size.toString(),
+                                color = Color.White,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Rooms",
+                                color = Color.Gray,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                    
+                    // Memories Card
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(Color(0xFF1C1C1E), RoundedCornerShape(20.dp))
+                            .padding(16.dp)
+                    ) {
+                        Column {
+                            Icon(Icons.Default.PhotoLibrary, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = p.memoriesCount.toString(),
+                                color = Color.White,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Memories",
+                                color = Color.Gray,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Text(
+                    text = "Public Rooms",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 32.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(p.publicRooms) { room ->
+                        PublicRoomCard(room = room, onClick = { onNavigateToRoom(room.id) })
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PublicRoomCard(room: PublicRoomDto, onClick: () -> Unit) {
+    val themeColor = parseThemeColor(room.theme)
+    
+    Column(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1.5f)
+                .clip(RoundedCornerShape(16.dp))
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            themeColor.copy(alpha = 0.6f),
+                            themeColor.copy(alpha = 0.2f),
+                            Color(0xFF121212)
+                        )
+                    )
+                )
+                .clickable { onClick() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.AutoAwesome,
+                contentDescription = null,
+                tint = Color(0xFF42A5F5), // Small star icon in center like screenshot
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(6.dp))
+        
+        Text(
+            text = room.name,
+            color = Color.White,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
+        )
+    }
+}
+
+private fun formatCount(count: Int): String {
+    if (count < 1000) return count.toString()
+    val df = DecimalFormat("#.#")
+    return df.format(count / 1000.0) + "k"
+}
+
+// Same logic as in HallwayScreen
+private fun parseThemeColor(hex: String?, fallback: Color = Color(0xFF007AFF)): Color {
+    if (hex.isNullOrBlank()) return fallback
+    return try {
+        val cleanHex = if (hex.startsWith("#")) hex else "#$hex"
+        Color(android.graphics.Color.parseColor(cleanHex))
+    } catch (e: Exception) {
+        fallback
+    }
+}
