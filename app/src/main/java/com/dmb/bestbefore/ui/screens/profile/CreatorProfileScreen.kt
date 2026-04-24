@@ -8,12 +8,11 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -103,106 +102,106 @@ fun CreatorProfileScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp)
+                    .verticalScroll(rememberScrollState())
             ) {
-                // User Card
-                Box(
+                // User Card (Prominent Header)
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFF1C1C1E), RoundedCornerShape(24.dp))
-                        .padding(20.dp)
+                        .background(Color(0xFF1C1C1E).copy(alpha = 0.8f), RoundedCornerShape(24.dp))
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                    // Profile Photo
+                    Box(
+                        modifier = Modifier
+                            .size(100.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF2C2C2E))
+                            .border(2.dp, Color.White.copy(alpha = 0.1f), CircleShape)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            // Name and Artist tag
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                val nameText = if (p.name?.startsWith("@") == true) p.name else "@${p.name ?: "user"}"
+                        if (!p.profileImageUrl.isNullOrEmpty()) {
+                            AsyncImage(
+                                model = p.profileImageUrl,
+                                contentDescription = "Profile Pic",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.AccountCircle,
+                                contentDescription = null,
+                                tint = Color.Gray,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Name and Artist tag
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val nameText = if (p.name?.startsWith("@") == true) p.name else "@${p.name ?: "user"}"
+                        Text(
+                            text = nameText,
+                            color = Color.White,
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        
+                        if (p.userType?.lowercase() == "artist") {
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Box(
+                                modifier = Modifier
+                                    .background(Color(0xFF007AFF), RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
                                 Text(
-                                    text = nameText,
+                                    text = "Artist",
                                     color = Color.White,
-                                    fontSize = 22.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
-                                )
-                                
-                                if (p.userType?.lowercase() == "artist") {
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .background(Color(0xFF333333), RoundedCornerShape(6.dp))
-                                            .padding(horizontal = 6.dp, vertical = 3.dp)
-                                    ) {
-                                        Text(
-                                            text = "Artist",
-                                            color = Color.White,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                            
-                            Spacer(modifier = Modifier.height(12.dp))
-                            
-                            // Stats Row
-                            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                                Column {
-                                    Text(text = "Rooming", color = Color.Gray, fontSize = 12.sp)
-                                    Text(
-                                        text = formatCount(p.roomingCount),
-                                        color = Color.White,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                Column {
-                                    Text(text = "Roomers", color = Color.Gray, fontSize = 12.sp)
-                                    Text(
-                                        text = formatCount(p.roomersCount),
-                                        color = Color.White,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                            
-                            Spacer(modifier = Modifier.height(16.dp))
-                            
-                            // Bio
-                            if (!p.bio.isNullOrEmpty()) {
-                                Text(
-                                    text = p.bio,
-                                    color = Color(0xFFCCCCCC),
-                                    fontSize = 14.sp
                                 )
                             }
                         }
-                        
-                        // Profile Pic
-                        Box(
-                            modifier = Modifier
-                                .size(72.dp)
-                                .background(Color(0xFF007AFF).copy(alpha = 0.2f), CircleShape)
-                                .clip(CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (!p.profileImageUrl.isNullOrEmpty()) {
-                                AsyncImage(
-                                    model = p.profileImageUrl,
-                                    contentDescription = "Profile Pic",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop,
-                                    error = androidx.compose.ui.res.painterResource(android.R.drawable.ic_menu_report_image)
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.Person,
-                                    contentDescription = null,
-                                    tint = Color(0xFF007AFF),
-                                    modifier = Modifier.size(36.dp)
-                                )
-                            }
+                    }
+                    
+                    // Bio
+                    if (!p.bio.isNullOrEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = p.bio!!,
+                            color = Color(0xFF8E8E93),
+                            fontSize = 15.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    // Stats Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = "Rooming", color = Color.Gray, fontSize = 12.sp)
+                            Text(
+                                text = formatCount(p.roomingCount),
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = "Roomers", color = Color.Gray, fontSize = 12.sp)
+                            Text(
+                                text = formatCount(p.roomersCount),
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }

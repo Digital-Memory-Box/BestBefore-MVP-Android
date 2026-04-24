@@ -78,6 +78,7 @@ fun ProfileScreen(
     val savedRoomCards by hallwayViewModel.savedRoomCards.collectAsState()
     val isRoomInRooming = selectedRoom?.let { r -> savedRoomCards.any { it.id == r.id } } == true
 
+    val profileImageUri by viewModel.profileImageUri.collectAsState()
     val isAllMediaVisible by viewModel.isAllMediaVisible.collectAsState()
 
     var showMusicSelector by remember { mutableStateOf(false) }
@@ -354,6 +355,7 @@ fun ProfileScreen(
                         cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                     }
                 },
+                userProfileImageUrl = profileImageUri?.toString(),
                 viewModel = hallwayViewModel
             )
         }

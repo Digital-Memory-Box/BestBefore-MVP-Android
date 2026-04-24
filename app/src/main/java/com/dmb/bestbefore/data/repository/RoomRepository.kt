@@ -65,6 +65,20 @@ class RoomRepository {
         }
     }
 
+    suspend fun getRoomById(roomId: String): Result<RoomDto> {
+        return try {
+            val response = api.getRoomById(freshBearer(), roomId)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                val err = response.errorBody()?.string() ?: "HTTP ${response.code()}"
+                Result.failure(Exception("Failed to fetch room $roomId: $err"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     private suspend fun tryFallbackRoomsRequest(
         endpointName: String,
         request: suspend (com.dmb.bestbefore.data.api.ApiService, String) -> retrofit2.Response<List<RoomDto>>

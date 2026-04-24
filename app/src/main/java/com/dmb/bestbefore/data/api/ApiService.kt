@@ -44,6 +44,12 @@ interface ApiService {
         @Header("Authorization") token: String
     ): Response<List<RoomDto>>
 
+    @GET("rooms/{id}")
+    suspend fun getRoomById(
+        @Header("Authorization") token: String,
+        @Path("id") roomId: String
+    ): Response<RoomDto>
+
     @GET("rooms/discover")
     suspend fun getDiscoverRooms(
         @Header("Authorization") token: String

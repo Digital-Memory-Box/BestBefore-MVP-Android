@@ -47,10 +47,11 @@ object OrbMenuLayout {
 @Composable
 fun OrbMenu(
     modifier: Modifier = Modifier,
-    diameter: Dp = 420.dp, // Biraz daha büyütüldü
+    diameter: Dp = 420.dp,
     onAddClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
-    onCameraClick: () -> Unit = {}
+    onCameraClick: () -> Unit = {},
+    profileImageUrl: String? = null
 ) {
     val theme = ThemeState.currentTheme
     val accentColor = ThemeState.currentAccent
@@ -147,14 +148,31 @@ fun OrbMenu(
                 .align(Alignment.Center)
                 .offset(x = -buttonRadius, y = 0.dp)
         ) {
-            OrbButton(
-                icon = Icons.Default.Person,
-                contentDescription = "Profile",
-                onClick = onProfileClick,
-                size = 60.dp,
-                iconSize = 38.dp,
-                tint = iconTint
-            )
+            if (!profileImageUrl.isNullOrEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .size(60.dp)
+                        .clip(CircleShape)
+                        .border(1.dp, iconTint.copy(alpha = 0.5f), CircleShape)
+                        .clickable { onProfileClick() }
+                ) {
+                    coil.compose.AsyncImage(
+                        model = profileImageUrl,
+                        contentDescription = "Profile",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                }
+            } else {
+                OrbButton(
+                    icon = Icons.Default.Person,
+                    contentDescription = "Profile",
+                    onClick = onProfileClick,
+                    size = 60.dp,
+                    iconSize = 38.dp,
+                    tint = iconTint
+                )
+            }
         }
 
         // 3. Camera Button (Alt Kavis)

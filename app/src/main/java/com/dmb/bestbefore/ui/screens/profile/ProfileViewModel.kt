@@ -185,12 +185,38 @@ class ProfileViewModel : ViewModel() {
     }
 
     // Helper for resolving connected rooms names
-    fun getRoomByIdFromRemote(id: String): TimeCapsuleRoom? {
+    suspend fun getRoomByIdFromRemote(id: String): TimeCapsuleRoom? {
         // First check in created rooms
         _createdRooms.value.find { it.id == id }?.let { return it }
-        // Potentially check a global room cache if implemented, 
-        // for now we just return null and the UI handles the ID fallback.
-        return null
+        
+        return try {
+            val result = roomRepository.getRoomById(id)
+            result.getOrNull()?.let { dto ->
+                TimeCapsuleRoom(
+                    id = dto.id,
+                    roomName = dto.name,
+                    capsuleDays = dto.capsuleDurationDays,
+                    capsuleHours = dto.capsuleDurationHours,
+                    capsuleMinutes = dto.capsuleDurationMinutes,
+                    notificationDays = 0,
+                    notificationHours = 0,
+                    isPublic = !dto.isPrivate,
+                    isCollaboration = dto.isTimeCapsule,
+                    unlockTime = dto.unlockTime,
+                    scheduledClosureTime = dto.expirationDate ?: 0L,
+                    theme = dto.theme,
+                    description = dto.description,
+                    music = dto.backgroundMusic,
+                    connectedRooms = dto.connectedRooms,
+                    isOwnedByMe = dto.isOwnedByMe,
+                    isCollaborator = dto.isCollaborator,
+                    ownerUserType = dto.ownerUserType
+                )
+            }
+        } catch (e: Exception) {
+            Log.e("ProfileViewModel", "Failed to fetch remote room $id", e)
+            null
+        }
     }
     
     // Credential Update State
@@ -1557,15 +1583,23 @@ class ProfileViewModel : ViewModel() {
     // Deep Link Handler
     // Deep Link Handler
     fun handleDeepLink(roomId: String) {
-        val room = _createdRooms.value.find { it.id == roomId }
-        if (room != null) {
-            // Show photos first (Unlocked Room Flow Step 1)
-            _unlockedPhotosRoom.value = room
+        val localRoom = _createdRooms.value.find { it.id == roomId }
+        if (localRoom != null) {
+            selectRoom(localRoom)
         } else {
-             // If room not found in current loaded list (e.g. fresh start), 
-             // we might need to fetch it or wait for init. 
-             // For MVP, we assume initDatabase loads it.
-             // We can also trigger a specific "Load Room" here if needed.
+             viewModelScope.launch {
+                 _isLoading.value = true
+                 try {
+                     val remoteRoom = getRoomByIdFromRemote(roomId)
+                     if (remoteRoom != null) {
+                         selectRoom(remoteRoom)
+                     }
+                 } catch (e: Exception) {
+                     Log.e("ProfileViewModel", "Failed to load deep link room: $roomId", e)
+                 } finally {
+                     _isLoading.value = false
+                 }
+             }
         }
     }
     
@@ -1691,6 +1725,23 @@ class ProfileViewModel : ViewModel() {
             _profileImageUri.value = localUri
             val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
             sessionManager.saveProfilePhotoUri(localUri.toString())
+            
+            // Upload to backend for global visibility
+            viewModelScope.launch {
+                try {
+                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    if (bytes != null) {
+                        val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                        val dataUri = "data:image/jpeg;base64,$base64"
+                        val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
+                        authRepo.updateMe(com.dmb.bestbefore.data.api.models.UpdateMeRequest(profileImageUrl = dataUri))
+                        Log.d("ProfileViewModel", "Profile photo synced to backend")
+                    }
+                } catch (e: Exception) {
+                    Log.e("ProfileViewModel", "Failed to sync profile photo", e)
+                }
+            }
+            
             Toast.makeText(context, "Profile photo updated", Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(context, "Photo could not be updated", Toast.LENGTH_SHORT).show()

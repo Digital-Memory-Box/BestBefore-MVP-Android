@@ -70,6 +70,7 @@ fun HallwayScreen(
     onOpenRoom: (HallwayCard) -> Unit = {},
     onCreateRoomClick: () -> Unit = {},
     onCameraClick: () -> Unit = {},
+    userProfileImageUrl: String? = null,
     viewModel: HallwayViewModel = viewModel()
 ) {
     val cards by viewModel.filteredCards.collectAsState()
@@ -222,7 +223,8 @@ fun HallwayScreen(
                 diameter = orbWidth,
                 onProfileClick = onNavigateToProfile,
                 onAddClick = onCreateRoomClick,
-                onCameraClick = onCameraClick
+                onCameraClick = onCameraClick,
+                profileImageUrl = userProfileImageUrl
             )
         }
 
@@ -1236,8 +1238,7 @@ fun ActiveCardDetails(
     val colors = LocalBestBeforeColors.current
     val context = androidx.compose.ui.platform.LocalContext.current
     val isCollabRoom = card.collaboratorCount > 0
-    val hasDescription = card.description.isNotBlank() &&
-            card.description != "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do usermod temper..."
+    val hasDescription = card.description.isNotBlank()
     val hasTags = card.tags.isNotEmpty()
 
     // BB-UI-07: Entire details section is wrapped in a Box to allow
@@ -1265,8 +1266,9 @@ fun ActiveCardDetails(
                     // Avatar
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
-                            .background(themeColor, CircleShape)
+                            .size(44.dp)
+                            .background(Color(0xFF2C2C2E), CircleShape)
+                            .border(1.5.dp, Color.White.copy(alpha = 0.15f), CircleShape)
                             .clip(CircleShape)
                             .clickable { card.ownerId?.let { onNavigateToCreatorProfile(it) } },
                         contentAlignment = Alignment.Center
@@ -1280,9 +1282,10 @@ fun ActiveCardDetails(
                             )
                         } else {
                             Icon(
-                                Icons.Default.Person,
+                                Icons.Default.AccountCircle,
                                 contentDescription = null,
-                                tint = Color.Black
+                                tint = Color.Gray.copy(alpha = 0.8f),
+                                modifier = Modifier.size(32.dp)
                             )
                         }
                     }
