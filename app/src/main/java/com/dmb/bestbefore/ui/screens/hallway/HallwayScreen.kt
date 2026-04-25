@@ -49,6 +49,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dmb.bestbefore.ui.screens.notifications.NotificationViewModel
 import com.dmb.bestbefore.data.models.HallwayCard
 import com.dmb.bestbefore.ui.components.OrbMenu
+import com.dmb.bestbefore.ui.components.ProfileAvatar
 import com.dmb.bestbefore.ui.theme.LocalBestBeforeColors
 import com.dmb.bestbefore.ui.theme.ThemeState
 import androidx.core.graphics.toColorInt
@@ -323,14 +324,6 @@ private fun RoomingContent(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = "Music",
-                        tint = colors.textPrimary,
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clickable { onMusicClick() }
-                    )
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -602,16 +595,36 @@ private fun RoomingCard(
             .background(Color.DarkGray)
             .clickable { onClick() }
     ) {
-        // Gradient background
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(themeColor.copy(alpha = 0.3f), Color.Black.copy(alpha = 0.9f))
+        // Gradient or Photo background
+        val searchKeyword = card.title.lowercase()
+            .replace("'s", "")
+            .split(" ")
+            .filter { it.length > 3 && it !in listOf("room", "hallway", "best", "before", "collection") }
+            .take(2)
+            .joinToString(",")
+            .takeIf { it.isNotBlank() } ?: "abstract"
+        val roomImage = if (!card.imageUrl.isNullOrBlank()) card.imageUrl 
+                        else if (card.photos.isNotEmpty()) card.photos.first()
+                        else "https://loremflickr.com/640/480/$searchKeyword"
+        
+        Box(modifier = Modifier.fillMaxSize()) {
+            coil.compose.AsyncImage(
+                model = roomImage,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                alpha = 0.6f
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(themeColor.copy(alpha = 0.2f), Color.Black.copy(alpha = 0.85f))
+                        )
                     )
-                )
-        )
+            )
+        }
 
         // Saved badge top-right
         if (isSaved) {
@@ -719,21 +732,41 @@ private fun RoomingCard(
         ) {
             Text(
                 text = card.title,
-                fontSize = 24.sp,
+                fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = colors.textPrimary
             )
+            
+            // Owner Row
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(vertical = 2.dp)
+            ) {
+                ProfileAvatar(
+                    imageUri = card.ownerProfilePic,
+                    size = 24.dp,
+                    accentColor = Color.White
+                )
+                Text(
+                    text = card.ownerName ?: "artist",
+                    fontSize = 12.sp,
+                    color = colors.textPrimary.copy(alpha = 0.8f),
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
             Text(
                 text = "Time Capsule: ${card.timeCapsuleDays}d 0h 0m",
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 color = colors.textSecondary
             )
             Text(
                 "Tap to view details >",
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = colors.textSecondary,
-                modifier = Modifier.padding(top = 8.dp)
+                modifier = Modifier.padding(top = 4.dp)
             )
 
             // Locked badge
@@ -1149,13 +1182,19 @@ fun HallwayActiveCard(
                 ),
             contentAlignment = Alignment.BottomCenter
         ) {
-            if (hasRealPhotos) {
-                // Native VerticalPager for smooth up/down photo/video scrolling
-                VerticalPager(
-                    state = verticalPagerState,
-                    modifier = Modifier.fillMaxSize()
-                ) { page ->
-                    val mediaUrl = actualPhotos[page]
+            // Native VerticalPager for smooth up/down photo/video scrolling
+            VerticalPager(
+                state = verticalPagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                    val searchKeyword = card.title.lowercase()
+                        .replace("'s", "")
+                        .split(" ")
+                        .filter { it.length > 3 && it !in listOf("room", "hallway", "best", "before", "collection") }
+                        .take(2)
+                        .joinToString(",")
+                        .takeIf { it.isNotBlank() } ?: "abstract"
+                    val mediaUrl = actualPhotos.getOrNull(page) ?: "https://loremflickr.com/640/800/$searchKeyword"
                     val isVideo = mediaUrl.endsWith(".mp4", ignoreCase = true) || 
                                   mediaUrl.endsWith(".mov", ignoreCase = true) || 
                                   mediaUrl.endsWith(".webm", ignoreCase = true) ||
@@ -1175,8 +1214,7 @@ fun HallwayActiveCard(
                         )
                     }
                 }
-            }
-
+            
             // Top sheen overlay
             Box(
                 modifier = Modifier
@@ -1194,10 +1232,11 @@ fun HallwayActiveCard(
                     )
             )
 
-            // Image index indicator (1/N) — always shown
+            // Image index indicator (1/N)
             if (hasRealPhotos && maxImages > 1) {
                 Box(
                     modifier = Modifier
+                        .align(Alignment.BottomCenter)
                         .padding(bottom = 12.dp)
                         .background(
                             Color.Black.copy(alpha = 0.5f),
@@ -1207,12 +1246,13 @@ fun HallwayActiveCard(
                 ) {
                     Text(
                         text = "${verticalPagerState.currentPage + 1}/$maxImages",
-                        color = colors.textPrimary,
+                        color = Color.White,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
+
         }
     }
 }
@@ -1272,11 +1312,15 @@ fun ActiveCardDetails(
                     )
 
                     // Username
+                    val nameText = (card.ownerName?.takeIf { it.isNotBlank() }
+                                   ?: card.ownerEmail?.substringBefore("@")
+                                   ?: "artist")
                     Text(
-                        text = card.ownerName ?: "@${card.ownerEmail?.substringBefore("@") ?: "artist"}",
-                        color = colors.textPrimary,
+                        text = nameText,
+                        color = Color.White,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
+                        fontSize = 16.sp,
+                        modifier = Modifier.padding(end = 4.dp)
                     )
 
                     // BB-UI-07: Collaborator toggle button
@@ -1372,13 +1416,21 @@ fun ActiveCardDetails(
                     }
 
                     if (!isSimilarMode) {
-                        Text(
-                            text = "Show Similar",
-                            color = colors.textPrimary.copy(alpha = 0.7f),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.clickable { onShowSimilarRooms() }
-                        )
+                        Row(
+                            modifier = Modifier
+                                .clickable { onShowSimilarRooms() }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text("✨", fontSize = 12.sp)
+                            Text(
+                                text = "Show Similar Rooms",
+                                color = Color(0xFF007AFF),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     } else {
                         // "Connection" button in Similarity Mode
                         Box(
@@ -1541,12 +1593,6 @@ fun HallwayHeader(
     ) {
         Text(title, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            Icon(
-                Icons.Default.MusicNote,
-                contentDescription = "Music",
-                tint = colors.textPrimary,
-                modifier = Modifier.clickable { onMusicClick() }
-            )
             Box {
                 Icon(
                     Icons.Default.Notifications,
@@ -1799,18 +1845,21 @@ private fun ExpandedDescriptionOverlay(
                     .border(1.dp, themeColor.copy(alpha = 0.45f), RoundedCornerShape(30.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(18.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(Color.Black.copy(alpha = 0.30f))
-                )
-                Text(
-                    text = card.title,
-                    color = colors.textSecondary.copy(alpha = 0.82f),
-                    fontSize = 30.sp,
-                    fontWeight = FontWeight.Bold
+                // Hero Photo
+                val searchKeyword = card.title.lowercase()
+                    .replace("'s", "")
+                    .split(" ")
+                    .filter { it.length > 3 && it !in listOf("room", "hallway", "best", "before", "collection") }
+                    .take(2)
+                    .joinToString(",")
+                    .takeIf { it.isNotBlank() } ?: "abstract"
+                val mediaUrl = card.photos.firstOrNull() ?: "https://loremflickr.com/640/800/$searchKeyword"
+                
+                coil.compose.AsyncImage(
+                    model = mediaUrl,
+                    contentDescription = card.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
                 )
             }
 

@@ -3,9 +3,8 @@ package com.dmb.bestbefore.ui.screens.profile
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.*
@@ -31,12 +30,13 @@ import coil.compose.AsyncImage
 import com.dmb.bestbefore.data.api.models.PublicProfileDto
 import com.dmb.bestbefore.data.api.models.PublicRoomDto
 import java.text.DecimalFormat
+import com.dmb.bestbefore.ui.components.ProfileAvatar
 
 @Composable
 fun CreatorProfileScreen(
     userId: String,
     onNavigateBack: () -> Unit,
-    onNavigateToRoom: (String) -> Unit,
+    onNavigateToRoom: (String, String) -> Unit,
     viewModel: CreatorProfileViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -98,173 +98,158 @@ fun CreatorProfileScreen(
         } else {
             val p = profile!!
             
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp)
-                    .verticalScroll(rememberScrollState())
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 32.dp)
             ) {
                 // User Card (Prominent Header)
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFF1C1C1E).copy(alpha = 0.8f), RoundedCornerShape(24.dp))
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // Profile Photo
-                    ProfileAvatar(
-                        imageUri = p.profileImageUrl,
-                        size = 100.dp,
-                        accentColor = Color.White
-                    )
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    // Name and Artist tag
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val nameText = if (p.name?.startsWith("@") == true) p.name else "@${p.name ?: "user"}"
-                        Text(
-                            text = nameText,
-                            color = Color.White,
-                            fontSize = 26.sp,
-                            fontWeight = FontWeight.Bold
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .background(Color(0xFF1C1C1E).copy(alpha = 0.8f), RoundedCornerShape(24.dp))
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        ProfileAvatar(
+                            imageUri = p.profileImageUrl,
+                            size = 100.dp,
+                            accentColor = Color.White
                         )
                         
-                        if (p.userType?.lowercase() == "artist") {
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Box(
-                                modifier = Modifier
-                                    .background(Color(0xFF007AFF), RoundedCornerShape(8.dp))
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val nameText = p.name?.takeIf { it.isNotBlank() } ?: "User"
+                            Text(
+                                text = nameText,
+                                color = Color.White,
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            
+                            if (p.userType?.lowercase() == "artist") {
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .background(Color(0xFF007AFF), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = "Artist",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                        
+                        if (!p.bio.isNullOrEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = p.bio!!,
+                                color = Color(0xFF8E8E93),
+                                fontSize = 15.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(24.dp))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = "Rooming", color = Color.Gray, fontSize = 12.sp)
                                 Text(
-                                    text = "Artist",
+                                    text = formatCount(p.roomingCount),
                                     color = Color.White,
-                                    fontSize = 12.sp,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = "Roomers", color = Color.Gray, fontSize = 12.sp)
+                                Text(
+                                    text = formatCount(p.roomersCount),
+                                    color = Color.White,
+                                    fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
                         }
                     }
-                    
-                    // Bio
-                    if (!p.bio.isNullOrEmpty()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = p.bio!!,
-                            color = Color(0xFF8E8E93),
-                            fontSize = 15.sp,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    }
-                    
-                    Spacer(modifier = Modifier.height(24.dp))
-                    
-                    // Stats Row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(text = "Rooming", color = Color.Gray, fontSize = 12.sp)
-                            Text(
-                                text = formatCount(p.roomingCount),
-                                color = Color.White,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(text = "Roomers", color = Color.Gray, fontSize = 12.sp)
-                            Text(
-                                text = formatCount(p.roomersCount),
-                                color = Color.White,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
                 }
-                
-                Spacer(modifier = Modifier.height(16.dp))
                 
                 // Info Cards (Rooms / Memories)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // Rooms Card
-                    Box(
+                item {
+                    Row(
                         modifier = Modifier
-                            .weight(1f)
-                            .background(Color(0xFF1C1C1E), RoundedCornerShape(20.dp))
-                            .padding(16.dp)
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Column {
-                            Icon(Icons.Default.Home, null, tint = Color(0xFF007AFF), modifier = Modifier.size(24.dp))
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = p.publicRooms.size.toString(),
-                                color = Color.White,
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Rooms",
-                                color = Color.Gray,
-                                fontSize = 12.sp
-                            )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(Color(0xFF1C1C1E), RoundedCornerShape(20.dp))
+                                .padding(16.dp)
+                        ) {
+                            Column {
+                                Icon(Icons.Default.Home, null, tint = Color(0xFF007AFF), modifier = Modifier.size(24.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = p.publicRooms.size.toString(),
+                                    color = Color.White,
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(text = "Rooms", color = Color.Gray, fontSize = 12.sp)
+                            }
                         }
-                    }
-                    
-                    // Memories Card
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(Color(0xFF1C1C1E), RoundedCornerShape(20.dp))
-                            .padding(16.dp)
-                    ) {
-                        Column {
-                            Icon(Icons.Default.PhotoLibrary, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(24.dp))
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = p.memoriesCount.toString(),
-                                color = Color.White,
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Memories",
-                                color = Color.Gray,
-                                fontSize = 12.sp
-                            )
+                        
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(Color(0xFF1C1C1E), RoundedCornerShape(20.dp))
+                                .padding(16.dp)
+                        ) {
+                            Column {
+                                Icon(Icons.Default.PhotoLibrary, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(24.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = p.memoriesCount.toString(),
+                                    color = Color.White,
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(text = "Memories", color = Color.Gray, fontSize = 12.sp)
+                            }
                         }
                     }
                 }
                 
-                Spacer(modifier = Modifier.height(24.dp))
+                item {
+                    Text(
+                        text = "Public Rooms",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                    )
+                }
                 
-                Text(
-                    text = "Public Rooms",
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(bottom = 32.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(p.publicRooms) { room ->
-                        PublicRoomCard(room = room, onClick = { onNavigateToRoom(room.id) })
-                    }
+                // Public Rooms Grid
+                gridItems(
+                    items = p.publicRooms,
+                    columnCount = 2,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                ) { room ->
+                    PublicRoomCard(room = room, onClick = { onNavigateToRoom(room.id, room.name) })
                 }
             }
         }
@@ -278,6 +263,15 @@ fun PublicRoomCard(room: PublicRoomDto, onClick: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
+        val searchKeyword = room.name.lowercase()
+            .replace("'s", "")
+            .split(" ")
+            .filter { it.length > 3 && it !in listOf("room", "hallway", "best", "before", "collection") }
+            .take(2)
+            .joinToString(",")
+            .takeIf { it.isNotBlank() } ?: "abstract"
+        val roomImage = room.photos.firstOrNull() ?: "https://loremflickr.com/640/800/$searchKeyword"
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -295,21 +289,13 @@ fun PublicRoomCard(room: PublicRoomDto, onClick: () -> Unit) {
                 .clickable { onClick() },
             contentAlignment = Alignment.Center
         ) {
-            if (room.photos.isNotEmpty()) {
-                AsyncImage(
-                    model = room.photos.first(),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.AutoAwesome,
-                    contentDescription = null,
-                    tint = Color(0xFF42A5F5),
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+            AsyncImage(
+                model = roomImage,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                alpha = 0.7f
+            )
         }
         
         Spacer(modifier = Modifier.height(6.dp))
@@ -349,5 +335,35 @@ private fun parseThemeColor(hex: String?, fallback: Color = Color(0xFF007AFF)): 
         Color(android.graphics.Color.parseColor(cleanHex))
     } catch (e: Exception) {
         fallback
+    }
+}
+
+/**
+ * Extension for LazyColumn to support grid-like layouts for a dynamic number of items.
+ */
+fun <T> androidx.compose.foundation.lazy.LazyListScope.gridItems(
+    items: List<T>,
+    columnCount: Int,
+    modifier: Modifier = Modifier,
+    horizontalArrangement: Arrangement.Horizontal = Arrangement.spacedBy(12.dp),
+    itemContent: @Composable (T) -> Unit
+) {
+    val rowCount = (items.size + columnCount - 1) / columnCount
+    items(rowCount) { rowIndex ->
+        Row(
+            modifier = modifier.fillMaxWidth().padding(bottom = 12.dp),
+            horizontalArrangement = horizontalArrangement
+        ) {
+            for (columnIndex in 0 until columnCount) {
+                val itemIndex = rowIndex * columnCount + columnIndex
+                if (itemIndex < items.size) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        itemContent(items[itemIndex])
+                    }
+                } else {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
     }
 }

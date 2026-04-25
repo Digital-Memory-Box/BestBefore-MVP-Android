@@ -358,7 +358,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun isCollaborator(room: com.dmb.bestbefore.data.api.models.RoomDto, currentUserEmail: String): Boolean {
-        return room.collaborators?.any { element ->
+        val accepted = room.collaborators?.any { element ->
             if (element.isJsonPrimitive) {
                 element.asString.equals(currentUserEmail, ignoreCase = true)
             } else if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
@@ -367,10 +367,12 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 false
             }
         } == true
+        val pending = room.pendingCollaborators?.any { it.equals(currentUserEmail, ignoreCase = true) } == true
+        return accepted || pending
     }
 
     private fun isViewer(room: com.dmb.bestbefore.data.api.models.RoomDto, currentUserEmail: String): Boolean {
-        return room.viewers?.any { element ->
+        val accepted = room.viewers?.any { element ->
             if (element.isJsonPrimitive) {
                 element.asString.equals(currentUserEmail, ignoreCase = true)
             } else if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
@@ -379,6 +381,8 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 false
             }
         } == true
+        val pending = room.pendingViewers?.any { it.equals(currentUserEmail, ignoreCase = true) } == true
+        return accepted || pending
     }
 
     private fun filterCards(tab: BottomTab) {
@@ -406,12 +410,11 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
         } else {
             when (tab) {
                 BottomTab.ROOMING -> {
-                    myRoomsList.filter { room ->
+                    allAvailableRooms.filter { room ->
                         val isOwner = room.ownerEmail?.equals(currentUserEmail, ignoreCase = true) == true
                         val isCollaborator = isCollaborator(room, currentUserEmail)
                         val isViewer = isViewer(room, currentUserEmail)
-                        val isPrivate = room.isPrivate
-                        !isOwner && (isCollaborator || isViewer) && isPrivate
+                        !isOwner && (isCollaborator || isViewer)
                     }
                 }
                 BottomTab.EVERYONE -> {
