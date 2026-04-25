@@ -270,7 +270,7 @@ fun PublicRoomCard(room: PublicRoomDto, onClick: () -> Unit) {
             .take(2)
             .joinToString(",")
             .takeIf { it.isNotBlank() } ?: "abstract"
-        val roomImage = room.photos.firstOrNull() ?: "https://loremflickr.com/640/800/$searchKeyword"
+        val roomImage = room.photos.firstOrNull()?.url ?: "https://loremflickr.com/640/800/$searchKeyword"
 
         Box(
             modifier = Modifier

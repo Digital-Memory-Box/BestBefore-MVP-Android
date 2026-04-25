@@ -11,7 +11,7 @@ data class TimeCapsuleRoom(
     val notificationMinutes: Int = 0,
     val isPublic: Boolean,
     val isCollaboration: Boolean = false,     // stores isTimeCapsule flag from backend
-    val photos: List<String> = emptyList(),
+    val photos: List<com.dmb.bestbefore.data.api.models.MemoryPreview> = emptyList(),
     val dateCreated: Long = System.currentTimeMillis(),
     val unlockTime: Long = 0L,
     val scheduledClosureTime: Long = 0L,      // 0 = no scheduled closure

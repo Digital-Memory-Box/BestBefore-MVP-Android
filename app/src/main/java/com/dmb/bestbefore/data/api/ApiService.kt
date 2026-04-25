@@ -145,6 +145,13 @@ interface ApiService {
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<Unit>
 
+    @DELETE("rooms/{roomId}/memories/{memoryId}")
+    suspend fun deleteMemory(
+        @Header("Authorization") token: String,
+        @Path("roomId") roomId: String,
+        @Path("memoryId") memoryId: String
+    ): Response<Unit>
+
     @POST("rooms/{roomId}/dump")
     suspend fun dumpMemories(
         @Header("Authorization") token: String,

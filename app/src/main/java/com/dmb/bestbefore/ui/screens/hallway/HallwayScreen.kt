@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,8 +26,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -47,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dmb.bestbefore.ui.screens.notifications.NotificationViewModel
+import com.dmb.bestbefore.data.models.CalendarEvent
 import com.dmb.bestbefore.data.models.HallwayCard
 import com.dmb.bestbefore.ui.components.OrbMenu
 import com.dmb.bestbefore.ui.components.ProfileAvatar
@@ -193,6 +197,7 @@ fun HallwayScreen(
                             onExitSimilarMode = viewModel::exitSimilarMode,
                             onConnectRoom = viewModel::connectRoom,
                             notificationCount = notificationCount.size,
+                            onDeleteMemory = { roomId, memoryId -> viewModel.deleteMemory(roomId, memoryId) },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -583,7 +588,7 @@ private fun RoomingCard(
 ) {
     val colors = LocalBestBeforeColors.current
     val themeColor = parseThemeColor(card.themeColorHex, fallback = colors.primary)
-    val isLocked = card.timeCapsuleDays > 0
+    val isLocked = com.dmb.bestbefore.utils.DateUtils.isLocked(card.unlockDate)
     val isViewer = card.isViewerOnly
     var showRemoveConfirm by remember { mutableStateOf(false) }
 
@@ -604,7 +609,7 @@ private fun RoomingCard(
             .joinToString(",")
             .takeIf { it.isNotBlank() } ?: "abstract"
         val roomImage = if (!card.imageUrl.isNullOrBlank()) card.imageUrl 
-                        else if (card.photos.isNotEmpty()) card.photos.first()
+                        else if (card.photos.isNotEmpty()) card.photos.first().url
                         else "https://loremflickr.com/640/480/$searchKeyword"
         
         Box(modifier = Modifier.fillMaxSize()) {
@@ -757,7 +762,8 @@ private fun RoomingCard(
             }
 
             Text(
-                text = "Time Capsule: ${card.timeCapsuleDays}d 0h 0m",
+                text = if (isLocked) "Unlocks in: ${com.dmb.bestbefore.utils.DateUtils.formatCountdown(card.unlockDate)}"
+                       else "Unlocked",
                 fontSize = 13.sp,
                 color = colors.textSecondary
             )
@@ -841,6 +847,7 @@ private fun HallwayContent(
     onExitSimilarMode: () -> Unit = {},
     onConnectRoom: (HallwayCard) -> Unit = {},
     notificationCount: Int,
+    onDeleteMemory: (String, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val colors = LocalBestBeforeColors.current
@@ -984,6 +991,7 @@ private fun HallwayContent(
                                 currentImageIndex = cardImageIndices[card.id] ?: 0,
                                 onImageIndexChange = { newIndex -> onImageIndexChange(card.id, newIndex) },
                                 onOpenRoom = { onOpenRoom(card) },
+                                onDeleteMemory = onDeleteMemory,
                                 cardHeight = cardHeight,
                                 widthFraction = cardWidthFraction
                             )
@@ -1041,12 +1049,10 @@ fun HallwayActiveCard(
     currentImageIndex: Int,
     onImageIndexChange: (Int) -> Unit,
     onOpenRoom: () -> Unit,
+    onDeleteMemory: (String, String) -> Unit = { _, _ -> },
     cardHeight: Dp = 350.dp,
     widthFraction: Float = 0.9f
 ) {
-    val actualPhotos = if (card.photos.isNotEmpty()) card.photos.take(5) else emptyList()
-    val hasRealPhotos = actualPhotos.isNotEmpty()
-    val maxImages = if (hasRealPhotos) actualPhotos.size else 1
     val colors = LocalBestBeforeColors.current
 
     // Subtle pulse to mimic the richer Swift glow language.
@@ -1079,30 +1085,30 @@ fun HallwayActiveCard(
         label = "cardScale"
     )
 
-    // VerticalPager state for photos
-    val verticalPagerState = rememberPagerState(
-        initialPage = currentImageIndex.coerceIn(0, maxImages - 1),
-        pageCount = { maxImages }
-    )
+    // Deletion dialog state
+    var showDeleteConfirm by remember { mutableStateOf<String?>(null) } // memoryId
 
-    // Sync external index changes into the pager
-    LaunchedEffect(currentImageIndex) {
-        val target = currentImageIndex.coerceIn(0, maxImages - 1)
-        if (verticalPagerState.currentPage != target) {
-            verticalPagerState.scrollToPage(target)
-        }
-    }
-
-    // Notify parent of page changes so the indicator badge and shared state stay in sync
-    LaunchedEffect(verticalPagerState.currentPage) {
-        onImageIndexChange(verticalPagerState.currentPage)
+    if (showDeleteConfirm != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = null },
+            title = { Text("Delete Memory") },
+            text = { Text("Do you want to delete this memory from the room? This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = { 
+                    onDeleteMemory(card.id, showDeleteConfirm!!)
+                    showDeleteConfirm = null 
+                }) { Text("Delete", color = Color.Red) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = null }) { Text("Cancel") }
+            }
+        )
     }
 
     Box(
         modifier = Modifier
             .fillMaxWidth(widthFraction)
             .height(cardHeight)
-            .clickable { onOpenRoom() }
             .scale(animatedScale)
     ) {
         // Layer 1: wide ambient halo
@@ -1179,41 +1185,58 @@ fun HallwayActiveCard(
                     Brush.verticalGradient(
                         listOf(Color(0xFF19192E), Color(0xFF14213D))
                     )
-                ),
+                )
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = { onOpenRoom() },
+                        onLongPress = {
+                            if (card.isOwnedByMe || card.isCollaborator) {
+                                card.photos.firstOrNull()?.let { showDeleteConfirm = it.id }
+                            }
+                        }
+                    )
+                },
             contentAlignment = Alignment.BottomCenter
         ) {
-            // Native VerticalPager for smooth up/down photo/video scrolling
-            VerticalPager(
-                state = verticalPagerState,
-                modifier = Modifier.fillMaxSize()
-            ) { page ->
-                    val searchKeyword = card.title.lowercase()
-                        .replace("'s", "")
-                        .split(" ")
-                        .filter { it.length > 3 && it !in listOf("room", "hallway", "best", "before", "collection") }
-                        .take(2)
-                        .joinToString(",")
-                        .takeIf { it.isNotBlank() } ?: "abstract"
-                    val mediaUrl = actualPhotos.getOrNull(page) ?: "https://loremflickr.com/640/800/$searchKeyword"
-                    val isVideo = mediaUrl.endsWith(".mp4", ignoreCase = true) || 
-                                  mediaUrl.endsWith(".mov", ignoreCase = true) || 
-                                  mediaUrl.endsWith(".webm", ignoreCase = true) ||
-                                  mediaUrl.contains("/video/", ignoreCase = true)
+            val latestPhoto = card.photos.firstOrNull()
+            if (latestPhoto != null) {
+                val mediaUrl = latestPhoto.url
+                val isVideo = mediaUrl.endsWith(".mp4", ignoreCase = true) || 
+                              mediaUrl.endsWith(".mov", ignoreCase = true) || 
+                              mediaUrl.endsWith(".webm", ignoreCase = true) ||
+                              mediaUrl.contains("/video/", ignoreCase = true)
 
-                    if (isVideo) {
-                        VideoPlayer(
-                            videoUrl = mediaUrl,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        coil.compose.AsyncImage(
-                            model = mediaUrl,
-                            contentDescription = "Room Media ${page + 1}",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                        )
-                    }
+                if (isVideo) {
+                    VideoPlayer(
+                        videoUrl = mediaUrl,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    coil.compose.AsyncImage(
+                        model = mediaUrl,
+                        contentDescription = "Room Media",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
                 }
+            } else {
+                // Fallback to LoremFlickr
+                val searchKeyword = card.title.lowercase()
+                    .replace("'s", "")
+                    .split(" ")
+                    .filter { it.length > 3 && it !in listOf("room", "hallway", "best", "before", "collection") }
+                    .take(2)
+                    .joinToString(",")
+                    .takeIf { it.isNotBlank() } ?: "abstract"
+                
+                coil.compose.AsyncImage(
+                    model = "https://loremflickr.com/640/800/$searchKeyword",
+                    contentDescription = "Dummy Media",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    alpha = 0.6f
+                )
+            }
             
             // Top sheen overlay
             Box(
@@ -1231,28 +1254,6 @@ fun HallwayActiveCard(
                         )
                     )
             )
-
-            // Image index indicator (1/N)
-            if (hasRealPhotos && maxImages > 1) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 12.dp)
-                        .background(
-                            Color.Black.copy(alpha = 0.5f),
-                            RoundedCornerShape(12.dp)
-                        )
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = "${verticalPagerState.currentPage + 1}/$maxImages",
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
         }
     }
 }
@@ -1387,6 +1388,24 @@ fun ActiveCardDetails(
                 maxLines = descMaxLines,
                 overflow = TextOverflow.Ellipsis
             )
+
+            // Real Time Capsule status
+            val isLocked = com.dmb.bestbefore.utils.DateUtils.isLocked(card.unlockDate)
+            if (isLocked) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
+                    Text("🔒", fontSize = 12.sp)
+                    Text(
+                        text = "Unlocks in: ${com.dmb.bestbefore.utils.DateUtils.formatCountdown(card.unlockDate)}",
+                        color = Color(0xFFFF9800),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
 
             if (hasDescription || (hasTags && card.tags.size > 2)) {
                 Row(
@@ -1853,7 +1872,7 @@ private fun ExpandedDescriptionOverlay(
                     .take(2)
                     .joinToString(",")
                     .takeIf { it.isNotBlank() } ?: "abstract"
-                val mediaUrl = card.photos.firstOrNull() ?: "https://loremflickr.com/640/800/$searchKeyword"
+                val mediaUrl = card.photos.firstOrNull()?.url ?: "https://loremflickr.com/640/800/$searchKeyword"
                 
                 coil.compose.AsyncImage(
                     model = mediaUrl,

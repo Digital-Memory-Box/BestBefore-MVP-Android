@@ -74,6 +74,11 @@ data class CreateRoomResponse(
     val id: String
 )
 
+data class MemoryPreview(
+    val id: String,
+    val url: String
+)
+
 data class RoomDto(
     @SerializedName(value = "_id", alternate = ["id"]) val id: String,
     val name: String,
@@ -83,7 +88,7 @@ data class RoomDto(
     val ownerUserType: String? = null,
     val ownerProfilePic: String? = null,
     val createdAt: String?,
-    val photos: List<String>? = null,
+    val photos: List<MemoryPreview>? = null,
     val capsuleDurationDays: Int = 0,
     val capsuleDurationHours: Int = 0,
     val capsuleDurationMinutes: Int = 0,

@@ -22,7 +22,7 @@ class RoomDtoJsonDeserializer : JsonDeserializer<RoomDto> {
             ownerUserType = readFlexibleString(obj, "ownerUserType"),
             ownerProfilePic = readFlexibleString(obj, "ownerProfilePic"),
             createdAt = readFlexibleString(obj, "createdAt"),
-            photos = readStringList(obj, "photos"),
+            photos = readMemoryPreviewList(obj, "photos"),
             capsuleDurationDays = readInt(obj, "capsuleDurationDays"),
             capsuleDurationHours = readInt(obj, "capsuleDurationHours"),
             capsuleDurationMinutes = readInt(obj, "capsuleDurationMinutes"),
@@ -88,6 +88,20 @@ class RoomDtoJsonDeserializer : JsonDeserializer<RoomDto> {
     private fun readStringList(obj: JsonObject, key: String): List<String>? {
         if (!obj.has(key) || obj.get(key).isJsonNull || !obj.get(key).isJsonArray) return null
         return obj.getAsJsonArray(key).mapNotNull { jsonElementToString(it) }
+    }
+
+    private fun readMemoryPreviewList(obj: JsonObject, key: String): List<MemoryPreview>? {
+        if (!obj.has(key) || obj.get(key).isJsonNull || !obj.get(key).isJsonArray) return null
+        return obj.getAsJsonArray(key).mapNotNull { element ->
+            if (element.isJsonObject) {
+                val o = element.asJsonObject
+                val id = jsonElementToString(o.get("id") ?: o.get("_id")).orEmpty()
+                val url = o.get("url")?.asString.orEmpty()
+                MemoryPreview(id, url)
+            } else if (element.isJsonPrimitive) {
+                MemoryPreview("", element.asString)
+            } else null
+        }
     }
 
     private fun readJsonElementList(obj: JsonObject, key: String): List<JsonElement>? {

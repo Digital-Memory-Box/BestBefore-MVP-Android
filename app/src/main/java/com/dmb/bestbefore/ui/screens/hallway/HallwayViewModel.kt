@@ -249,7 +249,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                             title = room.name,
                             timeCapsuleDays = room.capsuleDurationDays,
                             description = room.description ?: room.generatedDescription ?: "",
-                            imageUrl = room.photos?.firstOrNull(),
+                            imageUrl = room.photos?.firstOrNull()?.url,
                             photos = room.photos ?: emptyList(),
                             themeColorHex = room.theme,
                             tags = room.tags ?: emptyList(),
@@ -273,7 +273,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                             title = room.name,
                             timeCapsuleDays = room.capsuleDurationDays,
                             description = room.description ?: room.generatedDescription ?: "",
-                            imageUrl = room.photos?.firstOrNull(),
+                            imageUrl = room.photos?.firstOrNull()?.url,
                             photos = room.photos ?: emptyList(),
                             themeColorHex = room.theme,
                             tags = room.tags ?: emptyList(),
@@ -449,7 +449,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 title = room.name,
                 timeCapsuleDays = room.capsuleDurationDays,
                 description = if (!room.description.isNullOrBlank()) room.description else (room.generatedDescription ?: ""),
-                imageUrl = room.photos?.firstOrNull(),
+                imageUrl = room.photos?.firstOrNull()?.url,
                 photos = room.photos ?: emptyList(),
                 themeColorHex = room.theme,
                 tags = room.tags ?: emptyList(),
@@ -466,11 +466,12 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                         } catch (e: Exception) { null }
                     } else null
                 } ?: emptyList(),
-                location = null, // Will fetch from DB if location is added to RoomDto later
+                location = null,
                 backgroundMusic = room.backgroundMusic,
                 isViewerOnly = isViewerOnly,
                 isOwnedByMe = isOwner,
-                isCollaborator = isCollaborator
+                isCollaborator = isCollaborator,
+                unlockDate = room.unlockDate
             )
         }
         _cards.value = mappedCards
@@ -551,6 +552,18 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
     // Pull-to-refresh support
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    fun deleteMemory(roomId: String, memoryId: String) {
+        viewModelScope.launch {
+            val result = roomRepository.deleteMemory(roomId, memoryId)
+            if (result.isSuccess) {
+                Log.d("HallwayViewModel", "Successfully deleted memory $memoryId")
+                refreshRooms() // Trigger full refresh
+            } else {
+                Log.e("HallwayViewModel", "Failed to delete memory: ${result.exceptionOrNull()?.message}")
+            }
+        }
+    }
 
     fun refreshRooms() {
         viewModelScope.launch {

@@ -255,8 +255,13 @@ fun DashboardTab(
                                       contentAlignment = Alignment.Center
                                   ) {
                                       if (room.photos.isNotEmpty()) {
-                                          // TODO: Display actual room photo
-                                          Icon(Icons.Default.Image, null, tint = Color(0xFF007AFF), modifier = Modifier.size(32.dp))
+                                          AsyncImage(
+                                              model = room.photos.first().url,
+                                              contentDescription = null,
+                                              modifier = Modifier.fillMaxSize(),
+                                              contentScale = ContentScale.Crop,
+                                              alpha = 0.5f
+                                          )
                                       } else {
                                           Icon(Icons.Default.Folder, null, tint = Color(0xFF007AFF), modifier = Modifier.size(32.dp))
                                       }
