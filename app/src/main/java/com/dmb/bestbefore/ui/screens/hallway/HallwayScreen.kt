@@ -1111,7 +1111,7 @@ fun HallwayActiveCard(
                 .fillMaxSize()
                 .padding(2.dp)
                 .alpha(dynamicGlowAlpha * 0.34f)
-                .blur(60.dp)
+                .blur(32.dp)
                 .scale(1.2f * pulseScale)
                 .background(
                     brush = Brush.radialGradient(
@@ -1131,7 +1131,7 @@ fun HallwayActiveCard(
                 .fillMaxSize()
                 .padding(6.dp)
                 .alpha(dynamicGlowAlpha * 0.7f)
-                .blur(24.dp)
+                .blur(16.dp)
                 .scale(1.08f * pulseScale)
                 .background(
                     brush = Brush.radialGradient(
