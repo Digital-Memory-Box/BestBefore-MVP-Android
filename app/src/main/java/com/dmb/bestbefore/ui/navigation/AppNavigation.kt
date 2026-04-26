@@ -4,6 +4,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -148,7 +151,9 @@ fun AppNavigation() {
             com.dmb.bestbefore.ui.screens.profile.CreatorProfileScreen(
                 userId = userId,
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToRoom = { roomId -> navController.navigate("room_detail/$roomId") }
+                onNavigateToRoom = { roomId, _ -> 
+                    navController.navigate("room_detail/$roomId") 
+                }
             )
         }
 
@@ -204,11 +209,27 @@ fun AppNavigation() {
                     navController.popBackStack()
                 }
                 
+                val isLoading by profileViewModel.isLoading.collectAsState()
+                
                 // Also listen to profileViewModel closing its own overlay
-                LaunchedEffect(room) {
-                    // if room becomes null after it was set, it means viewModel.goBack() was called
-                    // or room was deleted
-                    if (room == null && profileViewModel.isRefreshing.value == false) {
+                LaunchedEffect(room, isLoading) {
+                    // if room becomes null AFTER it was successfully loaded, it means it was closed or deleted
+                    // We check isLoading to avoid popping while initially fetching the room
+                    if (room == null && !isLoading) {
+                        // Check if we already tried to load (to distinguish initial state from 'closed' state)
+                        // Actually, handleDeepLink sets isLoading=true immediately.
+                        // So if room is null and isLoading is false, it's either before we started or after we finished.
+                        // We can use a local 'hasStarted' to be safe.
+                    }
+                }
+                
+                var hasStartedLoading by remember { mutableStateOf(false) }
+                LaunchedEffect(isLoading) {
+                    if (isLoading) hasStartedLoading = true
+                }
+                
+                LaunchedEffect(room, isLoading, hasStartedLoading) {
+                    if (hasStartedLoading && room == null && !isLoading) {
                         navController.popBackStack()
                     }
                 }

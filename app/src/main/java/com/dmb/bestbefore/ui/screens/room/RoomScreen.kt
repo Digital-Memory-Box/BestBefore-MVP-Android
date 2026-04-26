@@ -1,3 +1,4 @@
+@file:OptIn(ExperimentalFoundationApi::class)
 package com.dmb.bestbefore.ui.screens.room
 
 import android.Manifest
@@ -5,8 +6,10 @@ import android.content.pm.PackageManager
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import com.dmb.bestbefore.ui.screens.notifications.NotificationViewModel
 import com.dmb.bestbefore.data.models.CalendarEvent
 import java.text.SimpleDateFormat
 import java.util.*
@@ -49,6 +54,8 @@ fun RoomScreen(
     val countdownText by viewModel.countdownText.collectAsState()
     val calendarEvents by viewModel.calendarEvents.collectAsState()
     val memories by viewModel.memories.collectAsState()
+
+    var showDeleteConfirm by remember { mutableStateOf<String?>(null) }
 
     val calendarPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -91,26 +98,92 @@ fun RoomScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(400.dp),
+                            .height(500.dp)
+                            .padding(horizontal = 24.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                Icons.Default.CloudQueue,
-                                contentDescription = null,
-                                tint = Color.Gray,
-                                modifier = Modifier.size(64.dp)
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text("This room is currently empty", color = Color.Gray)
+                        // Dummy background for empty room
+                        val searchKeyword = roomName.lowercase()
+                            .replace("'s", "")
+                            .split(" ")
+                            .filter { it.length > 3 && it !in listOf("room", "hallway", "best", "before", "collection") }
+                            .take(2)
+                            .joinToString(",")
+                            .takeIf { it.isNotBlank() } ?: "abstract"
+                        val dummyUrl = "https://loremflickr.com/640/800/$searchKeyword"
+                        
+                        Card(
+                            modifier = Modifier.fillMaxSize(),
+                            shape = RoundedCornerShape(24.dp),
+                            elevation = CardDefaults.cardElevation(8.dp)
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                AsyncImage(
+                                    model = dummyUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                    alpha = 0.5f
+                                )
+                                Column(
+                                    modifier = Modifier.fillMaxSize(),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        Icons.Default.CloudQueue,
+                                        contentDescription = null,
+                                        tint = Color.White.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(64.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = "This room is currently empty",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = "Add your first memory to get started",
+                                        color = Color.White.copy(alpha = 0.6f),
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             } else {
                 items(memories) { memory ->
-                    MemoryItem(memory)
+                    MemoryItem(
+                        memory = memory,
+                        onLongClick = {
+                            // Check if current user is owner or collaborator. 
+                            // For MVP, we'll allow long-press to show dialog, 
+                            // and backend will enforce security.
+                            showDeleteConfirm = memory["_id"] as? String
+                        }
+                    )
                 }
             }
+        }
+
+        // Deletion Dialog
+        if (showDeleteConfirm != null) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirm = null },
+                title = { Text("Delete Memory") },
+                text = { Text("Do you want to delete this memory? This cannot be undone.") },
+                confirmButton = {
+                    TextButton(onClick = { 
+                        viewModel.deleteMemory(showDeleteConfirm!!)
+                        showDeleteConfirm = null 
+                    }) { Text("Delete", color = Color.Red) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirm = null }) { Text("Cancel") }
+                }
+            )
         }
 
         // Top bar icons
@@ -200,7 +273,14 @@ fun RoomScreen(
         }
 
         if (showRoomInfoDialog) {
-            RoomInfoDialog(roomName = roomName, roomId = roomId, onDismiss = { viewModel.toggleRoomInfoDialog() })
+            val room = viewModel.roomState.collectAsState().value
+            RoomInfoDialog(
+                roomName = room?.name ?: roomName,
+                roomId = room?.id ?: roomId,
+                description = room?.description.takeIf { !it.isNullOrBlank() } ?: room?.generatedDescription ?: "No description provided.",
+                tags = room?.tags ?: emptyList(),
+                onDismiss = { viewModel.toggleRoomInfoDialog() }
+            )
         }
 
         if (showCalendarDialog) {
@@ -228,7 +308,7 @@ fun ProfileMenuDialog(roomName: String, onDismiss: () -> Unit, onRenameRoom: (St
                 TextButton(onClick = { showRenameDialog = true }, modifier = Modifier.fillMaxWidth()) { Text("Rename Room", modifier = Modifier.fillMaxWidth()) }
                 TextButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.fillMaxWidth()) { Text("Delete Room", color = Color.Red, modifier = Modifier.fillMaxWidth()) }
                 TextButton(onClick = { }, modifier = Modifier.fillMaxWidth()) { Text("Share Room", modifier = Modifier.fillMaxWidth()) }
-                Divider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 TextButton(onClick = onLogout, modifier = Modifier.fillMaxWidth()) { Text("Log Out", color = Color.Red, modifier = Modifier.fillMaxWidth()) }
             }
         },
@@ -258,11 +338,21 @@ fun ProfileMenuDialog(roomName: String, onDismiss: () -> Unit, onRenameRoom: (St
 }
 
 @Composable
-fun RoomInfoDialog(roomName: String, roomId: String, onDismiss: () -> Unit) {
+fun RoomInfoDialog(roomName: String, roomId: String, description: String, tags: List<String>, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Room Info") },
-        text = { Column { Text("Name: $roomName", fontWeight = FontWeight.Bold); Spacer(modifier = Modifier.height(8.dp)); Text("ID: $roomId", fontSize = 12.sp, color = Color.Gray) } },
+        text = { 
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { 
+                Text("Name: $roomName", fontWeight = FontWeight.Bold)
+                Text("Description: $description", fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
+                if (tags.isNotEmpty()) {
+                    Text("Tags: ${tags.joinToString(", ") { "#$it" }}", fontSize = 12.sp, color = Color.Gray)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("ID: $roomId", fontSize = 10.sp, color = Color.Gray.copy(alpha = 0.5f)) 
+            } 
+        },
         confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } }
     )
 }
@@ -323,8 +413,9 @@ fun CalendarEventsDialog(events: List<CalendarEvent>, onDismiss: () -> Unit, onE
 }
 
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun MemoryItem(memory: Map<String, Any>) {
+fun MemoryItem(memory: Map<String, Any>, onLongClick: () -> Unit) {
     val type = memory["type"] as? String ?: "photo"
     val title = memory["title"] as? String ?: ""
     val content = memory["content"] as? String ?: ""
@@ -334,7 +425,11 @@ fun MemoryItem(memory: Map<String, Any>) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 16.dp)
+            .combinedClickable(
+                onClick = { /* Open detailed view if needed */ },
+                onLongClick = onLongClick
+            ),
         colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.05f)),
         shape = RoundedCornerShape(16.dp)
     ) {

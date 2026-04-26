@@ -51,6 +51,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import com.dmb.bestbefore.ui.theme.LocalBestBeforeColors
 import coil.compose.AsyncImage
+import com.dmb.bestbefore.ui.components.ProfileAvatar
 
 // --- REFACTORED PROFILE MENU (iOS Tab Style) ---
 
@@ -254,8 +255,13 @@ fun DashboardTab(
                                       contentAlignment = Alignment.Center
                                   ) {
                                       if (room.photos.isNotEmpty()) {
-                                          // TODO: Display actual room photo
-                                          Icon(Icons.Default.Image, null, tint = Color(0xFF007AFF), modifier = Modifier.size(32.dp))
+                                          AsyncImage(
+                                              model = room.photos.first().url,
+                                              contentDescription = null,
+                                              modifier = Modifier.fillMaxSize(),
+                                              contentScale = ContentScale.Crop,
+                                              alpha = 0.5f
+                                          )
                                       } else {
                                           Icon(Icons.Default.Folder, null, tint = Color(0xFF007AFF), modifier = Modifier.size(32.dp))
                                       }
@@ -595,36 +601,12 @@ fun CustomizationTab(
         // BB-UI-14: Profile Photo
         Text(text = "Profile Photo", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(84.dp)
-                    .background(colors.secondary, CircleShape)
-                    .border(2.dp, accentColor, CircleShape)
-                    .clip(CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                if (profileImageUri != null) {
-                    AsyncImage(
-                        model = profileImageUri,
-                        contentDescription = "Profile photo",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Icon(Icons.Default.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
-                }
-            }
-            Spacer(modifier = Modifier.width(16.dp))
-            Box(
-                modifier = Modifier
-                    .background(accentColor, RoundedCornerShape(10.dp))
-                    .clickable { updatePhotoLauncher.launch("image/*") }
-                    .padding(horizontal = 18.dp, vertical = 12.dp)
-            ) {
-                Text("Update Photo", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            }
-        }
+        ProfileAvatar(
+            imageUri = profileImageUri,
+            size = 84.dp,
+            accentColor = accentColor,
+            onClick = { updatePhotoLauncher.launch("image/*") }
+        )
         Spacer(modifier = Modifier.height(24.dp))
 
         // BB-UI-15: Interface Theme

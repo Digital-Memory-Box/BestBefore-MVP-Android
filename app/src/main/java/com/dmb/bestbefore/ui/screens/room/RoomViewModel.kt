@@ -49,6 +49,9 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
     private val _memories = MutableStateFlow<List<Map<String, Any>>>(emptyList())
     val memories: StateFlow<List<Map<String, Any>>> = _memories.asStateFlow()
 
+    private val _roomState = MutableStateFlow<com.dmb.bestbefore.data.api.models.RoomDto?>(null)
+    val roomState: StateFlow<com.dmb.bestbefore.data.api.models.RoomDto?> = _roomState.asStateFlow()
+
     private var entryTime: Long = 0
 
     fun initialize(roomId: String, roomName: String) {
@@ -58,7 +61,31 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
         // Track entry for dwell time
         entryTime = System.currentTimeMillis()
         
+        fetchRoomDetails()
         fetchMemories()
+    }
+
+    private fun fetchRoomDetails() {
+        viewModelScope.launch {
+            val result = repository.getRoomById(_roomId.value)
+            result.onSuccess { room ->
+                _roomState.value = room
+                room.unlockDate?.let { isoDate ->
+                    try {
+                        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
+                            timeZone = java.util.TimeZone.getTimeZone("UTC")
+                        }
+                        val unlockDate = sdf.parse(isoDate)
+                        if (unlockDate != null && unlockDate.after(java.util.Date())) {
+                            _lockEndTime.value = unlockDate.time
+                            startCountdown(unlockDate.time)
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("RoomViewModel", "Error parsing unlockDate: ${e.message}")
+                    }
+                }
+            }
+        }
     }
 
     private val _isLoading = MutableStateFlow(false)
@@ -177,6 +204,15 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
              repository.updateRoom(_roomId.value, mapOf("name" to newName))
              _roomName.value = newName
          }
+    }
+
+    fun deleteMemory(memoryId: String) {
+        viewModelScope.launch {
+            val result = repository.deleteMemory(_roomId.value, memoryId)
+            if (result.isSuccess) {
+                fetchMemories() // Refresh list
+            }
+        }
     }
 
     private fun loadCalendarEvents() {

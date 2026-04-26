@@ -138,8 +138,8 @@ class ProfileViewModel : ViewModel() {
     private val _recentActivities = MutableStateFlow<List<RecentActivity>>(emptyList())
     val recentActivities: StateFlow<List<RecentActivity>> = _recentActivities.asStateFlow()
 
-    private val _profileImageUri = MutableStateFlow<Uri?>(null)
-    val profileImageUri: StateFlow<Uri?> = _profileImageUri.asStateFlow()
+    private val _profileImageUri = MutableStateFlow<Any?>(null)
+    val profileImageUri: StateFlow<Any?> = _profileImageUri.asStateFlow()
 
     private val _roomEmotions = MutableStateFlow<Map<String, String>>(emptyMap())
     val roomEmotions: StateFlow<Map<String, String>> = _roomEmotions.asStateFlow()
@@ -529,7 +529,7 @@ class ProfileViewModel : ViewModel() {
         _profileMusic.value = if (!savedMusic.isNullOrEmpty()) savedMusic else "None"
         // Prefer the backend-persisted URL (survives app restarts); fall back to local file URI
         _profileImageUri.value = when {
-            !savedProfileImageUrl.isNullOrBlank() -> Uri.parse(savedProfileImageUrl)
+            !savedProfileImageUrl.isNullOrBlank() -> savedProfileImageUrl // Keep as String for data: or http:
             !savedProfilePhotoUri.isNullOrBlank() -> Uri.parse(savedProfilePhotoUri)
             else -> null
         }
@@ -562,7 +562,7 @@ class ProfileViewModel : ViewModel() {
                             _bio.value = ""
                         }
                         if (userDto.profileImageUrl != null && userDto.profileImageUrl.isNotBlank()) {
-                            _profileImageUri.value = Uri.parse(userDto.profileImageUrl)
+                            _profileImageUri.value = userDto.profileImageUrl
                         }
                         // Load profile tags from backend
                         if (userDto.preferredTags != null) {
@@ -602,13 +602,15 @@ class ProfileViewModel : ViewModel() {
                         _roomersCount.value = uniqueRoomers.size
                         
                         allRooms.addAll(mapDtosToRooms(myCreatedRoomsDtos, isSaved = false))
+                        allRooms.addAll(mapDtosToRooms(myJoinedRoomsDtos, isSaved = false))
                     } else {
                         val e = roomsResult.exceptionOrNull()
                         Log.e("ProfileViewModel", "getRooms failed: ${e?.message}")
                     }
 
-                    // Memories will be fetched lazily when a room is selected or specifically refreshed.
-                    _totalMemories.value = allRooms.sumOf { it.photos?.size ?: 0 } // Estimate from photo count
+                    // Memories: Count from all rooms (owned + collaborated)
+                    _totalRooms.value = allRooms.size
+                    _totalMemories.value = allRooms.sumOf { it.photos.size }
                     refreshRoomLists(allRooms)
 
                     // AI: fetch personalised suggestions after rooms and user profile are loaded
@@ -2085,7 +2087,7 @@ class ProfileViewModel : ViewModel() {
                     ) rawProfileImageUri else null
                     
                     val profileImageBase64 = _profileImageUri.value?.let { uri ->
-                        if (profileImageUrlForBackend == null) encodeProfileImageBase64(context, uri) else null
+                        if (profileImageUrlForBackend == null && uri is android.net.Uri) encodeProfileImageBase64(context, uri) else null
                     }
                     
                     val updateResult = authRepo.updateMe(

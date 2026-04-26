@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,7 +43,7 @@ fun SharedUserCard(
     roomersCount: String,
     accentColor: Color,
     privacyStatus: UserPrivacyStatus = UserPrivacyStatus.NONE,
-    profileImageUri: Uri? = null,
+    profileImageUri: Any? = null,
     tags: List<String> = emptyList()
 ) {
     var isBioExpanded by remember { mutableStateOf(false) }
@@ -119,7 +120,6 @@ fun SharedUserCard(
                 size = 84.dp,
                 accentColor = accentColor
             )
-        }
         }
 
         if (biography.isNotEmpty()) {
@@ -272,23 +272,27 @@ fun ProfileAvatar(
     Box(
         modifier = modifier
             .size(size)
-            .background(accentColor.copy(alpha = 0.12f), CircleShape)
-            .border(1.5.dp, accentColor.copy(alpha = 0.4f), CircleShape)
+            .background(accentColor, CircleShape)
+            .border(1.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
             .clip(CircleShape)
             .then(clickableModifier),
         contentAlignment = Alignment.Center
     ) {
-        if (imageUri != null) {
+        val isNotBlank = when(imageUri) {
+            is String -> imageUri.isNotBlank()
+            else -> imageUri != null
+        }
+        if (isNotBlank) {
             val modelStr = imageUri.toString()
             if (modelStr.startsWith("data:image")) {
                 // Large base64 handling is better with specialized decoder or bytes
-                // For simplicity here, AsyncImage handles data URIs, but let's ensure it's not null/empty
                 if (modelStr.length > 22) {
                      AsyncImage(
                         model = imageUri,
                         contentDescription = "Avatar",
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        error = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Default.Person)
                     )
                 } else {
                     Icon(Icons.Default.Person, null, tint = accentColor, modifier = Modifier.size(size * 0.5f))
@@ -298,14 +302,16 @@ fun ProfileAvatar(
                     model = imageUri,
                     contentDescription = "Avatar",
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    error = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Default.Person)
                 )
             }
         } else {
+            val isLight = accentColor.luminance() > 0.5f
             Icon(
                 imageVector = Icons.Default.Person,
                 contentDescription = null,
-                tint = accentColor.copy(alpha = 0.8f),
+                tint = if (isLight) Color.Black.copy(alpha = 0.6f) else Color.White,
                 modifier = Modifier.size(size * 0.5f)
             )
         }

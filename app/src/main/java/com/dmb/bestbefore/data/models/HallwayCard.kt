@@ -6,7 +6,7 @@ data class HallwayCard(
     val timeCapsuleDays: Int = 21,
     val description: String = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do usermod temper...",
     val imageUrl: String? = null,
-    val photos: List<String> = emptyList(),
+    val photos: List<com.dmb.bestbefore.data.api.models.MemoryPreview> = emptyList(),
     val themeColorHex: String? = null,
     val tags: List<String> = emptyList(),
     val ownerId: String? = null,
@@ -20,5 +20,6 @@ data class HallwayCard(
     val backgroundMusic: String? = null,
     val isViewerOnly: Boolean = false,
     val isOwnedByMe: Boolean = false,
-    val isCollaborator: Boolean = false
+    val isCollaborator: Boolean = false,
+    val unlockDate: String? = null
 )

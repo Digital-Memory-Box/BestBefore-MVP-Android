@@ -148,31 +148,14 @@ fun OrbMenu(
                 .align(Alignment.Center)
                 .offset(x = -buttonRadius, y = 0.dp)
         ) {
-            if (!profileImageUrl.isNullOrEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .size(60.dp)
-                        .clip(CircleShape)
-                        .border(1.dp, iconTint.copy(alpha = 0.5f), CircleShape)
-                        .clickable { onProfileClick() }
-                ) {
-                    coil.compose.AsyncImage(
-                        model = profileImageUrl,
-                        contentDescription = "Profile",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                    )
-                }
-            } else {
-                OrbButton(
-                    icon = Icons.Default.Person,
-                    contentDescription = "Profile",
-                    onClick = onProfileClick,
-                    size = 60.dp,
-                    iconSize = 38.dp,
-                    tint = iconTint
-                )
-            }
+            OrbButton(
+                icon = Icons.Default.Person,
+                contentDescription = "Profile",
+                onClick = onProfileClick,
+                size = 60.dp,
+                iconSize = 38.dp,
+                tint = iconTint
+            )
         }
 
         // 3. Camera Button (Alt Kavis)
