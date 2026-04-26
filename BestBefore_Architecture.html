@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>BestBefore — System Architecture</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #07080F;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 24px 48px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    h1 {
+      color: #E2E8F0;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    p.subtitle {
+      color: #475569;
+      font-size: 13px;
+      margin-bottom: 28px;
+    }
+    svg { display: block; }
+  </style>
+</head>
+<body>
+  <h1>BestBefore — System Architecture</h1>
+  <p class="subtitle">Mobile · Backend API · AI Microservice · Infrastructure</p>
+
+<svg width="1260" height="900" viewBox="0 0 1260 900" xmlns="http://www.w3.org/2000/svg">
+<defs>
+
+  <!-- ── Arrowhead markers ── -->
+  <marker id="arr" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+    <path d="M0,0 L9,3.5 L0,7 Z" fill="#94A3B8"/>
+  </marker>
+  <marker id="arr-blue" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+    <path d="M0,0 L9,3.5 L0,7 Z" fill="#60A5FA"/>
+  </marker>
+  <marker id="arr-orange" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+    <path d="M0,0 L9,3.5 L0,7 Z" fill="#FB923C"/>
+  </marker>
+  <marker id="arr-green" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+    <path d="M0,0 L9,3.5 L0,7 Z" fill="#34D399"/>
+  </marker>
+  <marker id="arr-red" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+    <path d="M0,0 L9,3.5 L0,7 Z" fill="#F87171"/>
+  </marker>
+  <marker id="arr-purple" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+    <path d="M0,0 L9,3.5 L0,7 Z" fill="#A78BFA"/>
+  </marker>
+  <marker id="arr-back" markerWidth="9" markerHeight="7" refX="1" refY="3.5" orient="auto">
+    <path d="M9,0 L0,3.5 L9,7 Z" fill="#FB923C"/>
+  </marker>
+
+  <!-- ── Drop shadows ── -->
+  <filter id="shadow" x="-8%" y="-8%" width="116%" height="116%">
+    <feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#000000" flood-opacity="0.55"/>
+  </filter>
+  <filter id="glow-blue" x="-20%" y="-20%" width="140%" height="140%">
+    <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#3B82F6" flood-opacity="0.25"/>
+  </filter>
+  <filter id="glow-purple" x="-20%" y="-20%" width="140%" height="140%">
+    <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#7C3AED" flood-opacity="0.25"/>
+  </filter>
+
+  <!-- ── Background gradient ── -->
+  <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" style="stop-color:#07080F"/>
+    <stop offset="100%" style="stop-color:#0D1020"/>
+  </linearGradient>
+
+  <!-- Box gradients -->
+  <linearGradient id="grad-blue" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%" style="stop-color:#0F1E42"/>
+    <stop offset="100%" style="stop-color:#0A1530"/>
+  </linearGradient>
+  <linearGradient id="grad-purple" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%" style="stop-color:#1E1040"/>
+    <stop offset="100%" style="stop-color:#140C2E"/>
+  </linearGradient>
+  <linearGradient id="grad-orange" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%" style="stop-color:#2D1500"/>
+    <stop offset="100%" style="stop-color:#1E0E00"/>
+  </linearGradient>
+  <linearGradient id="grad-green" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%" style="stop-color:#042014"/>
+    <stop offset="100%" style="stop-color:#02150D"/>
+  </linearGradient>
+  <linearGradient id="grad-red" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%" style="stop-color:#2A0808"/>
+    <stop offset="100%" style="stop-color:#1C0505"/>
+  </linearGradient>
+  <linearGradient id="grad-indigo" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%" style="stop-color:#0E0E22"/>
+    <stop offset="100%" style="stop-color:#090914"/>
+  </linearGradient>
+
+</defs>
+
+<!-- ════════════════════════════════════════════════════════════
+     BACKGROUND
+════════════════════════════════════════════════════════════ -->
+<rect width="1260" height="900" fill="url(#bg)" rx="16"/>
+
+<!-- ════════════════════════════════════════════════════════════
+     LAYER BANDS (subtle zone indicators)
+════════════════════════════════════════════════════════════ -->
+
+<!-- CLIENT LAYER band -->
+<rect x="18" y="18" width="1224" height="196" rx="14"
+      fill="none" stroke="rgba(59,130,246,0.12)" stroke-width="1.2"/>
+<text x="36" y="38" font-size="9.5" font-weight="700" fill="rgba(59,130,246,0.45)"
+      letter-spacing="2.5" font-family="'Segoe UI',sans-serif">CLIENT  LAYER</text>
+
+<!-- API GATEWAY band -->
+<rect x="18" y="234" width="1224" height="158" rx="14"
+      fill="none" stroke="rgba(124,58,237,0.12)" stroke-width="1.2"/>
+<text x="36" y="252" font-size="9.5" font-weight="700" fill="rgba(124,58,237,0.45)"
+      letter-spacing="2.5" font-family="'Segoe UI',sans-serif">API  GATEWAY</text>
+
+<!-- SERVICES band -->
+<rect x="18" y="416" width="1224" height="194" rx="14"
+      fill="none" stroke="rgba(16,185,129,0.08)" stroke-width="1.2"/>
+<text x="36" y="434" font-size="9.5" font-weight="700" fill="rgba(16,185,129,0.4)"
+      letter-spacing="2.5" font-family="'Segoe UI',sans-serif">INFRASTRUCTURE  &amp;  SERVICES</text>
+
+<!-- EXTERNAL band -->
+<rect x="18" y="634" width="1224" height="248" rx="14"
+      fill="none" stroke="rgba(99,102,241,0.08)" stroke-width="1.2"/>
+<text x="36" y="652" font-size="9.5" font-weight="700" fill="rgba(99,102,241,0.4)"
+      letter-spacing="2.5" font-family="'Segoe UI',sans-serif">EXTERNAL  APIS</text>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     COMPONENT BOXES
+════════════════════════════════════════════════════════════ -->
+
+<!-- ── ANDROID APP ── -->
+<g filter="url(#shadow)">
+  <rect x="52" y="48" width="258" height="152" rx="14" fill="url(#grad-blue)" stroke="#3B82F6" stroke-width="1.5" filter="url(#glow-blue)"/>
+  <!-- top accent bar -->
+  <rect x="52" y="48" width="258" height="5" rx="2.5" fill="#3B82F6"/>
+</g>
+<!-- Icon + title -->
+<text x="72" y="88" font-size="26" font-family="'Segoe UI',sans-serif">📱</text>
+<text x="108" y="85" font-size="15" font-weight="700" fill="#E2E8F0" font-family="'Segoe UI',sans-serif">Android App</text>
+<text x="72" y="104" font-size="10" fill="#64748B" font-family="'Segoe UI',sans-serif">Kotlin · Jetpack Compose</text>
+<text x="72" y="118" font-size="10" fill="#64748B" font-family="'Segoe UI',sans-serif">Retrofit · Coil · Firebase SDK</text>
+<!-- divider -->
+<line x1="72" y1="128" x2="296" y2="128" stroke="rgba(59,130,246,0.2)" stroke-width="1"/>
+<text x="72" y="143" font-size="9.5" fill="#93C5FD" font-family="'Segoe UI',sans-serif">▸ Hallway · Room Detail · Profile</text>
+<text x="72" y="157" font-size="9.5" fill="#93C5FD" font-family="'Segoe UI',sans-serif">▸ AI suggestion cards · LRU cache</text>
+<text x="72" y="171" font-size="9.5" fill="#93C5FD" font-family="'Segoe UI',sans-serif">▸ Push notifications · QR join</text>
+
+<!-- ── iOS APP ── -->
+<g filter="url(#shadow)">
+  <rect x="950" y="48" width="258" height="152" rx="14" fill="url(#grad-blue)" stroke="#3B82F6" stroke-width="1.5" filter="url(#glow-blue)"/>
+  <rect x="950" y="48" width="258" height="5" rx="2.5" fill="#3B82F6"/>
+</g>
+<text x="970" y="88" font-size="26" font-family="'Segoe UI',sans-serif">🍎</text>
+<text x="1006" y="85" font-size="15" font-weight="700" fill="#E2E8F0" font-family="'Segoe UI',sans-serif">iOS App</text>
+<text x="970" y="104" font-size="10" fill="#64748B" font-family="'Segoe UI',sans-serif">Swift · SwiftUI</text>
+<text x="970" y="118" font-size="10" fill="#64748B" font-family="'Segoe UI',sans-serif">Alamofire · Firebase SDK</text>
+<line x1="970" y1="128" x2="1194" y2="128" stroke="rgba(59,130,246,0.2)" stroke-width="1"/>
+<text x="970" y="143" font-size="9.5" fill="#93C5FD" font-family="'Segoe UI',sans-serif">▸ Hallway · Room Detail · Profile</text>
+<text x="970" y="157" font-size="9.5" fill="#93C5FD" font-family="'Segoe UI',sans-serif">▸ AI suggestion cards · SDWebImage</text>
+<text x="970" y="171" font-size="9.5" fill="#93C5FD" font-family="'Segoe UI',sans-serif">▸ Push notifications · QR join</text>
+
+
+<!-- ── NODE.JS BACKEND ── -->
+<g filter="url(#shadow)">
+  <rect x="130" y="258" width="1000" height="120" rx="14" fill="url(#grad-purple)" stroke="#7C3AED" stroke-width="1.5" filter="url(#glow-purple)"/>
+  <rect x="130" y="258" width="1000" height="5" rx="2.5" fill="#7C3AED"/>
+</g>
+<text x="152" y="293" font-size="15" font-weight="700" fill="#E2E8F0" font-family="'Segoe UI',sans-serif">⚙️  Node.js Backend API</text>
+<text x="380" y="293" font-size="11" fill="#7C3AED" font-family="'Segoe UI',sans-serif">·  Express 5  ·  Hosted on Railway  ·  Firebase Auth Middleware on every route</text>
+
+<!-- endpoint pills row 1 -->
+<g font-size="9.5" font-family="'Segoe UI',sans-serif">
+  <!-- pill helper: each pill is rect + text -->
+  <rect x="152" y="301" width="82" height="18" rx="9" fill="rgba(124,58,237,0.18)" stroke="rgba(139,92,246,0.4)" stroke-width="1"/>
+  <text x="162" y="314" fill="#C4B5FD">Auth / Users</text>
+
+  <rect x="242" y="301" width="58" height="18" rx="9" fill="rgba(124,58,237,0.18)" stroke="rgba(139,92,246,0.4)" stroke-width="1"/>
+  <text x="252" y="314" fill="#C4B5FD">Rooms</text>
+
+  <rect x="308" y="301" width="68" height="18" rx="9" fill="rgba(124,58,237,0.18)" stroke="rgba(139,92,246,0.4)" stroke-width="1"/>
+  <text x="318" y="314" fill="#C4B5FD">Memories</text>
+
+  <rect x="384" y="301" width="85" height="18" rx="9" fill="rgba(124,58,237,0.18)" stroke="rgba(139,92,246,0.4)" stroke-width="1"/>
+  <text x="394" y="314" fill="#C4B5FD">Suggestions</text>
+
+  <rect x="477" y="301" width="92" height="18" rx="9" fill="rgba(124,58,237,0.18)" stroke="rgba(139,92,246,0.4)" stroke-width="1"/>
+  <text x="487" y="314" fill="#C4B5FD">Search / Discover</text>
+
+  <rect x="577" y="301" width="58" height="18" rx="9" fill="rgba(124,58,237,0.18)" stroke="rgba(139,92,246,0.4)" stroke-width="1"/>
+  <text x="587" y="314" fill="#C4B5FD">Invites</text>
+
+  <rect x="643" y="301" width="90" height="18" rx="9" fill="rgba(124,58,237,0.18)" stroke="rgba(139,92,246,0.4)" stroke-width="1"/>
+  <text x="653" y="314" fill="#C4B5FD">Notifications</text>
+
+  <rect x="741" y="301" width="76" height="18" rx="9" fill="rgba(124,58,237,0.18)" stroke="rgba(139,92,246,0.4)" stroke-width="1"/>
+  <text x="751" y="314" fill="#C4B5FD">Analytics</text>
+
+  <rect x="825" y="301" width="68" height="18" rx="9" fill="rgba(124,58,237,0.18)" stroke="rgba(139,92,246,0.4)" stroke-width="1"/>
+  <text x="835" y="314" fill="#C4B5FD">Tags</text>
+
+  <rect x="901" y="301" width="80" height="18" rx="9" fill="rgba(124,58,237,0.18)" stroke="rgba(139,92,246,0.4)" stroke-width="1"/>
+  <text x="911" y="314" fill="#C4B5FD">SoundCloud</text>
+</g>
+<text x="152" y="352" font-size="9.5" fill="#475569" font-family="'Segoe UI',sans-serif">
+  MongoDB Driver · Firebase Admin SDK · JWT Auth Middleware · AI Service HTTP Proxy · FCM Push Dispatcher
+</text>
+
+
+<!-- ── FIREBASE ── -->
+<g filter="url(#shadow)">
+  <rect x="36" y="440" width="260" height="154" rx="14" fill="url(#grad-orange)" stroke="#F97316" stroke-width="1.5"/>
+  <rect x="36" y="440" width="260" height="5" rx="2.5" fill="#F97316"/>
+</g>
+<text x="56" y="477" font-size="24">🔥</text>
+<text x="90" y="476" font-size="14" font-weight="700" fill="#E2E8F0" font-family="'Segoe UI',sans-serif">Firebase</text>
+<text x="56" y="495" font-size="10" fill="#64748B" font-family="'Segoe UI',sans-serif">Authentication (JWT / ID Token)</text>
+<text x="56" y="508" font-size="10" fill="#64748B" font-family="'Segoe UI',sans-serif">Cloud Messaging (FCM)</text>
+<text x="56" y="521" font-size="10" fill="#64748B" font-family="'Segoe UI',sans-serif">Google Cloud · Free / Spark Plan</text>
+<line x1="56" y1="530" x2="280" y2="530" stroke="rgba(249,115,22,0.2)" stroke-width="1"/>
+<text x="56" y="545" font-size="9.5" fill="#FDBA74" font-family="'Segoe UI',sans-serif">▸ Verify token on every request</text>
+<text x="56" y="559" font-size="9.5" fill="#FDBA74" font-family="'Segoe UI',sans-serif">▸ Multicast push to room members</text>
+<text x="56" y="573" font-size="9.5" fill="#FDBA74" font-family="'Segoe UI',sans-serif">▸ Memory-added · invite alerts</text>
+<text x="56" y="586" font-size="9.5" fill="#FDBA74" font-family="'Segoe UI',sans-serif">▸ Google / Apple Sign-In</text>
+
+
+<!-- ── MONGODB ── -->
+<g filter="url(#shadow)">
+  <rect x="500" y="440" width="260" height="154" rx="14" fill="url(#grad-green)" stroke="#22C55E" stroke-width="1.5"/>
+  <rect x="500" y="440" width="260" height="5" rx="2.5" fill="#22C55E"/>
+</g>
+<text x="520" y="477" font-size="24">🗄️</text>
+<text x="556" y="476" font-size="14" font-weight="700" fill="#E2E8F0" font-family="'Segoe UI',sans-serif">MongoDB Atlas</text>
+<text x="520" y="495" font-size="10" fill="#64748B" font-family="'Segoe UI',sans-serif">Managed Cloud Database · AWS</text>
+<line x1="520" y1="504" x2="744" y2="504" stroke="rgba(34,197,94,0.2)" stroke-width="1"/>
+<!-- collections -->
+<text x="520" y="520" font-size="9.5" fill="#86EFAC" font-family="'Segoe UI',sans-serif">Collections:</text>
+<text x="520" y="534" font-size="9.5" fill="#6EE7B7" font-family="'Segoe UI',sans-serif">▸ Users   (profile · preferences · FCM)</text>
+<text x="520" y="548" font-size="9.5" fill="#6EE7B7" font-family="'Segoe UI',sans-serif">▸ Rooms   (tags · embedding · photos)</text>
+<text x="520" y="562" font-size="9.5" fill="#6EE7B7" font-family="'Segoe UI',sans-serif">▸ Memories  (photo/note/audio/video)</text>
+<text x="520" y="576" font-size="9.5" fill="#6EE7B7" font-family="'Segoe UI',sans-serif">▸ Notifications  (invite · memory alerts)</text>
+<text x="520" y="586" font-size="9" fill="#374151" font-family="'Segoe UI',sans-serif">Stores 1536-dim room embedding vectors</text>
+
+
+<!-- ── PYTHON AI SERVICE ── -->
+<g filter="url(#shadow)">
+  <rect x="964" y="440" width="260" height="154" rx="14" fill="url(#grad-red)" stroke="#EF4444" stroke-width="1.5"/>
+  <rect x="964" y="440" width="260" height="5" rx="2.5" fill="#EF4444"/>
+</g>
+<text x="984" y="477" font-size="24">🤖</text>
+<text x="1020" y="476" font-size="14" font-weight="700" fill="#E2E8F0" font-family="'Segoe UI',sans-serif">Python AI Service</text>
+<text x="984" y="495" font-size="10" fill="#64748B" font-family="'Segoe UI',sans-serif">FastAPI · Pydantic · Uvicorn · Railway</text>
+<line x1="984" y1="504" x2="1208" y2="504" stroke="rgba(239,68,68,0.2)" stroke-width="1"/>
+<text x="984" y="519" font-size="9.5" fill="#FCA5A5" font-family="'Segoe UI',sans-serif">▸ /v1/embed         text→vector</text>
+<text x="984" y="533" font-size="9.5" fill="#FCA5A5" font-family="'Segoe UI',sans-serif">▸ /v1/semantic-search  cosine rank</text>
+<text x="984" y="547" font-size="9.5" fill="#FCA5A5" font-family="'Segoe UI',sans-serif">▸ /v1/score            hybrid 5-factor</text>
+<text x="984" y="561" font-size="9.5" fill="#FCA5A5" font-family="'Segoe UI',sans-serif">▸ /v1/suggestions      top-10 rooms</text>
+<text x="984" y="575" font-size="9.5" fill="#FCA5A5" font-family="'Segoe UI',sans-serif">▸ /v1/user-preference  learning loop</text>
+<text x="984" y="589" font-size="9.5" fill="#FCA5A5" font-family="'Segoe UI',sans-serif">▸ /v1/generate-description  gpt-4o</text>
+
+
+<!-- ── OPENAI ── -->
+<g filter="url(#shadow)">
+  <rect x="964" y="660" width="260" height="106" rx="14" fill="url(#grad-indigo)" stroke="#818CF8" stroke-width="1.5"/>
+  <rect x="964" y="660" width="260" height="5" rx="2.5" fill="#818CF8"/>
+</g>
+<text x="984" y="694" font-size="24">🧠</text>
+<text x="1020" y="693" font-size="14" font-weight="700" fill="#E2E8F0" font-family="'Segoe UI',sans-serif">OpenAI API</text>
+<text x="984" y="712" font-size="9.5" fill="#A5B4FC" font-family="'Segoe UI',sans-serif">▸ text-embedding-3-small → 1536-dim vectors</text>
+<text x="984" y="726" font-size="9.5" fill="#A5B4FC" font-family="'Segoe UI',sans-serif">▸ gpt-4o-mini → nostalgic room descriptions</text>
+<text x="984" y="740" font-size="9.5" fill="#A5B4FC" font-family="'Segoe UI',sans-serif">▸ gpt-4o-mini → hybrid score reasoning</text>
+<text x="984" y="754" font-size="9.5" fill="#6366F1" font-family="'Segoe UI',sans-serif">Used only by Python AI Service layer</text>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     ARROWS
+     Convention:
+       Blue  = client ↔ API (HTTPS)
+       Purple = backend calls (async AI)
+       Orange = auth / push
+       Green  = DB read/write
+       Red    = AI service HTTP
+       Gray   = push notification return
+════════════════════════════════════════════════════════════ -->
+
+
+<!-- ①  Android → Node.js  (HTTPS) -->
+<path d="M 181 200 C 181 228 340 248 340 258"
+      stroke="#60A5FA" stroke-width="2" fill="none"
+      marker-end="url(#arr-blue)" opacity="0.85"/>
+<!-- ①b  Node.js → Android (response) -->
+<path d="M 320 258 C 320 238 160 218 160 200"
+      stroke="#60A5FA" stroke-width="1.5" fill="none"
+      stroke-dasharray="5,3"
+      marker-end="url(#arr-blue)" opacity="0.55"/>
+<!-- label -->
+<rect x="158" y="215" width="126" height="18" rx="4" fill="rgba(0,0,0,0.55)"/>
+<text x="164" y="228" font-size="9" fill="#93C5FD" font-family="'Segoe UI',sans-serif">HTTPS · Bearer Token</text>
+
+
+<!-- ②  iOS → Node.js  (HTTPS) -->
+<path d="M 1079 200 C 1079 228 920 248 920 258"
+      stroke="#60A5FA" stroke-width="2" fill="none"
+      marker-end="url(#arr-blue)" opacity="0.85"/>
+<path d="M 940 258 C 940 238 1100 218 1100 200"
+      stroke="#60A5FA" stroke-width="1.5" fill="none"
+      stroke-dasharray="5,3"
+      marker-end="url(#arr-blue)" opacity="0.55"/>
+<rect x="974" y="215" width="126" height="18" rx="4" fill="rgba(0,0,0,0.55)"/>
+<text x="980" y="228" font-size="9" fill="#93C5FD" font-family="'Segoe UI',sans-serif">HTTPS · Bearer Token</text>
+
+
+<!-- ③  Node.js → Firebase  (verify token + send FCM) -->
+<path d="M 240 378 C 240 408 166 420 166 440"
+      stroke="#FB923C" stroke-width="2" fill="none"
+      marker-end="url(#arr-orange)" opacity="0.9"/>
+<rect x="155" y="392" width="148" height="28" rx="4" fill="rgba(0,0,0,0.6)"/>
+<text x="161" y="405" font-size="9" fill="#FDBA74" font-family="'Segoe UI',sans-serif">Verify JWT token</text>
+<text x="161" y="416" font-size="9" fill="#FDBA74" font-family="'Segoe UI',sans-serif">Send FCM push</text>
+
+
+<!-- ④  Firebase → Android  (Push Notifications — dashed curved) -->
+<path d="M 90 440 C 60 380 50 260 90 200"
+      stroke="#FB923C" stroke-width="1.8" fill="none"
+      stroke-dasharray="6,4"
+      marker-end="url(#arr-orange)" opacity="0.7"/>
+<rect x="16" y="308" width="66" height="28" rx="4" fill="rgba(0,0,0,0.6)"/>
+<text x="22" y="321" font-size="8.5" fill="#FDBA74" font-family="'Segoe UI',sans-serif">Push</text>
+<text x="22" y="332" font-size="8.5" fill="#FDBA74" font-family="'Segoe UI',sans-serif">Notifications</text>
+
+
+<!-- ⑤  Firebase → iOS  (Push Notifications — long dashed) -->
+<path d="M 296 460 C 420 430 760 390 920 370 C 1000 360 1080 300 1100 200"
+      stroke="#FB923C" stroke-width="1.8" fill="none"
+      stroke-dasharray="6,4"
+      marker-end="url(#arr-orange)" opacity="0.6"/>
+<rect x="570" y="376" width="66" height="28" rx="4" fill="rgba(0,0,0,0.6)"/>
+<text x="576" y="389" font-size="8.5" fill="#FDBA74" font-family="'Segoe UI',sans-serif">Push</text>
+<text x="576" y="400" font-size="8.5" fill="#FDBA74" font-family="'Segoe UI',sans-serif">Notifications</text>
+
+
+<!-- ⑥  Node.js ↔ MongoDB  (read / write) -->
+<path d="M 630 378 L 630 440"
+      stroke="#34D399" stroke-width="2.2" fill="none"
+      marker-end="url(#arr-green)" opacity="0.9"/>
+<path d="M 650 440 L 650 378"
+      stroke="#34D399" stroke-width="1.5" fill="none"
+      stroke-dasharray="5,3"
+      marker-end="url(#arr-green)" opacity="0.6"/>
+<rect x="656" y="398" width="70" height="18" rx="4" fill="rgba(0,0,0,0.55)"/>
+<text x="662" y="411" font-size="9" fill="#6EE7B7" font-family="'Segoe UI',sans-serif">Read / Write</text>
+
+
+<!-- ⑦  Node.js → Python AI Service  (AI requests) -->
+<path d="M 1020 378 C 1020 408 1094 420 1094 440"
+      stroke="#F87171" stroke-width="2" fill="none"
+      marker-end="url(#arr-red)" opacity="0.9"/>
+<rect x="1016" y="394" width="90" height="28" rx="4" fill="rgba(0,0,0,0.6)"/>
+<text x="1022" y="407" font-size="9" fill="#FCA5A5" font-family="'Segoe UI',sans-serif">HTTP requests</text>
+<text x="1022" y="418" font-size="9" fill="#FCA5A5" font-family="'Segoe UI',sans-serif">(async / parallel)</text>
+
+
+<!-- ⑧  Python AI → OpenAI  (embeddings + completions) -->
+<path d="M 1094 594 L 1094 660"
+      stroke="#818CF8" stroke-width="2" fill="none"
+      marker-end="url(#arr-purple)" opacity="0.9"/>
+<rect x="1098" y="620" width="106" height="18" rx="4" fill="rgba(0,0,0,0.55)"/>
+<text x="1104" y="633" font-size="9" fill="#C7D2FE" font-family="'Segoe UI',sans-serif">Embeddings · Completions</text>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     LEGEND
+════════════════════════════════════════════════════════════ -->
+<rect x="36" y="672" width="360" height="186" rx="12" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+<text x="56" y="694" font-size="10.5" font-weight="700" fill="#94A3B8" letter-spacing="1.5" font-family="'Segoe UI',sans-serif">LEGEND</text>
+
+<!-- legend items -->
+<line x1="56" y1="714" x2="100" y2="714" stroke="#60A5FA" stroke-width="2" marker-end="url(#arr-blue)"/>
+<text x="108" y="718" font-size="10" fill="#94A3B8" font-family="'Segoe UI',sans-serif">Client → API (HTTPS + Bearer Token)</text>
+
+<line x1="56" y1="736" x2="100" y2="736" stroke="#60A5FA" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-blue)"/>
+<text x="108" y="740" font-size="10" fill="#94A3B8" font-family="'Segoe UI',sans-serif">API response (JSON)</text>
+
+<line x1="56" y1="758" x2="100" y2="758" stroke="#FB923C" stroke-width="2" marker-end="url(#arr-orange)"/>
+<text x="108" y="762" font-size="10" fill="#94A3B8" font-family="'Segoe UI',sans-serif">Backend → Firebase (auth verify + FCM dispatch)</text>
+
+<line x1="56" y1="780" x2="100" y2="780" stroke="#FB923C" stroke-width="1.8" stroke-dasharray="6,4" marker-end="url(#arr-orange)"/>
+<text x="108" y="784" font-size="10" fill="#94A3B8" font-family="'Segoe UI',sans-serif">Firebase → Device (push notification)</text>
+
+<line x1="56" y1="802" x2="100" y2="802" stroke="#34D399" stroke-width="2.2" marker-end="url(#arr-green)"/>
+<text x="108" y="806" font-size="10" fill="#94A3B8" font-family="'Segoe UI',sans-serif">Backend ↔ MongoDB (read / write)</text>
+
+<line x1="56" y1="824" x2="100" y2="824" stroke="#F87171" stroke-width="2" marker-end="url(#arr-red)"/>
+<text x="108" y="828" font-size="10" fill="#94A3B8" font-family="'Segoe UI',sans-serif">Backend → AI Service (async HTTP)</text>
+
+<line x1="56" y1="846" x2="100" y2="846" stroke="#818CF8" stroke-width="2" marker-end="url(#arr-purple)"/>
+<text x="108" y="850" font-size="10" fill="#94A3B8" font-family="'Segoe UI',sans-serif">AI Service → OpenAI (embeddings · GPT completions)</text>
+
+
+<!-- ════════════════════════════════════════════════════════════
+     KEY FLOWS NOTE
+════════════════════════════════════════════════════════════ -->
+<rect x="430" y="672" width="500" height="186" rx="12" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+<text x="450" y="694" font-size="10.5" font-weight="700" fill="#94A3B8" letter-spacing="1.5" font-family="'Segoe UI',sans-serif">KEY  AI  FLOWS</text>
+
+<text x="450" y="716" font-size="10" fill="#818CF8" font-family="'Segoe UI',sans-serif">📦  Room Created</text>
+<text x="470" y="730" font-size="9.5" fill="#64748B" font-family="'Segoe UI',sans-serif">→ API embeds name+tags  →  AI /v1/embed  →  OpenAI  →  stores 1536-dim vector in MongoDB</text>
+<text x="470" y="743" font-size="9.5" fill="#64748B" font-family="'Segoe UI',sans-serif">→ API generates description  →  AI /v1/generate-description  →  gpt-4o-mini  →  stored in DB</text>
+
+<text x="450" y="762" font-size="10" fill="#818CF8" font-family="'Segoe UI',sans-serif">🔍  Discover Feed Opens</text>
+<text x="470" y="776" font-size="9.5" fill="#64748B" font-family="'Segoe UI',sans-serif">→ API builds queryText from user tags+bio+name  →  AI /v1/semantic-search  →  cosine rank</text>
+<text x="470" y="789" font-size="9.5" fill="#64748B" font-family="'Segoe UI',sans-serif">→ Returns top-10 rooms by similarity  →  EVERYONE tab re-sorted silently in background</text>
+
+<text x="450" y="808" font-size="10" fill="#818CF8" font-family="'Segoe UI',sans-serif">🤝  Connect Rooms</text>
+<text x="470" y="822" font-size="9.5" fill="#64748B" font-family="'Segoe UI',sans-serif">→ API sends source room + 60 candidates  →  AI /v1/suggestions  →  hybrid score + embedding</text>
+<text x="470" y="835" font-size="9.5" fill="#64748B" font-family="'Segoe UI',sans-serif">→ Returns top-10 with similarity %  →  accept adds bidirectional connectedRooms link</text>
+
+<text x="450" y="854" font-size="10" fill="#818CF8" font-family="'Segoe UI',sans-serif">❤️  User Interaction (VIEW / LIKE / IGNORE)</text>
+<text x="470" y="867" font-size="9.5" fill="#64748B" font-family="'Segoe UI',sans-serif">→ AI /v1/user-preference/update  →  tag weights updated  →  new preferenceEmbedding stored</text>
+
+</svg>
+</body>
+</html>

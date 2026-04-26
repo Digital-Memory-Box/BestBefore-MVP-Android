@@ -301,11 +301,31 @@ class RoomRepository {
         }
     }
 
+    suspend fun deleteMemory(roomId: String, memoryId: String): Result<Unit> {
+        return try {
+            val response = api.deleteMemory(freshBearer(), roomId, memoryId)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("Failed to delete memory: ${response.code()}"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun acceptSuggestion(roomId: String, suggestionId: String): Result<Unit> {
         return try {
             val response = api.acceptSuggestion(freshBearer(), roomId, suggestionId)
             if (response.isSuccessful) Result.success(Unit)
             else Result.failure(Exception("Failed to accept suggestion: ${response.code()}"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun rejectSuggestion(roomId: String, suggestionId: String): Result<Unit> {
+        return try {
+            val response = api.rejectSuggestion(freshBearer(), roomId, suggestionId)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("Failed to reject suggestion: ${response.code()}"))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -366,6 +386,60 @@ class RoomRepository {
             val response = api.createHandshakeInvite(freshBearer(), roomId, body)
             if (response.isSuccessful && response.body() != null) Result.success(response.body()!!)
             else Result.failure(Exception("Failed to create handshake invite: ${response.code()}"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // ── AI Discovery & Semantic Search ───────────────────────────────────────
+
+    /**
+     * POST /rooms/discover/initial — Backend-level semantic discovery.
+     * Re-ranks public rooms using the user's preferred tags, name, and bio
+     * against stored room embeddings via the Python AI service.
+     * Falls back to tag-overlap scoring on the backend side if AI is unavailable.
+     */
+    suspend fun getInitialDiscoveryRooms(
+        preferredTags: List<String> = emptyList(),
+        userLat: Double? = null,
+        userLon: Double? = null,
+        userName: String = "",
+        bio: String = ""
+    ): Result<InitialDiscoveryResponse> {
+        return try {
+            val request = InitialDiscoveryRequest(preferredTags, userLat, userLon, userName, bio)
+            val response = api.getInitialDiscoveryRooms(freshBearer(), request)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                val err = response.errorBody()?.string() ?: "HTTP ${response.code()}"
+                Result.failure(Exception("Initial discovery failed: $err"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * POST /search/search — Backend semantic search over room embeddings.
+     * Returns rooms ranked by cosine similarity to the query string.
+     * Optional geolocation filtering via maxDistance (km).
+     */
+    suspend fun semanticSearchRooms(
+        query: String,
+        userLat: Double? = null,
+        userLon: Double? = null,
+        maxDistance: Double? = null
+    ): Result<BackendSearchResponse> {
+        return try {
+            val request = BackendSearchRequest(query, userLat, userLon, maxDistance)
+            val response = api.semanticSearchRooms(freshBearer(), request)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                val err = response.errorBody()?.string() ?: "HTTP ${response.code()}"
+                Result.failure(Exception("Semantic search failed: $err"))
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }

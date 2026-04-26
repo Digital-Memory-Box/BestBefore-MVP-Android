@@ -89,6 +89,7 @@ fun HallwayScreen(
     val similarModeSource by viewModel.similarModeSource.collectAsState()
     val roomingFilter by viewModel.roomingFilter.collectAsState()
     val isInitialLoading by viewModel.isInitialLoading.collectAsState()
+    val serverStatus by viewModel.serverStatus.collectAsState()
     val notificationViewModel: NotificationViewModel = viewModel()
     val notificationCount by notificationViewModel.notifications.collectAsState()
     // Responsive orb diameter to avoid collapse/clipping on narrow phones.
@@ -154,12 +155,24 @@ fun HallwayScreen(
                                 .fillMaxWidth(),
                             contentAlignment = Alignment.Center
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
+                            ) {
                                 CircularProgressIndicator(color = LocalBestBeforeColors.current.primary)
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text(
-                                    text = if (currentTab == BottomTab.ARTISTS) "Loading artists..." else "Loading hallway...",
-                                    color = LocalBestBeforeColors.current.textSecondary
+                                val loadingText = when (serverStatus) {
+                                    HallwayViewModel.ServerStatus.WARMING_UP ->
+                                        "Server is starting up...\nThis takes ~30 s after inactivity."
+                                    HallwayViewModel.ServerStatus.READY ->
+                                        if (currentTab == BottomTab.ARTISTS) "Loading artists..." else "Loading rooms..."
+                                    else ->
+                                        "Connecting..."
+                                }
+                                androidx.compose.material3.Text(
+                                    text = loadingText,
+                                    color = LocalBestBeforeColors.current.textSecondary,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium
                                 )
                             }
                         }
@@ -1264,31 +1277,12 @@ fun ActiveCardDetails(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Avatar
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .background(Color(0xFF2C2C2E), CircleShape)
-                            .border(1.5.dp, Color.White.copy(alpha = 0.15f), CircleShape)
-                            .clip(CircleShape)
-                            .clickable { card.ownerId?.let { onNavigateToCreatorProfile(it) } },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (!card.ownerProfilePic.isNullOrEmpty()) {
-                            coil.compose.AsyncImage(
-                                model = card.ownerProfilePic,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                            )
-                        } else {
-                            Icon(
-                                Icons.Default.AccountCircle,
-                                contentDescription = null,
-                                tint = Color.Gray.copy(alpha = 0.8f),
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
-                    }
+                    ProfileAvatar(
+                        imageUri = card.ownerProfilePic,
+                        size = 44.dp,
+                        accentColor = Color.White,
+                        onClick = { card.ownerId?.let { onNavigateToCreatorProfile(it) } }
+                    )
 
                     // Username
                     Text(

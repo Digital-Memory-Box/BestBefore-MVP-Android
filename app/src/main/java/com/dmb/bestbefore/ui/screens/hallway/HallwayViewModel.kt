@@ -12,9 +12,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
+import kotlinx.coroutines.withTimeoutOrNull
 
 class HallwayViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -22,6 +24,13 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
     private val authRepository: com.dmb.bestbefore.data.repository.AuthRepository by lazy {
         com.dmb.bestbefore.data.repository.AuthRepository(getApplication())
     }
+
+    // ── Server warm-up status ─────────────────────────────────────────────────
+    // Railway free tier cold-starts take 20–60 s. We ping /health first so the
+    // user sees a meaningful message instead of a blank spinner.
+    enum class ServerStatus { CONNECTING, WARMING_UP, READY }
+    private val _serverStatus = MutableStateFlow(ServerStatus.CONNECTING)
+    val serverStatus: StateFlow<ServerStatus> = _serverStatus.asStateFlow()
 
     private val _cards = MutableStateFlow<List<HallwayCard>>(emptyList())
     val cards: StateFlow<List<HallwayCard>> = _cards.asStateFlow()
@@ -47,11 +56,26 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
         _roomingFilter.value = filter
     }
 
-    val filteredCards: StateFlow<List<HallwayCard>> = combine(_cards, _selectedFilterTag, _searchQuery) { cards, tag, query ->
+    // Populated by the backend semantic search when searchQuery >= 3 chars.
+    private val _semanticSearchCards = MutableStateFlow<List<HallwayCard>>(emptyList())
+    val semanticSearchCards: StateFlow<List<HallwayCard>> = _semanticSearchCards.asStateFlow()
+
+    private val _isSemanticSearching = MutableStateFlow(false)
+    val isSemanticSearching: StateFlow<Boolean> = _isSemanticSearching.asStateFlow()
+
+    val filteredCards: StateFlow<List<HallwayCard>> = combine(
+        _cards, _selectedFilterTag, _searchQuery, _semanticSearchCards
+    ) { cards, tag, query, semanticCards ->
         val normalizedQuery = query.trim()
-        cards.filter { card ->
+        // Use backend semantic results when available, else fall back to local title filter.
+        val sourceCards = if (normalizedQuery.length >= 3 && semanticCards.isNotEmpty()) {
+            semanticCards
+        } else {
+            cards
+        }
+        sourceCards.filter { card ->
             val matchesTagFilter = tag.isNullOrBlank() || card.tags.any { it.equals(tag, ignoreCase = true) }
-            val matchesSearch = if (normalizedQuery.isBlank()) {
+            val matchesSearch = if (normalizedQuery.isBlank() || (normalizedQuery.length >= 3 && semanticCards.isNotEmpty())) {
                 true
             } else {
                 card.title.contains(normalizedQuery, ignoreCase = true)
@@ -164,6 +188,8 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
 
     private var myRoomsList: List<com.dmb.bestbefore.data.api.models.RoomDto> = emptyList()
     private var discoverRoomsList: List<com.dmb.bestbefore.data.api.models.RoomDto> = emptyList()
+    // AI-ranked room IDs from /rooms/discover/initial, in descending similarity order.
+    private var aiDiscoveryRankedIds: List<String> = emptyList()
 
     // ── Similar Rooms Mode ──────────────────────────────────────────────
     private val _similarModeSource = MutableStateFlow<HallwayCard?>(null)
@@ -204,42 +230,105 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         fetchRooms()
+        watchSearchQueryForSemanticSearch()
     }
 
     private fun fetchRooms() {
         viewModelScope.launch {
             _isInitialLoading.value = true
+            val t0 = System.currentTimeMillis()
+            fun ms() = System.currentTimeMillis() - t0
+            Log.i(TAG_PERF, "━━━ fetchRooms START ━━━")
+
+            // ── Server warm-up ping ───────────────────────────────────────────
+            // Railway free tier cold-starts in 20–60 s. Fire /health first.
+            // After 2 s with no response, flip to WARMING_UP so the UI can tell
+            // the user the server is starting rather than showing a blank screen.
+            val warmupJob = launch {
+                kotlinx.coroutines.delay(2_000)
+                if (_serverStatus.value == ServerStatus.CONNECTING) {
+                    _serverStatus.value = ServerStatus.WARMING_UP
+                    Log.i(TAG_PERF, "[${ms()}ms] server still cold — showing warm-up message")
+                }
+            }
+            val pingT0 = System.currentTimeMillis()
             try {
-                val myDeferred = async { roomRepository.getRooms() }
+                val pingResult = withTimeoutOrNull(90_000L) {
+                    com.dmb.bestbefore.data.api.RetrofitClient.apiService.health()
+                }
+                val pingMs = System.currentTimeMillis() - pingT0
+                if (pingResult?.isSuccessful == true) {
+                    Log.i(TAG_PERF, "[${ms()}ms] /health OK in ${pingMs}ms — server is warm ✅")
+                } else {
+                    Log.w(TAG_PERF, "[${ms()}ms] /health ${pingResult?.code()} in ${pingMs}ms — proceeding anyway")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG_PERF, "[${ms()}ms] /health exception in ${System.currentTimeMillis() - pingT0}ms: ${e.message}")
+            } finally {
+                warmupJob.cancel()
+                _serverStatus.value = ServerStatus.READY
+            }
+            Log.i(TAG_PERF, "[${ms()}ms] warm-up done — launching data fetches")
+
+            try {
+                // Launch all three in parallel and record when each fires
+                Log.i(TAG_PERF, "[${ms()}ms] launching getRooms + getDiscoverRooms + getMe in parallel")
+                val myDeferred      = async { roomRepository.getRooms() }
                 val discoverDeferred = async { roomRepository.getDiscoverRooms() }
-                val meDeferred = async { authRepository.getMe() }
-                
-                val myResult = myDeferred.await()
+                val meDeferred      = async { authRepository.getMe() }
+
+                val myResult      = myDeferred.await()
+                Log.i(TAG_PERF, "[${ms()}ms] getRooms DONE")
                 val discoverResult = discoverDeferred.await()
-                val meResult = meDeferred.await()
-                
+                Log.i(TAG_PERF, "[${ms()}ms] getDiscoverRooms DONE")
+                val meResult      = meDeferred.await()
+                Log.i(TAG_PERF, "[${ms()}ms] getMe DONE  — all 3 parallel calls complete")
+
                 if (myResult.isSuccess) {
                     val rooms = myResult.getOrThrow()
-                    Log.d("HallwayViewModel", "getRooms: fetched ${rooms.size} rooms")
+                    val photoStats = rooms.photoStats()
+                    Log.i(TAG_PERF, "[${ms()}ms] /rooms → ${rooms.size} rooms | $photoStats")
                     myRoomsList = rooms
                 } else {
-                    val e = myResult.exceptionOrNull()
-                    Log.e("HallwayViewModel", "getRooms failed: ${e?.message}")
+                    Log.e(TAG_PERF, "[${ms()}ms] /rooms FAILED: ${myResult.exceptionOrNull()?.message}")
                 }
 
                 if (discoverResult.isSuccess) {
                     val rooms = discoverResult.getOrThrow()
-                    Log.d("HallwayViewModel", "getDiscoverRooms: fetched ${rooms.size} rooms")
+                    val photoStats = rooms.photoStats()
+                    Log.i(TAG_PERF, "[${ms()}ms] /rooms/discover → ${rooms.size} rooms | $photoStats")
                     discoverRoomsList = rooms
                 } else {
-                    val e = discoverResult.exceptionOrNull()
-                    Log.e("HallwayViewModel", "getDiscoverRooms failed: ${e?.message}")
+                    Log.e(TAG_PERF, "[${ms()}ms] /rooms/discover FAILED: ${discoverResult.exceptionOrNull()?.message}")
                 }
 
-                // Sync ignored/saved rooms from profile
+                // Sync ignored/saved rooms from profile + kick off AI discovery
                 if (meResult.isSuccess) {
                     val userDto = meResult.getOrThrow()
                     _ignoredRoomIds.value = userDto.ignoredRoomIds?.toSet() ?: emptySet()
+
+                    // AI discovery: fire-and-forget so cards render immediately at default order.
+                    // When the AI result arrives it silently re-sorts the EVERYONE tab.
+                    val hasTags = !userDto.preferredTags.isNullOrEmpty()
+                    val hasBio = !userDto.bio.isNullOrBlank()
+                    val hasName = !userDto.name.isNullOrBlank()
+                    if (hasTags || hasBio || hasName) {
+                        launch {
+                            roomRepository.getInitialDiscoveryRooms(
+                                preferredTags = userDto.preferredTags ?: emptyList(),
+                                userLat = userDto.lastLat,
+                                userLon = userDto.lastLon,
+                                userName = userDto.name ?: "",
+                                bio = userDto.bio ?: ""
+                            ).onSuccess { response ->
+                                aiDiscoveryRankedIds = response.results.map { it.roomId }
+                                filterCards(_currentTab.value)
+                                Log.d("HallwayViewModel", "AI discovery: ${response.count} rooms re-ranked (strategy=${response.strategy})")
+                            }.onFailure { e ->
+                                Log.w("HallwayViewModel", "AI discovery failed, default order kept: ${e.message}")
+                            }
+                        }
+                    }
                     
                     // We need to fetch the actual cards for these IDs to populate _ignoredRoomCards
                     val allRooms = (myRoomsList + discoverRoomsList).distinctBy { it.id }
@@ -290,15 +379,19 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
                 
+                Log.i(TAG_PERF, "[${ms()}ms] calling filterCards")
                 filterCards(_currentTab.value)
+                Log.i(TAG_PERF, "[${ms()}ms] filterCards done → ${_cards.value.size} cards visible")
             } catch (e: Exception) {
-                Log.e("HallwayViewModel", "Error fetching rooms", e)
+                Log.e(TAG_PERF, "[${ms()}ms] fetchRooms EXCEPTION: ${e.message}", e)
             } finally {
+                Log.i(TAG_PERF, "━━━ fetchRooms END  total=${ms()}ms ━━━")
                 _isInitialLoading.value = false
             }
             
-            // Try fetching tags
+            // Tags fetch — sequential after cards are visible (non-blocking for UI)
             try {
+                val tagsT0 = System.currentTimeMillis()
                 val token = com.dmb.bestbefore.data.repository.AuthRepository(getApplication()).getFirebaseIdToken(false)
                 if (token != null) {
                     val tagsResponse = com.dmb.bestbefore.data.api.RetrofitClient.apiService.getTags("Bearer $token")
@@ -339,10 +432,11 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                             }
                         }
                         _availableTags.value = parsedTags
+                        Log.i(TAG_PERF, "/tags → ${parsedTags.size} tags in ${System.currentTimeMillis() - tagsT0}ms")
                     }
                 }
             } catch (e: Exception) {
-                Log.e("HallwayViewModel", "Error fetching tags", e)
+                Log.e(TAG_PERF, "tags fetch FAILED: ${e.message}")
             }
         }
     }
@@ -415,13 +509,17 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
                 BottomTab.EVERYONE -> {
-                    allAvailableRooms.filter {
+                    val base = allAvailableRooms.filter {
                         val isOwner = it.ownerEmail?.equals(currentUserEmail, ignoreCase = true) == true
                         !isOwner &&
                         isRoomPublic(it) &&
                         !isArtistRoom(it) &&
                         !_ignoredRoomIds.value.contains(it.id)
                     }
+                    if (aiDiscoveryRankedIds.isNotEmpty()) {
+                        val rankMap = aiDiscoveryRankedIds.withIndex().associate { (i, id) -> id to i }
+                        base.sortedBy { rankMap[it.id] ?: Int.MAX_VALUE }
+                    } else base
                 }
                 BottomTab.ARTISTS -> {
                     allAvailableRooms.filter {
@@ -481,11 +579,78 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    // Debounced semantic search: fires when query reaches 3+ chars, clears on shorter input.
+    private fun watchSearchQueryForSemanticSearch() {
+        viewModelScope.launch {
+            @Suppress("OPT_IN_USAGE")
+            searchQuery.debounce(500L).collect { query ->
+                if (query.length >= 3) {
+                    _isSemanticSearching.value = true
+                    val allAvailable = (myRoomsList + discoverRoomsList).distinctBy { it.id }
+                    val result = roomRepository.semanticSearchRooms(query)
+                    result.onSuccess { response ->
+                        val ranked = response.results.map { searchResult ->
+                            allAvailable.find { it.id == searchResult.roomId }?.let { room ->
+                                val currentUserEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
+                                val isOwner = room.ownerEmail?.equals(currentUserEmail, ignoreCase = true) == true
+                                val isCollabFlag = isCollaborator(room, currentUserEmail)
+                                val isViewerFlag = isViewer(room, currentUserEmail)
+                                HallwayCard(
+                                    id = room.id,
+                                    title = room.name,
+                                    timeCapsuleDays = room.capsuleDurationDays,
+                                    description = if (!room.description.isNullOrBlank()) room.description
+                                                  else (room.generatedDescription ?: searchResult.description ?: ""),
+                                    imageUrl = room.photos?.firstOrNull(),
+                                    photos = room.photos ?: emptyList(),
+                                    themeColorHex = room.theme,
+                                    tags = room.tags ?: searchResult.tags ?: emptyList(),
+                                    ownerId = room.ownerId,
+                                    ownerEmail = room.ownerEmail,
+                                    ownerName = room.ownerName,
+                                    ownerUserType = room.ownerUserType,
+                                    ownerProfilePic = room.ownerProfilePic,
+                                    collaboratorCount = room.collaborators?.size ?: 0,
+                                    collaborators = emptyList(),
+                                    location = null,
+                                    backgroundMusic = room.backgroundMusic,
+                                    isViewerOnly = !isOwner && !isCollabFlag && (isViewerFlag || isRoomPublic(room)),
+                                    isOwnedByMe = isOwner,
+                                    isCollaborator = isCollabFlag
+                                )
+                            }
+                        }.filterNotNull()
+                        _semanticSearchCards.value = ranked
+                        Log.d("HallwayViewModel", "Semantic search: ${ranked.size} results for '$query'")
+                    }.onFailure { e ->
+                        Log.w("HallwayViewModel", "Semantic search failed, keeping local filter: ${e.message}")
+                        _semanticSearchCards.value = emptyList()
+                    }
+                    _isSemanticSearching.value = false
+                } else {
+                    _semanticSearchCards.value = emptyList()
+                }
+            }
+        }
+    }
+
     fun selectCard(index: Int) {
         if (index >= 0 && index < _cards.value.size) {
             _selectedCardIndex.value = index
             _activePagerPage.value = index
             _areCollaboratorsExpanded.value = false
+            trackViewInteraction(index)
+        }
+    }
+
+    private fun trackViewInteraction(index: Int) {
+        val card = _cards.value.getOrNull(index) ?: return
+        viewModelScope.launch {
+            roomRepository.trackInteraction(
+                roomId = card.id,
+                dwellTimeSeconds = 0L,
+                type = "VIEW"
+            )
         }
     }
 
@@ -495,6 +660,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
         _activePagerPage.value = 0
         _selectedFilterTag.value = null
         _searchQuery.value = ""
+        _semanticSearchCards.value = emptyList()
         _areCollaboratorsExpanded.value = false
         filterCards(tab)
     }
@@ -511,6 +677,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
         _selectedCardIndex.value = 0
         _activePagerPage.value = 0
         _areCollaboratorsExpanded.value = false
+        if (query.length < 3) _semanticSearchCards.value = emptyList()
     }
 
     fun setOrbMenuVisible(isVisible: Boolean) {
@@ -574,4 +741,36 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
 
 enum class BottomTab {
     ROOMING, EVERYONE, ARTISTS
+}
+
+// ── Perf helpers ──────────────────────────────────────────────────────────────
+
+private const val TAG_PERF = "BB_PERF"
+
+/**
+ * Summarises the photo payload of a list of RoomDto objects so we can immediately
+ * see whether photos are stored as raw base64 (large) or as CDN URLs (small).
+ *
+ * Example output:
+ *   "12 rooms, 47 photos — 43 base64 ⚠ (avg ~38 KB each), 4 URLs"
+ */
+private fun List<com.dmb.bestbefore.data.api.models.RoomDto>.photoStats(): String {
+    val allPhotos = flatMap { it.photos ?: emptyList() }
+    if (allPhotos.isEmpty()) return "no photos"
+
+    val base64Photos = allPhotos.filter { it.startsWith("data:") }
+    val urlPhotos    = allPhotos.filter { it.startsWith("http") }
+    val otherPhotos  = allPhotos.size - base64Photos.size - urlPhotos.size
+
+    val avgBase64Kb  = if (base64Photos.isNotEmpty())
+        base64Photos.sumOf { it.length }.toLong() / base64Photos.size / 1024
+    else 0L
+
+    val b64Warn = if (base64Photos.isNotEmpty()) " ⚠ BASE64" else ""
+    return buildString {
+        append("${allPhotos.size} photos")
+        if (base64Photos.isNotEmpty()) append(" | ${base64Photos.size} base64$b64Warn ~${avgBase64Kb}KB avg")
+        if (urlPhotos.isNotEmpty())    append(" | ${urlPhotos.size} URLs")
+        if (otherPhotos > 0)           append(" | $otherPhotos other")
+    }
 }

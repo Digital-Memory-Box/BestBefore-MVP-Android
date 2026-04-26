@@ -114,25 +114,12 @@ fun SharedUserCard(
                 }
             }
 
-            Box(
-                modifier = Modifier
-                    .size(84.dp)
-                    .background(accentColor.copy(alpha = 0.18f), CircleShape)
-                    .border(2.dp, accentColor, CircleShape)
-                    .clip(CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                if (profileImageUri != null) {
-                    AsyncImage(
-                        model = profileImageUri,
-                        contentDescription = "Profile photo",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                    )
-                } else {
-                    Icon(Icons.Default.Person, contentDescription = null, tint = accentColor, modifier = Modifier.size(34.dp))
-                }
-            }
+            ProfileAvatar(
+                imageUri = profileImageUri,
+                size = 84.dp,
+                accentColor = accentColor
+            )
+        }
         }
 
         if (biography.isNotEmpty()) {
@@ -269,6 +256,58 @@ fun MusicPresetOption(title: String, isSelected: Boolean, tintColor: Color, onCl
         Spacer(modifier = Modifier.weight(1f))
         if (isSelected) {
             Icon(Icons.Default.CheckCircle, contentDescription = null, tint = tintColor)
+        }
+    }
+}
+@Composable
+fun ProfileAvatar(
+    imageUri: Any?, // Can be Uri, String (URL or Base64), or null
+    size: androidx.compose.ui.unit.Dp,
+    accentColor: Color = Color(0xFF007AFF),
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
+) {
+    val clickableModifier = if (onClick != null) Modifier.clickable { onClick() } else Modifier
+    
+    Box(
+        modifier = modifier
+            .size(size)
+            .background(accentColor.copy(alpha = 0.12f), CircleShape)
+            .border(1.5.dp, accentColor.copy(alpha = 0.4f), CircleShape)
+            .clip(CircleShape)
+            .then(clickableModifier),
+        contentAlignment = Alignment.Center
+    ) {
+        if (imageUri != null) {
+            val modelStr = imageUri.toString()
+            if (modelStr.startsWith("data:image")) {
+                // Large base64 handling is better with specialized decoder or bytes
+                // For simplicity here, AsyncImage handles data URIs, but let's ensure it's not null/empty
+                if (modelStr.length > 22) {
+                     AsyncImage(
+                        model = imageUri,
+                        contentDescription = "Avatar",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                } else {
+                    Icon(Icons.Default.Person, null, tint = accentColor, modifier = Modifier.size(size * 0.5f))
+                }
+            } else {
+                AsyncImage(
+                    model = imageUri,
+                    contentDescription = "Avatar",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+            }
+        } else {
+            Icon(
+                imageVector = Icons.Default.Person,
+                contentDescription = null,
+                tint = accentColor.copy(alpha = 0.8f),
+                modifier = Modifier.size(size * 0.5f)
+            )
         }
     }
 }

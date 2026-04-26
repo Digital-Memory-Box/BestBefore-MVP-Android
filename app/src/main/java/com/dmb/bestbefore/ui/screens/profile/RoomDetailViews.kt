@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package com.dmb.bestbefore.ui.screens.profile
 
 import androidx.compose.animation.*
@@ -9,7 +11,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -52,6 +56,7 @@ import com.dmb.bestbefore.ui.components.MusicPlayer
 import androidx.compose.foundation.Image
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.dmb.bestbefore.utils.Base64BitmapCache
 
 // Helper to prevent UI thread blocking while decoding large Base64 images from backend
 @Composable
@@ -62,25 +67,33 @@ fun AsyncBase64Image(
 ) {
     val modelStr = itemData.toString()
     if (modelStr.startsWith("data:image")) {
-        var bytes by remember { mutableStateOf<ByteArray?>(null) }
+        // Check in-process LRU cache before decoding to avoid re-decoding on every recompose.
+        var bitmap by remember(modelStr) {
+            mutableStateOf(Base64BitmapCache.get(modelStr))
+        }
         LaunchedEffect(modelStr) {
-            withContext(Dispatchers.IO) {
-                try {
-                    val cleanStr = modelStr.substringAfter("base64,")
-                    bytes = android.util.Base64.decode(cleanStr, android.util.Base64.DEFAULT)
-                } catch (e: Exception) {
-                    bytes = ByteArray(0)
+            if (bitmap == null) {
+                val decoded = withContext(Dispatchers.Default) {
+                    try {
+                        val cleanStr = modelStr.substringAfter("base64,")
+                        val bytes = android.util.Base64.decode(cleanStr, android.util.Base64.DEFAULT)
+                        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    } catch (_: Exception) { null }
+                }
+                if (decoded != null) {
+                    Base64BitmapCache.put(modelStr, decoded)
+                    bitmap = decoded
                 }
             }
         }
-        if (bytes != null && bytes!!.isNotEmpty()) {
-            coil.compose.AsyncImage(
-                model = java.nio.ByteBuffer.wrap(bytes!!),
+        if (bitmap != null) {
+            androidx.compose.foundation.Image(
+                bitmap = bitmap!!.asImageBitmap(),
                 contentDescription = null,
                 contentScale = contentScale,
                 modifier = modifier
             )
-        } else if (bytes == null) {
+        } else {
             Box(modifier = modifier, contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Color(0xFF007AFF), modifier = Modifier.size(24.dp))
             }
@@ -152,6 +165,8 @@ fun RoomDetailScreen(
     var showRoomDetailsSheet by remember { mutableStateOf(false) }
     var showWriteNoteDialog by remember { mutableStateOf(false) }
     var showDeleteRoomConfirm by remember { mutableStateOf(false) }
+    var showDeleteMemoryConfirm by remember { mutableStateOf(false) }
+    var memoryToDelete by remember { mutableStateOf<android.net.Uri?>(null) }
     var noteContent by remember { mutableStateOf("") }
     var showAllMediaGrid by remember { mutableStateOf(false) }
     var isIgnored by remember { mutableStateOf(false) }
@@ -634,16 +649,22 @@ fun RoomDetailScreen(
                             ) {
                                 val item1 = displayMedia[i]
                                 val item2 = displayMedia.getOrNull(i + 1)
-                                
+
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
                                         .aspectRatio(1f)
                                         .clip(RoundedCornerShape(16.dp))
                                         .background(Color.DarkGray)
-                                        .clickable {
-                                            viewModel.openGalleryViewer(displayMedia, i)
-                                        }
+                                        .combinedClickable(
+                                            onClick = { viewModel.openGalleryViewer(displayMedia, i) },
+                                            onLongClick = {
+                                                if (viewModel.isMyMemory(room!!.id, item1)) {
+                                                    memoryToDelete = item1
+                                                    showDeleteMemoryConfirm = true
+                                                }
+                                            }
+                                        )
                                 ) {
                                     val itemStr = item1.toString()
                                     val isAudio1 = isAudioMemoryUri(item1)
@@ -696,9 +717,15 @@ fun RoomDetailScreen(
                                             .aspectRatio(1f)
                                             .clip(RoundedCornerShape(16.dp))
                                             .background(Color.DarkGray)
-                                            .clickable {
-                                                viewModel.openGalleryViewer(displayMedia, i + 1)
-                                            }
+                                            .combinedClickable(
+                                                onClick = { viewModel.openGalleryViewer(displayMedia, i + 1) },
+                                                onLongClick = {
+                                                    if (viewModel.isMyMemory(room!!.id, item2)) {
+                                                        memoryToDelete = item2
+                                                        showDeleteMemoryConfirm = true
+                                                    }
+                                                }
+                                            )
                                     ) {
                                         val item2Str = item2.toString()
                                         val isAudio2 = isAudioMemoryUri(item2)
@@ -754,13 +781,34 @@ fun RoomDetailScreen(
                 // ─── CONNECTED ROOMS SECTION ────────────────────────────────
                 val connectedIds = room!!.connectedRooms
                 Spacer(modifier = Modifier.height(40.dp))
-                Text(
-                    "Connected Rooms",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Connected Rooms",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    if (canContribute) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(Color(0xFF34C759), CircleShape)
+                                .clickable { viewModel.openConnectRooms(room!!.id) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = "Connect Rooms",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
                 if (connectedIds.isEmpty()) {
                     Text(
                         "No connections yet.",
@@ -774,46 +822,15 @@ fun RoomDetailScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         connectedIds.forEach { targetId ->
-                            val targetRoom = viewModel.createdRooms.value.find { it.id == targetId }
-                                ?: viewModel.getRoomByIdFromRemote(targetId)
-
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp))
-                                    .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
-                                    .clickable {
-                                        if (targetRoom != null) {
-                                            viewModel.selectRoom(targetRoom)
-                                        }
-                                    }
-                                    .padding(16.dp)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Icon(Icons.Default.Link, "Connected", tint = Color(0xFF007AFF), modifier = Modifier.size(20.dp))
-                                    Column {
-                                        Text(
-                                            text = targetRoom?.roomName ?: "Connected Room ($targetId)",
-                                            color = Color.White,
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        if (targetRoom != null) {
-                                            Text(
-                                                text = "Tap to view room",
-                                                color = Color.Gray,
-                                                fontSize = 12.sp
-                                            )
-                                        }
-                                    }
-                                }
-                            }
+                            ConnectedRoomItem(
+                                targetId = targetId,
+                                viewModel = viewModel,
+                                onClick = { room -> viewModel.selectRoom(room) }
+                            )
                         }
                     }
                 }
+
             } // End of Column (has room)
             } // End of PullToRefreshBox
         } // End of room == null else block
@@ -865,7 +882,15 @@ fun RoomDetailScreen(
                             modifier = Modifier
                                 .aspectRatio(1f)
                                 .background(Color.DarkGray)
-                                .clickable { viewModel.openGalleryViewer(currentRoomMedia, index) }
+                                .combinedClickable(
+                                    onClick = { viewModel.openGalleryViewer(currentRoomMedia, index) },
+                                    onLongClick = {
+                                        if (viewModel.isMyMemory(room!!.id, item)) {
+                                            memoryToDelete = item
+                                            showDeleteMemoryConfirm = true
+                                        }
+                                    }
+                                )
                         ) {
                             val itemStr = item.toString()
                             if (isNoteMemoryUri(item)) {
@@ -893,6 +918,19 @@ fun RoomDetailScreen(
             }
         }
         
+        // Connect Rooms Overlay
+        val showConnectRooms by viewModel.showConnectRooms.collectAsState()
+        if (showConnectRooms && room != null) {
+            androidx.activity.compose.BackHandler(enabled = true) {
+                viewModel.closeConnectRooms()
+            }
+            ConnectRoomsScreen(
+                room = room!!,
+                viewModel = viewModel,
+                onBack = { viewModel.closeConnectRooms() }
+            )
+        }
+
         // Image Viewer Overlay
         val isGalleryOpen by viewModel.isGalleryViewerOpen.collectAsState()
         if (isGalleryOpen) {
@@ -1075,6 +1113,48 @@ fun RoomDetailScreen(
                     Spacer(modifier = Modifier.height(32.dp))
                 }
             }
+        }
+
+        if (showDeleteMemoryConfirm && memoryToDelete != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    showDeleteMemoryConfirm = false
+                    memoryToDelete = null
+                },
+                containerColor = Color(0xFF1C1C1E),
+                title = {
+                    Text(
+                        text = "Delete Memory?",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Text(
+                        text = "Are you sure you want to delete this memory? This cannot be undone.",
+                        color = Color.LightGray
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            room?.let { viewModel.deleteMemory(it.id, memoryToDelete!!) }
+                            showDeleteMemoryConfirm = false
+                            memoryToDelete = null
+                        }
+                    ) {
+                        Text("Delete", color = Color.Red, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showDeleteMemoryConfirm = false
+                        memoryToDelete = null
+                    }) {
+                        Text("Cancel", color = Color.Gray)
+                    }
+                }
+            )
         }
 
         if (showDeleteRoomConfirm) {
@@ -1417,6 +1497,291 @@ fun ProfileGalleryViewer(viewModel: ProfileViewModel) {
     }
 }
 
+// ── Connect Rooms Screen ──────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ConnectRoomsScreen(
+    room: com.dmb.bestbefore.data.models.TimeCapsuleRoom,
+    viewModel: ProfileViewModel,
+    onBack: () -> Unit
+) {
+    // Observe live room so connectedRooms updates after accepting a suggestion
+    val liveRoom by viewModel.selectedRoom.collectAsState()
+    val currentRoom = liveRoom ?: room
+    val suggestions by viewModel.connectionSuggestions.collectAsState()
+    val isLoading by viewModel.isLoadingConnectionSuggestions.collectAsState()
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0A0A0F))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.statusBars)
+        ) {
+            // ── Header ──────────────────────────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier
+                        .clickable { onBack() }
+                        .padding(end = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color(0xFF007AFF),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Back", color = Color(0xFF007AFF), fontSize = 16.sp)
+                }
+                Text(
+                    text = "Connected Rooms",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center
+                )
+                // "+" button — re-opens suggestions fetch
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .background(Color(0xFF34C759), CircleShape)
+                        .clickable { viewModel.openConnectRooms(currentRoom.id) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "Refresh suggestions",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            // ── Scrollable content ──────────────────────────────────────────
+            androidx.compose.foundation.lazy.LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                // ── Connected Rooms ─────────────────────────────────────────
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                if (currentRoom.connectedRooms.isEmpty()) {
+                    item {
+                        Text(
+                            "No connections yet.",
+                            color = Color(0xFF8E8E93),
+                            fontSize = 15.sp,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+                } else {
+                    items(currentRoom.connectedRooms) { targetId ->
+                        ConnectedRoomItem(
+                            targetId = targetId,
+                            viewModel = viewModel,
+                            onClick = { targetRoom -> viewModel.selectRoom(targetRoom) }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
+                }
+
+                // ── Suggested Connections header ────────────────────────────
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(bottom = 14.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = Color(0xFF34C759),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            "Suggested Connections",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+
+                // ── Loading / empty ─────────────────────────────────────────
+                if (isLoading) {
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator(
+                                    color = Color(0xFF34C759),
+                                    modifier = Modifier.size(28.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    "Finding best connections...",
+                                    color = Color(0xFF8E8E93),
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+                } else if (suggestions.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "No suggestions available right now.",
+                                color = Color(0xFF8E8E93),
+                                fontSize = 14.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                    // ── Suggestion cards ────────────────────────────────────
+                    items(suggestions) { suggestion ->
+                        val alreadyConnected = currentRoom.connectedRooms.contains(suggestion.targetRoomId)
+                        if (!alreadyConnected) {
+                            SuggestionCard(
+                                suggestion = suggestion,
+                                onAccept = { viewModel.acceptConnectionSuggestion(currentRoom.id, suggestion) },
+                                onReject = { viewModel.rejectConnectionSuggestion(currentRoom.id, suggestion) }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+                    }
+                }
+
+                item { Spacer(modifier = Modifier.height(32.dp)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SuggestionCard(
+    suggestion: com.dmb.bestbefore.data.api.models.RoomSuggestionDto,
+    onAccept: () -> Unit,
+    onReject: () -> Unit
+) {
+    val scoreColor = when {
+        suggestion.score >= 70 -> Color(0xFF34C759)
+        suggestion.score >= 40 -> Color(0xFFFF9500)
+        else -> Color(0xFFFF3B30)
+    }
+
+    val description = suggestion.reasoning?.takeIf { it.isNotBlank() }
+        ?: "Initial discovery generated from user interest tags via AI scoring."
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF1C1C1E), RoundedCornerShape(14.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.07f), RoundedCornerShape(14.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Room info
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = suggestion.targetRoomName,
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = description,
+                color = Color(0xFF8E8E93),
+                fontSize = 12.sp,
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                lineHeight = 16.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.width(10.dp))
+
+        // Score badge
+        Box(
+            modifier = Modifier
+                .background(scoreColor.copy(alpha = 0.18f), RoundedCornerShape(20.dp))
+                .border(1.dp, scoreColor.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "${suggestion.score}%",
+                color = scoreColor,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        // Accept button
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .background(Color(0xFF34C759), CircleShape)
+                .clickable { onAccept() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.Check,
+                contentDescription = "Connect",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.width(6.dp))
+
+        // Reject button
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .background(Color(0xFFFF3B30), CircleShape)
+                .clickable { onReject() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.Close,
+                contentDescription = "Reject",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
 @Composable
 fun CountdownTimer(targetTimeMillis: Long) {
     var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -1583,5 +1948,57 @@ fun DetailRow(label: String, value: String) {
     ) {
         Text(label, color = Color.Gray, fontSize = 16.sp)
         Text(value, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun ConnectedRoomItem(
+    targetId: String,
+    viewModel: ProfileViewModel,
+    onClick: (com.dmb.bestbefore.data.models.TimeCapsuleRoom) -> Unit
+) {
+    val createdRooms by viewModel.createdRooms.collectAsState()
+    var targetRoom by remember(targetId) { mutableStateOf(createdRooms.find { it.id == targetId }) }
+
+    LaunchedEffect(targetId) {
+        if (targetRoom == null) {
+            targetRoom = viewModel.getRoomByIdFromRemote(targetId)
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+            .clickable {
+                targetRoom?.let { onClick(it) }
+            }
+            .padding(16.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                Icons.Default.Link,
+                "Connected",
+                tint = Color(0xFF007AFF),
+                modifier = Modifier.size(20.dp)
+            )
+            Column {
+                Text(
+                    text = targetRoom?.roomName ?: "Connected Room",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = if (targetRoom != null) "Tap to view room" else "Loading details...",
+                    color = Color.Gray,
+                    fontSize = 12.sp
+                )
+            }
+        }
     }
 }

@@ -22,6 +22,7 @@ import android.util.Log
 import java.io.File
 
 import com.dmb.bestbefore.data.models.CalendarEvent
+import com.dmb.bestbefore.data.models.MemoryItem
 import com.dmb.bestbefore.ui.theme.AppTheme
 import com.dmb.bestbefore.ui.theme.AppThemes
 import com.dmb.bestbefore.data.local.PreferencesManager
@@ -30,6 +31,8 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.EmailAuthProvider
 import com.dmb.bestbefore.data.api.models.UserDto
 import com.dmb.bestbefore.data.api.models.UpdateMeRequest
+import com.dmb.bestbefore.data.api.models.RoomSuggestionDto
+import com.dmb.bestbefore.data.api.models.RoomSuggestionsResponse
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -74,6 +77,16 @@ class ProfileViewModel : ViewModel() {
     /** AI-generated description text for the room creation wizard. */
     private val _aiGeneratedDescription = MutableStateFlow<String?>(null)
     val aiGeneratedDescription: StateFlow<String?> = _aiGeneratedDescription.asStateFlow()
+
+    // ── Connect Rooms ─────────────────────────────────────────────────────────
+    private val _showConnectRooms = MutableStateFlow(false)
+    val showConnectRooms: StateFlow<Boolean> = _showConnectRooms.asStateFlow()
+
+    private val _connectionSuggestions = MutableStateFlow<List<RoomSuggestionDto>>(emptyList())
+    val connectionSuggestions: StateFlow<List<RoomSuggestionDto>> = _connectionSuggestions.asStateFlow()
+
+    private val _isLoadingConnectionSuggestions = MutableStateFlow(false)
+    val isLoadingConnectionSuggestions: StateFlow<Boolean> = _isLoadingConnectionSuggestions.asStateFlow()
     // ─────────────────────────────────────────────────────────────────────────
     
     private val _notifications = MutableStateFlow<List<com.dmb.bestbefore.data.models.AppNotification>>(emptyList())
@@ -192,6 +205,11 @@ class ProfileViewModel : ViewModel() {
         return try {
             val result = roomRepository.getRoomById(id)
             result.getOrNull()?.let { dto ->
+                val myEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
+                val isOwner = dto.ownerEmail?.equals(myEmail, ignoreCase = true) == true
+                val isCollab = isCollaborator(dto, myEmail)
+                val isView = isViewer(dto, myEmail)
+                
                 TimeCapsuleRoom(
                     id = dto.id,
                     roomName = dto.name,
@@ -202,14 +220,15 @@ class ProfileViewModel : ViewModel() {
                     notificationHours = 0,
                     isPublic = !dto.isPrivate,
                     isCollaboration = dto.isTimeCapsule,
-                    unlockTime = dto.unlockTime,
-                    scheduledClosureTime = dto.expirationDate ?: 0L,
-                    theme = dto.theme,
+                    unlockTime = dto.unlockDate?.let { parseISO8601(it) } ?: 0L,
+                    scheduledClosureTime = dto.expirationDate?.let { parseISO8601(it) } ?: 0L,
+                    theme = dto.theme ?: "Default",
                     description = dto.description,
-                    music = dto.backgroundMusic,
-                    connectedRooms = dto.connectedRooms,
-                    isOwnedByMe = dto.isOwnedByMe,
-                    isCollaborator = dto.isCollaborator,
+                    music = dto.backgroundMusic ?: "None",
+                    connectedRooms = dto.connectedRooms ?: emptyList(),
+                    isOwnedByMe = isOwner,
+                    isCollaborator = isCollab,
+                    isViewerOnly = !isOwner && !isCollab && (isView || !dto.isPrivate),
                     ownerUserType = dto.ownerUserType
                 )
             }
@@ -358,7 +377,11 @@ class ProfileViewModel : ViewModel() {
     // Room Media Map
     private val _roomMedia = MutableStateFlow<Map<String, List<Uri>>>(emptyMap())
     val roomMedia: StateFlow<Map<String, List<Uri>>> = _roomMedia.asStateFlow()
-    
+
+    // Memory metadata map: roomId -> (uriString -> MemoryItem)
+    // Populated from refreshRoomMemories. Allows ownership checks and deletion by URI.
+    private val _roomMemoryItems = MutableStateFlow<Map<String, Map<String, MemoryItem>>>(emptyMap())
+
     // Gallery viewer state
     private val _isGalleryViewerOpen = MutableStateFlow(false)
     val isGalleryViewerOpen: StateFlow<Boolean> = _isGalleryViewerOpen.asStateFlow()
@@ -1184,6 +1207,7 @@ class ProfileViewModel : ViewModel() {
             if (showRefreshIndicator) _isRefreshing.value = true
             try {
                 val memoriesUrls = mutableListOf<String>()
+                val memoryItemMap = mutableMapOf<String, MemoryItem>()
                 val memoriesResult = roomRepository.getMemoriesByRoom(currentRoomId)
                 memoriesResult.onSuccess { memories ->
                     memories.forEach { memory ->
@@ -1193,23 +1217,44 @@ class ProfileViewModel : ViewModel() {
                         @Suppress("UNCHECKED_CAST")
                         val metadata = memory["metadata"] as? Map<String, Any?>
                         val mimeType = metadata?.get("mimeType") as? String
+
+                        // Extract MongoDB _id and authorId (may come as { "$oid": "..." } or plain string)
+                        val memoryId = extractMongoId(memory["_id"])
+                        val authorId = extractMongoId(memory["authorId"])
+
                         if (content != null) {
-                            when {
-                                type == "audio" -> memoriesUrls.add("data:${mimeType ?: "audio/mp4"};base64,$content")
-                                type == "video" -> memoriesUrls.add("data:${mimeType ?: "video/mp4"};base64,$content")
-                                type == "note" -> memoriesUrls.add("NOTE:${title ?: ""}:$content")
-                                content.startsWith("http") -> memoriesUrls.add(content)
-                                content.length > 100 -> memoriesUrls.add("data:image/jpeg;base64,$content")
+                            val uriStr = when {
+                                type == "audio" -> "data:${mimeType ?: "audio/mp4"};base64,$content"
+                                type == "video" -> "data:${mimeType ?: "video/mp4"};base64,$content"
+                                type == "note" -> "NOTE:${title ?: ""}:$content"
+                                content.startsWith("http") -> content
+                                content.length > 100 -> "data:image/jpeg;base64,$content"
+                                else -> null
+                            }
+                            if (uriStr != null) {
+                                memoriesUrls.add(uriStr)
+                                if (memoryId.isNotEmpty() && authorId.isNotEmpty()) {
+                                    memoryItemMap[uriStr] = MemoryItem(id = memoryId, authorId = authorId)
+                                }
                             }
                         }
                     }
                 }
                 _roomMedia.value = _roomMedia.value + (currentRoomId to memoriesUrls.map { Uri.parse(it) })
+                _roomMemoryItems.value = _roomMemoryItems.value + (currentRoomId to memoryItemMap)
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "refreshRoomMemories failed", e)
             } finally {
                 if (showRefreshIndicator) _isRefreshing.value = false
             }
+        }
+    }
+
+    private fun extractMongoId(value: Any?): String {
+        return when (value) {
+            is String -> value
+            is Map<*, *> -> (value["\$oid"] ?: value["oid"])?.toString() ?: ""
+            else -> ""
         }
     }
 
@@ -1794,9 +1839,116 @@ class ProfileViewModel : ViewModel() {
         _galleryViewerIndex.value = startIndex
         _isGalleryViewerOpen.value = true
     }
-    
+
     fun closeGalleryViewer() {
         _isGalleryViewerOpen.value = false
+    }
+
+    // ── Connect Rooms Actions ─────────────────────────────────────────────────
+
+    /** Opens the Connect Rooms screen and fetches AI suggestions for [roomId]. */
+    fun openConnectRooms(roomId: String) {
+        _showConnectRooms.value = true
+        _connectionSuggestions.value = emptyList()
+        viewModelScope.launch {
+            _isLoadingConnectionSuggestions.value = true
+            val result = roomRepository.getRoomSuggestions(roomId)
+            result.onSuccess { response ->
+                _connectionSuggestions.value = response.suggestions
+            }.onFailure { e ->
+                Log.w("ProfileViewModel", "Failed to load connection suggestions: ${e.message}")
+            }
+            _isLoadingConnectionSuggestions.value = false
+        }
+    }
+
+    fun closeConnectRooms() {
+        _showConnectRooms.value = false
+        _connectionSuggestions.value = emptyList()
+    }
+
+    /**
+     * Accept a suggested connection. Adds the targetRoomId to the current room's
+     * connectedRooms locally and removes the suggestion from the list.
+     */
+    fun acceptConnectionSuggestion(sourceRoomId: String, suggestion: RoomSuggestionDto) {
+        viewModelScope.launch {
+            val result = roomRepository.acceptSuggestion(sourceRoomId, suggestion.targetRoomId)
+            result.onSuccess {
+                // Remove from suggestions list
+                _connectionSuggestions.value = _connectionSuggestions.value.filter {
+                    it.targetRoomId != suggestion.targetRoomId
+                }
+                // Update local room state so Connected Rooms section refreshes immediately
+                val current = _selectedRoom.value ?: return@onSuccess
+                if (!current.connectedRooms.contains(suggestion.targetRoomId)) {
+                    _selectedRoom.value = current.copy(
+                        connectedRooms = current.connectedRooms + suggestion.targetRoomId
+                    )
+                }
+                // Mirror in createdRooms list
+                _createdRooms.value = _createdRooms.value.map { r ->
+                    if (r.id == sourceRoomId && !r.connectedRooms.contains(suggestion.targetRoomId))
+                        r.copy(connectedRooms = r.connectedRooms + suggestion.targetRoomId)
+                    else r
+                }
+                Log.d("ProfileViewModel", "Connected ${suggestion.targetRoomName} to room $sourceRoomId")
+            }.onFailure { e ->
+                Log.e("ProfileViewModel", "Failed to accept suggestion: ${e.message}")
+            }
+        }
+    }
+
+    /** Reject a suggested connection. Removes from the local list. */
+    fun rejectConnectionSuggestion(sourceRoomId: String, suggestion: RoomSuggestionDto) {
+        _connectionSuggestions.value = _connectionSuggestions.value.filter {
+            it.targetRoomId != suggestion.targetRoomId
+        }
+        viewModelScope.launch {
+            roomRepository.rejectSuggestion(sourceRoomId, suggestion.targetRoomId)
+                .onFailure { e ->
+                    Log.w("ProfileViewModel", "Failed to persist rejection: ${e.message}")
+                }
+        }
+    }
+
+    // ── Memory Deletion ───────────────────────────────────────────────────────
+
+    /**
+     * Returns true if the given [uri] in [roomId] was uploaded by the currently signed-in user.
+     * Only memories synced from the backend (with a known ID and authorId) return true.
+     */
+    fun isMyMemory(roomId: String, uri: Uri): Boolean {
+        val item = _roomMemoryItems.value[roomId]?.get(uri.toString()) ?: return false
+        if (item.id.isEmpty() || item.authorId.isEmpty()) return false
+        val myId = _cachedUserDto?.id ?: return false
+        return item.authorId == myId
+    }
+
+    /** Delete a memory the current user uploaded. Updates local state on success. */
+    fun deleteMemory(roomId: String, uri: Uri) {
+        val uriStr = uri.toString()
+        val item = _roomMemoryItems.value[roomId]?.get(uriStr) ?: return
+        if (item.id.isEmpty()) return
+        viewModelScope.launch {
+            val result = roomRepository?.deleteMemory(roomId, item.id)
+                ?: Result.failure(Exception("Repository not ready"))
+            result.onSuccess {
+                val updatedUris = _roomMedia.value[roomId]?.filter { it.toString() != uriStr }
+                if (updatedUris != null) {
+                    _roomMedia.value = _roomMedia.value + (roomId to updatedUris)
+                }
+                val updatedItems = _roomMemoryItems.value[roomId]?.toMutableMap()
+                    ?.also { it.remove(uriStr) }
+                if (updatedItems != null) {
+                    _roomMemoryItems.value = _roomMemoryItems.value + (roomId to updatedItems)
+                }
+                _totalMemories.value = (_totalMemories.value - 1).coerceAtLeast(0)
+                Log.d("ProfileViewModel", "Memory deleted: $uriStr")
+            }.onFailure { e ->
+                Log.e("ProfileViewModel", "Failed to delete memory: ${e.message}")
+            }
+        }
     }
     
     fun updateGalleryIndex(index: Int) {
@@ -2176,6 +2328,46 @@ class ProfileViewModel : ViewModel() {
     suspend fun getAuthToken(context: Context): String? {
         val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
         return authRepo.getFirebaseIdToken(false)
+    }
+    private fun isCollaborator(room: com.dmb.bestbefore.data.api.models.RoomDto, currentUserEmail: String): Boolean {
+        if (currentUserEmail.isBlank()) return false
+        return room.collaborators?.any { element ->
+            if (element.isJsonPrimitive) {
+                element.asString.equals(currentUserEmail, ignoreCase = true)
+            } else if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
+                element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
+            } else {
+                false
+            }
+        } == true
+    }
+
+    private fun isViewer(room: com.dmb.bestbefore.data.api.models.RoomDto, currentUserEmail: String): Boolean {
+        if (currentUserEmail.isBlank()) return false
+        return room.viewers?.any { element ->
+            if (element.isJsonPrimitive) {
+                element.asString.equals(currentUserEmail, ignoreCase = true)
+            } else if (element.isJsonObject && element.asJsonObject.has("email") && !element.asJsonObject.get("email").isJsonNull) {
+                element.asJsonObject.get("email").asString.equals(currentUserEmail, ignoreCase = true)
+            } else {
+                false
+            }
+        } == true
+    }
+
+    private fun parseISO8601(dateString: String?): Long {
+        if (dateString == null) return 0L
+        return try {
+            val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+            sdf.timeZone = TimeZone.getTimeZone("UTC")
+            sdf.parse(dateString)?.time ?: 0L
+        } catch (_: Exception) {
+            try {
+                val sdf2 = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+                sdf2.timeZone = TimeZone.getTimeZone("UTC")
+                sdf2.parse(dateString)?.time ?: 0L
+            } catch (__: Exception) { 0L }
+        }
     }
 }
 

@@ -22,7 +22,7 @@ class RoomDtoJsonDeserializer : JsonDeserializer<RoomDto> {
             ownerUserType = readFlexibleString(obj, "ownerUserType"),
             ownerProfilePic = readFlexibleString(obj, "ownerProfilePic"),
             createdAt = readFlexibleString(obj, "createdAt"),
-            photos = readStringList(obj, "photos"),
+            photos = readPhotoUrlList(obj, "photos"),
             capsuleDurationDays = readInt(obj, "capsuleDurationDays"),
             capsuleDurationHours = readInt(obj, "capsuleDurationHours"),
             capsuleDurationMinutes = readInt(obj, "capsuleDurationMinutes"),
@@ -83,6 +83,23 @@ class RoomDtoJsonDeserializer : JsonDeserializer<RoomDto> {
     private fun readBooleanNullable(obj: JsonObject, key: String): Boolean? {
         if (!obj.has(key) || obj.get(key).isJsonNull) return null
         return runCatching { obj.get(key).asBoolean }.getOrNull()
+    }
+
+    // Backend returns photos as [{ id: "...", url: "..." }] — extract url field.
+    private fun readPhotoUrlList(obj: JsonObject, key: String): List<String>? {
+        if (!obj.has(key) || obj.get(key).isJsonNull || !obj.get(key).isJsonArray) return null
+        return obj.getAsJsonArray(key).mapNotNull { element ->
+            when {
+                element.isJsonPrimitive -> element.asString
+                element.isJsonObject -> {
+                    val photoObj = element.asJsonObject
+                    val url = photoObj.get("url")
+                    if (url != null && !url.isJsonNull) url.asString
+                    else jsonElementToString(element)
+                }
+                else -> null
+            }
+        }
     }
 
     private fun readStringList(obj: JsonObject, key: String): List<String>? {

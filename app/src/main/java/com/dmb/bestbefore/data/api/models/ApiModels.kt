@@ -144,3 +144,58 @@ data class RoomSuggestionsResponse(
 data class UploadResponse(
     val imageUrl: String
 )
+
+// ── AI-powered Initial Discovery (POST /rooms/discover/initial) ───────────────
+
+data class InitialDiscoveryRequest(
+    val preferredTags: List<String> = emptyList(),
+    val userLat: Double? = null,
+    val userLon: Double? = null,
+    val userName: String = "",
+    val bio: String = ""
+)
+
+data class DiscoveryRoomResult(
+    val roomId: String,
+    val name: String,
+    val tags: List<String> = emptyList(),
+    val description: String? = null,
+    val lat: Double? = null,
+    val lon: Double? = null,
+    val isTimeCapsule: Boolean = false,
+    val similarity: Double = 0.0,
+    val distance: Double? = null
+)
+
+data class InitialDiscoveryResponse(
+    val results: List<DiscoveryRoomResult>,
+    val count: Int,
+    val strategy: String? = null,
+    val queryUsed: String? = null
+)
+
+// ── Backend Semantic Search (POST /search/search) ─────────────────────────────
+
+data class BackendSearchRequest(
+    val query: String,
+    val userLat: Double? = null,
+    val userLon: Double? = null,
+    val maxDistance: Double? = null
+)
+
+data class BackendSearchResult(
+    val roomId: String,
+    val name: String,
+    val similarity: Double,
+    val description: String? = null,
+    val lat: Double? = null,
+    val lon: Double? = null,
+    val tags: List<String>? = null,
+    val distance: Double? = null
+)
+
+data class BackendSearchResponse(
+    val query: String,
+    val results: List<BackendSearchResult>,
+    val count: Int
+)

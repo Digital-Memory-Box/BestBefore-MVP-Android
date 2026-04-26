@@ -18,6 +18,10 @@ import retrofit2.http.Query
 
 interface ApiService {
 
+    // ── Server health — used to detect Railway cold-start and warm the server ──
+    @GET("health")
+    suspend fun health(): Response<Map<String, @JvmSuppressWildcards Any>>
+
     // ── Auth ─────────────────────────────────────────────────────────────────
     // POST /auth/sync — verify Firebase token, find-or-create MongoDB user
     @POST("auth/sync")
@@ -54,6 +58,13 @@ interface ApiService {
     suspend fun getDiscoverRooms(
         @Header("Authorization") token: String
     ): Response<List<RoomDto>>
+
+    // AI-powered semantic discovery ranked by user preferences/bio/tags
+    @POST("rooms/discover/initial")
+    suspend fun getInitialDiscoveryRooms(
+        @Header("Authorization") token: String,
+        @Body request: InitialDiscoveryRequest
+    ): Response<InitialDiscoveryResponse>
 
     @POST("rooms")
     suspend fun createRoom(
@@ -94,6 +105,13 @@ interface ApiService {
 
     @POST("rooms/{roomId}/suggestions/{suggestionId}/accept")
     suspend fun acceptSuggestion(
+        @Header("Authorization") token: String,
+        @Path("roomId") roomId: String,
+        @Path("suggestionId") suggestionId: String
+    ): Response<Unit>
+
+    @POST("rooms/{roomId}/suggestions/{suggestionId}/reject")
+    suspend fun rejectSuggestion(
         @Header("Authorization") token: String,
         @Path("roomId") roomId: String,
         @Path("suggestionId") suggestionId: String
@@ -143,6 +161,13 @@ interface ApiService {
         @Header("Authorization") token: String,
         @Path("roomId") roomId: String,
         @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<Unit>
+
+    @DELETE("rooms/{roomId}/memories/{memoryId}")
+    suspend fun deleteMemory(
+        @Header("Authorization") token: String,
+        @Path("roomId") roomId: String,
+        @Path("memoryId") memoryId: String
     ): Response<Unit>
 
     @POST("rooms/{roomId}/dump")
@@ -255,6 +280,13 @@ interface ApiService {
     suspend fun getTags(
         @Header("Authorization") token: String
     ): Response<com.google.gson.JsonElement>
+
+    // ── Semantic Search (backend-level, uses room embeddings) ────────────────
+    @POST("search/search")
+    suspend fun semanticSearchRooms(
+        @Header("Authorization") token: String,
+        @Body request: BackendSearchRequest
+    ): Response<BackendSearchResponse>
 
     // ── Search Users ──────────────────────────────────────────────────────────
     @GET("users/search")
