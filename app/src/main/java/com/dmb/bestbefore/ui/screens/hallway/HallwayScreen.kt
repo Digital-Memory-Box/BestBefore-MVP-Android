@@ -52,6 +52,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dmb.bestbefore.ui.screens.notifications.NotificationViewModel
 import com.dmb.bestbefore.data.models.CalendarEvent
 import com.dmb.bestbefore.data.models.HallwayCard
+import com.dmb.bestbefore.ui.components.AnimatedBackgroundView
 import com.dmb.bestbefore.ui.components.OrbMenu
 import com.dmb.bestbefore.ui.components.ProfileAvatar
 import com.dmb.bestbefore.ui.theme.LocalBestBeforeColors
@@ -108,10 +109,18 @@ fun HallwayScreen(
         notificationViewModel.refresh()
     }
 
+    // Derive the active card's theme name to drive the background color.
+    // Rooming: first saved/collaborator card. Hallway/Artists: pager-active card.
+    val activeCardTheme = when (currentTab) {
+        BottomTab.ROOMING -> (savedRoomCards.firstOrNull() ?: cards.firstOrNull())
+            ?.themeColorHex?.lowercase() ?: "default"
+        else -> cards.getOrNull(activePagerPage)
+            ?.themeColorHex?.lowercase() ?: "default"
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
             .pointerInput(Unit) {
                 detectHorizontalDragGestures { change, dragAmount ->
                     // BB-UI-06: Swipe RIGHT → orb menu disappears
@@ -126,6 +135,9 @@ fun HallwayScreen(
                 }
             }
     ) {
+        // Full-screen animated background — color animates to match the active room's theme
+        AnimatedBackgroundView(theme = activeCardTheme)
+
         Column(modifier = Modifier.fillMaxSize()) {
 
             when (currentTab) {
@@ -609,8 +621,13 @@ private fun RoomingCard(
         modifier = Modifier
             .fillMaxWidth()
             .height(height.dp)
+            .border(2.dp, themeColor.copy(alpha = 0.75f), RoundedCornerShape(24.dp))
             .clip(RoundedCornerShape(24.dp))
-            .background(Color.DarkGray)
+            .background(
+                Brush.verticalGradient(
+                    listOf(themeColor.copy(alpha = 0.35f), Color.Black.copy(alpha = 0.9f))
+                )
+            )
             .clickable { onClick() }
     ) {
         // Gradient or Photo background
@@ -621,10 +638,23 @@ private fun RoomingCard(
             .take(2)
             .joinToString(",")
             .takeIf { it.isNotBlank() } ?: "abstract"
-        val roomImage = if (!card.imageUrl.isNullOrBlank()) card.imageUrl 
-                        else if (card.photos.isNotEmpty()) card.photos.first().url
-                        else "https://loremflickr.com/640/480/$searchKeyword"
-        
+        // Normalise photo URL: HTTP → use as-is; data:image → use as-is;
+        // raw base64 (no prefix) → prepend data:image/jpeg;base64,;
+        // anything else → fall back to placeholder.
+        fun normalizePhotoUrl(url: String?): String? {
+            if (url.isNullOrBlank()) return null
+            return when {
+                url.startsWith("http") || url.startsWith("data:image") -> url
+                url.startsWith("data:") && url.contains("base64,") ->
+                    "data:image/jpeg;base64," + url.substringAfter("base64,")
+                url.length > 100 -> "data:image/jpeg;base64,$url"
+                else -> null
+            }
+        }
+        val rawUrl = if (!card.imageUrl.isNullOrBlank()) card.imageUrl
+                     else card.photos.firstOrNull()?.url
+        val roomImage = normalizePhotoUrl(rawUrl) ?: "https://loremflickr.com/640/480/$searchKeyword"
+
         Box(modifier = Modifier.fillMaxSize()) {
             coil.compose.AsyncImage(
                 model = roomImage,
@@ -1165,7 +1195,7 @@ fun HallwayActiveCard(
                 )
         )
 
-        // Layer 3: soft rim light
+        // Layer 3: soft rim light — uses room themeColor
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -1175,28 +1205,31 @@ fun HallwayActiveCard(
                     width = 1.8.dp,
                     brush = Brush.linearGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = 0.92f),
-                            accentColor.copy(alpha = 0.95f),
-                            Color.White.copy(alpha = 0.55f)
+                            Color.White.copy(alpha = 0.7f),
+                            themeColor.copy(alpha = 0.95f),
+                            Color.White.copy(alpha = 0.5f)
                         )
                     ),
                     shape = RoundedCornerShape(32.dp)
                 )
         )
 
-        // Card body
+        // Card body — semi-transparent so the AnimatedBackground orbs bleed through
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .border(
                     2.dp,
-                    accentColor.copy(alpha = dynamicGlowAlpha * 0.86f),
+                    themeColor.copy(alpha = (dynamicGlowAlpha * 0.9f).coerceAtLeast(0.5f)),
                     RoundedCornerShape(32.dp)
                 )
                 .clip(RoundedCornerShape(32.dp))
                 .background(
                     Brush.verticalGradient(
-                        listOf(Color(0xFF19192E), Color(0xFF14213D))
+                        listOf(
+                            themeColor.copy(alpha = 0.38f),
+                            Color.Black.copy(alpha = 0.88f)
+                        )
                     )
                 )
                 .pointerInput(Unit) {
@@ -1885,8 +1918,15 @@ private fun ExpandedDescriptionOverlay(
                     .take(2)
                     .joinToString(",")
                     .takeIf { it.isNotBlank() } ?: "abstract"
-                val mediaUrl = card.photos.firstOrNull()?.url ?: "https://loremflickr.com/640/800/$searchKeyword"
-                
+                val rawMediaUrl = card.photos.firstOrNull()?.url
+                val mediaUrl = when {
+                    rawMediaUrl == null -> "https://loremflickr.com/640/800/$searchKeyword"
+                    rawMediaUrl.startsWith("http") || rawMediaUrl.startsWith("data:image") -> rawMediaUrl
+                    rawMediaUrl.startsWith("data:") && rawMediaUrl.contains("base64,") ->
+                        "data:image/jpeg;base64," + rawMediaUrl.substringAfter("base64,")
+                    rawMediaUrl.length > 100 -> "data:image/jpeg;base64,$rawMediaUrl"
+                    else -> "https://loremflickr.com/640/800/$searchKeyword"
+                }
                 coil.compose.AsyncImage(
                     model = mediaUrl,
                     contentDescription = card.title,
@@ -2072,13 +2112,20 @@ private fun BottomNavItem(text: String, isSelected: Boolean, onClick: () -> Unit
     }
 }
 
-// ── Helper: Parse theme color from hex string ───────────────────────────
+// ── Helper: Parse theme color from name or hex string ───────────────────
 private fun parseThemeColor(hex: String?, fallback: Color = Color(0xFF007AFF)): Color {
-    return hex?.let {
-        try {
-            Color(it.toColorInt())
-        } catch (_: Exception) {
-            fallback
-        }
-    } ?: fallback
+    if (hex == null) return fallback
+    val named = when (hex.trim().lowercase()) {
+        "ocean"             -> Color(0xFF00C6A2)
+        "sunset"            -> Color(0xFFE8820C)
+        "forest"            -> Color(0xFF22A84A)
+        "cyberpunk"         -> Color(0xFFAA3FD6)
+        "artist", "vibrant" -> Color(0xFFE01982)
+        "midnight"          -> Color(0xFF8800BB)
+        "glass"             -> Color(0xFFBBBBBB)
+        "default"           -> return fallback
+        else                -> null
+    }
+    if (named != null) return named
+    return try { Color(hex.toColorInt()) } catch (_: Exception) { fallback }
 }

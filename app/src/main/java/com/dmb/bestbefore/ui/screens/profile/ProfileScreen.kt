@@ -49,6 +49,7 @@ import com.dmb.bestbefore.ui.components.OrbMenu
 import com.dmb.bestbefore.ui.screens.hallway.HallwayViewModel
 import android.net.Uri
 import android.Manifest
+import android.os.Build
 import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.compose.material.icons.Icons
@@ -189,12 +190,20 @@ fun ProfileScreen(
         }
         
         viewModel.onRequestGalleryPermission = {
-            val permission = Manifest.permission.READ_MEDIA_IMAGES
+            val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                Manifest.permission.READ_MEDIA_IMAGES
+            } else {
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            }
             galleryPermissionLauncher.launch(permission)
         }
-        
+
         viewModel.onRequestFilePermission = {
-            val permission = Manifest.permission.READ_MEDIA_IMAGES
+            val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                Manifest.permission.READ_MEDIA_IMAGES
+            } else {
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            }
             filePermissionLauncher.launch(permission)
         }
     }
@@ -260,6 +269,16 @@ fun ProfileScreen(
         if (pendingToken != null) {
             viewModel.joinRoomViaToken(context, pendingToken!!)
             com.dmb.bestbefore.MainActivity.clearPendingInviteToken()
+        }
+    }
+
+    // Sync room cover photo back to HallwayViewModel whenever memories finish loading
+    // and a first photo is found (e.g. after refreshRoomMemories updates _selectedRoom).
+    LaunchedEffect(selectedRoom?.photos?.firstOrNull()?.url) {
+        val coverUrl = selectedRoom?.photos?.firstOrNull()?.url ?: return@LaunchedEffect
+        val roomId  = selectedRoom?.id                          ?: return@LaunchedEffect
+        if (coverUrl.isNotBlank()) {
+            hallwayViewModel.updateCardCover(roomId, coverUrl)
         }
     }
 

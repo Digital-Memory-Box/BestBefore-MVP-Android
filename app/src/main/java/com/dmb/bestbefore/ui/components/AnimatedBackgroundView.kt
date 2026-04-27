@@ -1,5 +1,7 @@
 package com.dmb.bestbefore.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -54,19 +56,22 @@ fun AnimatedBackgroundView(theme: String = "default") {
         }
     }
 
-    // ── Pre-compute immutable data so it is never re-allocated ────────────────
-    val centerGlowColors = remember(theme) {
-        when (theme.lowercase()) {
-            "ocean"    -> listOf(Color(0xFF00C6A2).copy(0.5f), Color(0xFF00C6A2).copy(0.2f), Color.Transparent)
-            "sunset"   -> listOf(Color(0xFFE8820C).copy(0.5f), Color(0xFFE8820C).copy(0.2f), Color.Transparent)
-            "forest"   -> listOf(Color(0xFF22A84A).copy(0.5f), Color(0xFF22A84A).copy(0.2f), Color.Transparent)
-            "cyberpunk"-> listOf(Color(0xFFAA3FD6).copy(0.5f), Color(0xFFAA3FD6).copy(0.2f), Color.Transparent)
-            "artist", "vibrant" -> listOf(Color(0.9f, 0.1f, 0.5f, 0.5f), Color(0.5f, 0.1f, 0.9f, 0.2f), Color.Transparent)
-            "midnight" -> listOf(Color(0.8f, 0.0f, 0.8f, 0.4f), Color(0.0f, 0.8f, 0.9f, 0.2f), Color.Transparent)
-            "glass"    -> listOf(Color.White.copy(0.15f), Color.White.copy(0.05f), Color.Transparent)
-            else       -> listOf(Color(0xFF1A7AF8).copy(0.5f), Color(0xFF1A7AF8).copy(0.2f), Color.Transparent)
-        }
+    // ── Animated center-glow color — transitions smoothly when theme changes ──
+    val targetCenterColor = when (theme.lowercase()) {
+        "ocean"              -> Color(0xFF00C6A2)
+        "sunset"             -> Color(0xFFE8820C)
+        "forest"             -> Color(0xFF22A84A)
+        "cyberpunk"          -> Color(0xFFAA3FD6)
+        "artist", "vibrant"  -> Color(0xFFE01982)
+        "midnight"           -> Color(0xFF8800BB)
+        "glass"              -> Color(0xFFBBBBBB)
+        else                 -> Color(0xFF1A7AF8)
     }
+    val animatedCenterColor by animateColorAsState(
+        targetValue = targetCenterColor,
+        animationSpec = tween(durationMillis = 700),
+        label = "bgCenterGlow"
+    )
     val orb1Colors = remember(isArtistTheme) {
         if (isArtistTheme) listOf(Color(0.5f, 0.2f, 1.0f), Color(0.2f, 0.8f, 1.0f))
         else listOf(Color(0.95f, 0.14f, 0.91f), Color(1.0f, 0.6f, 0.2f))
@@ -127,11 +132,20 @@ fun AnimatedBackgroundView(theme: String = "default") {
                     transformOrigin = TransformOrigin.Center
                 }
         ) {
-            val endRadius = minOf(size.width, size.height) * 0.5f
+            // Larger radius (0.72 × min dimension) and higher alpha so the glow is
+            // clearly visible around the card edges and in the details section below.
+            val endRadius = minOf(size.width, size.height) * 0.72f
             if (endRadius > 0f) {
+                // Reading animatedCenterColor here lets this Canvas re-draw during
+                // color transitions and stay static once the animation settles.
                 drawCircle(
                     brush = Brush.radialGradient(
-                        centerGlowColors,
+                        listOf(
+                            animatedCenterColor.copy(alpha = 0.65f),
+                            animatedCenterColor.copy(alpha = 0.30f),
+                            animatedCenterColor.copy(alpha = 0.08f),
+                            Color.Transparent
+                        ),
                         center = Offset(size.width / 2f, size.height / 2f),
                         radius = endRadius
                     ),
@@ -142,8 +156,7 @@ fun AnimatedBackgroundView(theme: String = "default") {
         }
 
         // ── LAYER 3: Orb 1 — GPU rotation, Canvas content is static ─────────
-        // orbAngle changes rotate the hardware layer on GPU; Canvas.draw() is
-        // only invoked on first composition or screen-size change.
+        // Orbit radius increased so the orb sweeps OUTSIDE the room card bounds.
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
@@ -152,37 +165,39 @@ fun AnimatedBackgroundView(theme: String = "default") {
                     transformOrigin = TransformOrigin.Center
                 }
         ) {
-            val cx = size.width / 2f + 180f
+            val orbRadius = minOf(size.width, size.height) * 0.44f
+            val cx = size.width / 2f + orbRadius
             val cy = size.height / 2f
             drawCircle(
                 brush = Brush.radialGradient(
-                    listOf(orb1Colors[0].copy(0.5f), orb1Colors[1].copy(0.2f), Color.Transparent),
+                    listOf(orb1Colors[0].copy(0.65f), orb1Colors[1].copy(0.28f), Color.Transparent),
                     center = Offset(cx, cy),
-                    radius = 70f
+                    radius = 130f
                 ),
-                radius = 70f,
+                radius = 130f,
                 center = Offset(cx, cy)
             )
         }
 
-        // ── LAYER 4: Orb 2 — GPU rotation at 0.8× speed, 180° offset ────────
+        // ── LAYER 4: Orb 2 — GPU rotation at 0.7× speed, 120° offset ────────
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    rotationZ = orbAngle * 0.8f + 180f
+                    rotationZ = orbAngle * 0.7f + 120f
                     transformOrigin = TransformOrigin.Center
                 }
         ) {
-            val cx = size.width / 2f + 200f
+            val orbRadius = minOf(size.width, size.height) * 0.46f
+            val cx = size.width / 2f + orbRadius
             val cy = size.height / 2f
             drawCircle(
                 brush = Brush.radialGradient(
-                    listOf(orb2Colors[0].copy(0.5f), orb2Colors[1].copy(0.2f), Color.Transparent),
+                    listOf(orb2Colors[0].copy(0.6f), orb2Colors[1].copy(0.25f), Color.Transparent),
                     center = Offset(cx, cy),
-                    radius = 90f
+                    radius = 150f
                 ),
-                radius = 90f,
+                radius = 150f,
                 center = Offset(cx, cy)
             )
         }

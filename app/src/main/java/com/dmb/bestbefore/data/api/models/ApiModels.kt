@@ -43,9 +43,10 @@ data class UpdateMeRequest(
     val ignoredRoomIds: List<String>? = null,
     val savedRoomIds: List<String>? = null,
     val preferredTags: List<String>? = null,
-    // AI Preference fields
+    // AI Preference fields — mirrors iOS user document schema
     val preferenceTagWeights: Map<String, Double>? = null,
     val preferenceRoomTypes: List<String>? = null,
+    val preferenceEmbedding: List<Float>? = null,
     val preferenceUpdatedAt: String? = null,
     val lastLat: Double? = null,
     val lastLon: Double? = null

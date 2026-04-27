@@ -66,7 +66,9 @@ fun AsyncBase64Image(
     modifier: Modifier = Modifier
 ) {
     val modelStr = itemData.toString()
-    if (modelStr.startsWith("data:image")) {
+    // Accept any data: URI with base64 content — some platforms store images with
+    // non-image MIME types (e.g. data:application/octet-stream;base64,...).
+    if (modelStr.startsWith("data:") && modelStr.contains("base64,")) {
         // Check in-process LRU cache before decoding to avoid re-decoding on every recompose.
         var bitmap by remember(modelStr) {
             mutableStateOf(Base64BitmapCache.get(modelStr))
@@ -659,7 +661,7 @@ fun RoomDetailScreen(
                                         .combinedClickable(
                                             onClick = { viewModel.openGalleryViewer(displayMedia, i) },
                                             onLongClick = {
-                                                if (viewModel.isMyMemory(room!!.id, item1)) {
+                                                if (canContribute && viewModel.isMyMemory(room!!.id, item1)) {
                                                     memoryToDelete = item1
                                                     showDeleteMemoryConfirm = true
                                                 }
@@ -885,7 +887,10 @@ fun RoomDetailScreen(
                                 .combinedClickable(
                                     onClick = { viewModel.openGalleryViewer(currentRoomMedia, index) },
                                     onLongClick = {
-                                        if (viewModel.isMyMemory(room!!.id, item)) {
+                                        // canContribute is out of scope here (defined inside the Column)
+                                        // so derive it directly from room which IS accessible at Box level
+                                        val isContrib = room?.isOwnedByMe == true || room?.isCollaborator == true
+                                        if (isContrib && viewModel.isMyMemory(room!!.id, item)) {
                                             memoryToDelete = item
                                             showDeleteMemoryConfirm = true
                                         }

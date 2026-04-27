@@ -605,7 +605,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                                     timeCapsuleDays = room.capsuleDurationDays,
                                     description = if (!room.description.isNullOrBlank()) room.description
                                                   else (room.generatedDescription ?: searchResult.description ?: ""),
-                                    imageUrl = room.photos?.firstOrNull(),
+                                    imageUrl = room.photos?.firstOrNull()?.url,
                                     photos = room.photos ?: emptyList(),
                                     themeColorHex = room.theme,
                                     tags = room.tags ?: searchResult.tags ?: emptyList(),
@@ -716,6 +716,21 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /** Called by ProfileScreen after a room's memories load and a cover photo is found. */
+    fun updateCardCover(roomId: String, photoUrl: String) {
+        if (photoUrl.isBlank()) return
+        val preview = com.dmb.bestbefore.data.api.models.MemoryPreview("cover", photoUrl)
+        fun patch(cards: List<HallwayCard>): List<HallwayCard> = cards.map { card ->
+            if (card.id != roomId) card
+            else card.copy(
+                imageUrl = photoUrl,
+                photos = listOf(preview) + card.photos.filter { it.id != "cover" }
+            )
+        }
+        _cards.value = patch(_cards.value)
+        _savedRoomCards.value = patch(_savedRoomCards.value)
+    }
+
     // Pull-to-refresh support
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
@@ -771,12 +786,12 @@ private const val TAG_PERF = "BB_PERF"
  *   "12 rooms, 47 photos — 43 base64 ⚠ (avg ~38 KB each), 4 URLs"
  */
 private fun List<com.dmb.bestbefore.data.api.models.RoomDto>.photoStats(): String {
-    val allPhotos = flatMap { it.photos ?: emptyList() }
-    if (allPhotos.isEmpty()) return "no photos"
+    val allUrls = flatMap { it.photos ?: emptyList() }.map { it.url }
+    if (allUrls.isEmpty()) return "no photos"
 
-    val base64Photos = allPhotos.filter { it.startsWith("data:") }
-    val urlPhotos    = allPhotos.filter { it.startsWith("http") }
-    val otherPhotos  = allPhotos.size - base64Photos.size - urlPhotos.size
+    val base64Photos = allUrls.filter { it.startsWith("data:") }
+    val urlPhotos    = allUrls.filter { it.startsWith("http") }
+    val otherPhotos  = allUrls.size - base64Photos.size - urlPhotos.size
 
     val avgBase64Kb  = if (base64Photos.isNotEmpty())
         base64Photos.sumOf { it.length }.toLong() / base64Photos.size / 1024
@@ -784,7 +799,7 @@ private fun List<com.dmb.bestbefore.data.api.models.RoomDto>.photoStats(): Strin
 
     val b64Warn = if (base64Photos.isNotEmpty()) " ⚠ BASE64" else ""
     return buildString {
-        append("${allPhotos.size} photos")
+        append("${allUrls.size} photos")
         if (base64Photos.isNotEmpty()) append(" | ${base64Photos.size} base64$b64Warn ~${avgBase64Kb}KB avg")
         if (urlPhotos.isNotEmpty())    append(" | ${urlPhotos.size} URLs")
         if (otherPhotos > 0)           append(" | $otherPhotos other")

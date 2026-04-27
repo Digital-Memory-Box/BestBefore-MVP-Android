@@ -45,21 +45,30 @@ class ProfileViewModel : ViewModel() {
     private val _currentStep = MutableStateFlow(ProfileStep.NONE)
     val currentStep: StateFlow<ProfileStep> = _currentStep.asStateFlow()
 
-    private fun parseCreatedAt(dateString: String?): Long {
-        if (dateString == null) return System.currentTimeMillis()
+    // Single ISO-8601 parser — handles both "Z" suffix and "+00:00" offset returned by MongoDB.
+    // The old SimpleDateFormat("...'Z'") treated Z as a literal character so "+00:00" dates
+    // always failed to parse, causing every unlock/closure time to be wrong.
+    private fun parseIso8601(dateString: String?): Long {
+        if (dateString == null) return 0L
         return try {
-             // Assuming ISO 8601 like "2023-10-27T10:00:00.000Z"
-             val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
-             sdf.timeZone = TimeZone.getTimeZone("UTC")
-             sdf.parse(dateString)?.time ?: System.currentTimeMillis()
+            java.time.OffsetDateTime.parse(dateString).toInstant().toEpochMilli()
         } catch (_: Exception) {
-             System.currentTimeMillis()
+            try {
+                java.time.ZonedDateTime.parse(dateString).toInstant().toEpochMilli()
+            } catch (__: Exception) { 0L }
         }
+    }
+
+    private fun parseCreatedAt(dateString: String?): Long {
+        val ms = parseIso8601(dateString)
+        return if (ms > 0L) ms else System.currentTimeMillis()
     }
 
     // RoomRepository — no token arg; fetches fresh Firebase token per request (matches iOS pattern)
     private val roomRepository = com.dmb.bestbefore.data.repository.RoomRepository()
     private val notificationRepository = com.dmb.bestbefore.data.repository.NotificationRepository()
+    // Initialised in initDatabase(context) so we can persist preference updates from AI responses.
+    private var authRepository: com.dmb.bestbefore.data.repository.AuthRepository? = null
 
     // ── AI Service integration ────────────────────────────────────────────────
     private val aiRepository = com.dmb.bestbefore.data.ai.AiRepository()
@@ -120,6 +129,9 @@ class ProfileViewModel : ViewModel() {
     private var audioRecorderHelper: com.dmb.bestbefore.utils.AudioRecorderHelper? = null
     
     private var creationSource: RoomCreationSource = RoomCreationSource.HALLWAY
+    // Remembers which step was active before navigating into ROOM_DETAIL so goBack()
+    // can return there instead of always resetting to NONE (Hallway).
+    private var previousStepBeforeRoomDetail: ProfileStep = ProfileStep.NONE
 
 
 
@@ -148,7 +160,7 @@ class ProfileViewModel : ViewModel() {
     private val _userName = MutableStateFlow("User") 
     val userName: StateFlow<String> = _userName.asStateFlow()
 
-    private val _bio = MutableStateFlow("Digital artist focusing on surreal landscapes and vibrant color theory.")
+    private val _bio = MutableStateFlow("")
     val bio: StateFlow<String> = _bio.asStateFlow()
 
     // ── Preferred Tags (for recommendation) ──────────────────────────
@@ -519,6 +531,7 @@ class ProfileViewModel : ViewModel() {
 
     // Helper context for DB init (Simple MVP approach)
     fun initDatabase(context: Context) {
+        if (authRepository == null) authRepository = com.dmb.bestbefore.data.repository.AuthRepository(context)
         val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
         val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
         val savedName = sessionManager.getUserName()
@@ -534,6 +547,8 @@ class ProfileViewModel : ViewModel() {
             else -> null
         }
         _roomEmotions.value = sessionManager.getRoomEmotions(currentUserId)
+        val savedBio = sessionManager.getBio()
+        if (!savedBio.isNullOrEmpty()) _bio.value = savedBio
 
         viewModelScope.launch {
             try {
@@ -567,6 +582,23 @@ class ProfileViewModel : ViewModel() {
                         // Load profile tags from backend
                         if (userDto.preferredTags != null) {
                             _preferredTags.value = userDto.preferredTags
+                        }
+                        // Sync theme, accentColor, profileMusic from backend so any
+                        // changes made on other devices (or iOS) are applied here too.
+                        if (userDto.theme.isNotBlank()) {
+                            val serverTheme = com.dmb.bestbefore.ui.theme.AppThemes.getThemeByName(userDto.theme)
+                            _selectedTheme.value = serverTheme
+                            com.dmb.bestbefore.ui.theme.ThemeState.selectTheme(context, serverTheme)
+                        }
+                        if (userDto.accentColor.isNotBlank()) {
+                            runCatching {
+                                val c = Color(android.graphics.Color.parseColor(userDto.accentColor))
+                                _accentColor.value = c
+                                com.dmb.bestbefore.ui.theme.ThemeState.selectAccent(context, c)
+                            }
+                        }
+                        if (!userDto.profileMusic.isNullOrBlank() && userDto.profileMusic != "None") {
+                            _profileMusic.value = userDto.profileMusic
                         }
                     }
 
@@ -991,6 +1023,87 @@ class ProfileViewModel : ViewModel() {
                 interactionType = "LIKE"
             ).onSuccess { updatedPrefs ->
                 Log.d("ProfileViewModel", "AI LIKE tracked. Top tags: ${updatedPrefs.preferredTags.take(5)}")
+                persistPreferenceUpdate(updatedPrefs)
+            }
+        }
+    }
+
+    /**
+     * Track a VIEW interaction for [room] (called when a room detail is opened).
+     * Fire-and-forget: persists preference signals without blocking the UI.
+     */
+    fun trackViewForRoom(room: com.dmb.bestbefore.data.models.TimeCapsuleRoom) {
+        val userDto = _cachedUserDto ?: return
+        viewModelScope.launch {
+            val candidateDto = com.dmb.bestbefore.data.api.models.RoomDto(
+                id = room.id, name = room.roomName, ownerEmail = null, createdAt = null,
+                isPrivate = !room.isPublic, isTimeCapsule = room.isCollaboration, tags = room.tags
+            )
+            aiRepository.trackRoomInteraction(userDto, candidateDto, "VIEW")
+                .onSuccess { persistPreferenceUpdate(it) }
+        }
+    }
+
+    /**
+     * Ask the AI service to generate a description for a room that has none.
+     * Triggered automatically when the room detail is opened (generative_service.py backend).
+     * Saves the result via PATCH /rooms/{id} for owned rooms so it persists.
+     * For collaborator/viewer rooms, updates local display state only.
+     */
+    private fun generateAndSaveRoomDescription(room: TimeCapsuleRoom) {
+        viewModelScope.launch {
+            aiRepository.generateRoomDescription(
+                roomName = room.roomName,
+                tags = room.tags,
+                isPrivate = !room.isPublic,
+                isTimeCapsule = room.isCollaboration
+            ).onSuccess { description ->
+                if (description.isBlank()) return@onSuccess
+                // Update local state immediately so the UI shows it right away
+                val updated = room.copy(description = description)
+                if (_selectedRoom.value?.id == room.id) _selectedRoom.value = updated
+                _createdRooms.value = _createdRooms.value.map { if (it.id == room.id) updated else it }
+                // Persist for owned rooms so it survives app restarts
+                if (room.isOwnedByMe) {
+                    roomRepository.updateRoom(room.id, mapOf("generatedDescription" to description))
+                        .onSuccess { Log.d("ProfileViewModel", "AI desc saved for '${room.roomName}'") }
+                        .onFailure { e -> Log.w("ProfileViewModel", "AI desc save failed: ${e.message}") }
+                }
+            }.onFailure { e ->
+                Log.w("ProfileViewModel", "AI description generation failed for '${room.roomName}': ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Save the AI-returned preference snapshot back to MongoDB via PATCH /me.
+     * This is what keeps Android's preference data in sync with iOS (same document schema).
+     *
+     * Fields written: preferredTags, preferenceTagWeights, preferenceRoomTypes,
+     * preferenceEmbedding, preferenceUpdatedAt, lastLat, lastLon.
+     */
+    private fun persistPreferenceUpdate(prefs: com.dmb.bestbefore.data.ai.UpdatePreferenceResponse) {
+        val repo = authRepository ?: return
+        viewModelScope.launch {
+            val now = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
+                .also { it.timeZone = java.util.TimeZone.getTimeZone("UTC") }
+                .format(java.util.Date())
+            repo.updateMe(
+                com.dmb.bestbefore.data.api.models.UpdateMeRequest(
+                    preferredTags       = prefs.preferredTags,
+                    preferenceTagWeights = prefs.preferenceTagWeights,
+                    preferenceRoomTypes = prefs.preferenceRoomTypes,
+                    preferenceEmbedding = prefs.preferenceEmbedding,
+                    preferenceUpdatedAt = now,
+                    lastLat = prefs.lastLat,
+                    lastLon = prefs.lastLon
+                )
+            ).onSuccess { updatedUser ->
+                _cachedUserDto = updatedUser
+                _preferredTags.value = updatedUser.preferredTags ?: _preferredTags.value
+                Log.d("ProfileViewModel", "Preferences persisted → ${updatedUser.preferenceTagWeights?.keys?.take(5)}")
+            }.onFailure { e ->
+                Log.w("ProfileViewModel", "Failed to persist preference update: ${e.message}")
             }
         }
     }
@@ -1208,6 +1321,19 @@ class ProfileViewModel : ViewModel() {
         viewModelScope.launch {
             if (showRefreshIndicator) _isRefreshing.value = true
             try {
+                // Pre-populate with the room's known photos from the DTO so the UI shows
+                // something immediately (and as a fallback if the API returns empty for
+                // viewer-only rooms or due to a network issue).
+                val currentRoom = _selectedRoom.value?.takeIf { it.id == currentRoomId }
+                if (currentRoom != null && currentRoom.photos.isNotEmpty() && _roomMedia.value[currentRoomId].isNullOrEmpty()) {
+                    val previewUris = currentRoom.photos.mapNotNull { preview ->
+                        preview.url.takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
+                    }
+                    if (previewUris.isNotEmpty()) {
+                        _roomMedia.value = _roomMedia.value + (currentRoomId to previewUris)
+                    }
+                }
+
                 val memoriesUrls = mutableListOf<String>()
                 val memoryItemMap = mutableMapOf<String, MemoryItem>()
                 val memoriesResult = roomRepository.getMemoriesByRoom(currentRoomId)
@@ -1230,7 +1356,14 @@ class ProfileViewModel : ViewModel() {
                                 type == "video" -> "data:${mimeType ?: "video/mp4"};base64,$content"
                                 type == "note" -> "NOTE:${title ?: ""}:$content"
                                 content.startsWith("http") -> content
-                                content.length > 100 -> "data:image/jpeg;base64,$content"
+                                // Already a full data URI — normalise non-image types to image/jpeg
+                                // so AsyncBase64Image can decode them (e.g. data:application/octet-stream)
+                                content.startsWith("data:image") -> content
+                                content.startsWith("data:") && content.contains("base64,") ->
+                                    "data:image/jpeg;base64," + content.substringAfter("base64,")
+                                // Explicit photo type OR long raw base64
+                                type == "photo" || content.length > 100 ->
+                                    "data:image/${mimeType?.substringAfter("/") ?: "jpeg"};base64,$content"
                                 else -> null
                             }
                             if (uriStr != null) {
@@ -1242,8 +1375,32 @@ class ProfileViewModel : ViewModel() {
                         }
                     }
                 }
-                _roomMedia.value = _roomMedia.value + (currentRoomId to memoriesUrls.map { Uri.parse(it) })
-                _roomMemoryItems.value = _roomMemoryItems.value + (currentRoomId to memoryItemMap)
+                // Only replace media if the API returned results; if empty, the pre-populated
+                // photos (from room.photos DTO) already set above remain as the fallback.
+                if (memoriesUrls.isNotEmpty()) {
+                    _roomMedia.value = _roomMedia.value + (currentRoomId to memoriesUrls.map { Uri.parse(it) })
+                    _roomMemoryItems.value = _roomMemoryItems.value + (currentRoomId to memoryItemMap)
+                }
+
+                // Update room cover with the most-recently-uploaded photo memory so
+                // the room detail and Hallway card always reflect what was last dropped.
+                val latestPhotoUrl = memoriesUrls.firstOrNull { url ->
+                    url.startsWith("http") || url.startsWith("data:image")
+                }
+                if (latestPhotoUrl != null) {
+                    val coverPreview = com.dmb.bestbefore.data.api.models.MemoryPreview("latest", latestPhotoUrl)
+                    _selectedRoom.value = _selectedRoom.value?.takeIf { it.id == currentRoomId }
+                        ?.let { r ->
+                            val existing = r.photos.filter { it.id != "latest" }
+                            r.copy(photos = listOf(coverPreview) + existing)
+                        } ?: _selectedRoom.value
+                    _createdRooms.value = _createdRooms.value.map { r ->
+                        if (r.id == currentRoomId) {
+                            val existing = r.photos.filter { it.id != "latest" }
+                            r.copy(photos = listOf(coverPreview) + existing)
+                        } else r
+                    }
+                }
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "refreshRoomMemories failed", e)
             } finally {
@@ -1512,7 +1669,14 @@ class ProfileViewModel : ViewModel() {
                 true
             }
             ProfileStep.ROOM_DETAIL -> {
-                closeOverlay()
+                val returnTo = previousStepBeforeRoomDetail
+                previousStepBeforeRoomDetail = ProfileStep.NONE
+                _selectedRoom.value = null
+                if (returnTo == ProfileStep.NONE) {
+                    _currentStep.value = ProfileStep.NONE
+                } else {
+                    _currentStep.value = returnTo
+                }
                 true
             }
             else -> {
@@ -1562,11 +1726,18 @@ class ProfileViewModel : ViewModel() {
     }
 
     fun selectRoom(room: TimeCapsuleRoom) {
+        previousStepBeforeRoomDetail = _currentStep.value
         _selectedRoom.value = room
         _currentStep.value = ProfileStep.ROOM_DETAIL
 
         // Fetch memories for the newly selected room without triggering the pull-to-refresh UI
         refreshRoomMemories(showRefreshIndicator = false)
+        // Fire-and-forget VIEW signal for AI preference learning
+        trackViewForRoom(room)
+        // If no description exists, ask the AI service to generate one
+        if (room.description.isNullOrBlank()) {
+            generateAndSaveRoomDescription(room)
+        }
 
         // check for unlock
         checkRoomUnlockStatus(room)
@@ -1917,14 +2088,19 @@ class ProfileViewModel : ViewModel() {
     // ── Memory Deletion ───────────────────────────────────────────────────────
 
     /**
-     * Returns true if the given [uri] in [roomId] was uploaded by the currently signed-in user.
-     * Only memories synced from the backend (with a known ID and authorId) return true.
+     * Returns true when [uri] has a known server-side memory ID, meaning it was synced
+     * from the backend and can be deleted via the API.
+     *
+     * Owner/collaborator gating is done at the call site (canContribute check in the UI).
+     * The backend independently validates per-memory ownership on DELETE.
+     *
+     * Previously this also compared authorId against _cachedUserDto.id, which silently
+     * returned false whenever _cachedUserDto was null (e.g. when entering via Hallway
+     * before initDatabase has run) — causing long-press to do nothing.
      */
     fun isMyMemory(roomId: String, uri: Uri): Boolean {
         val item = _roomMemoryItems.value[roomId]?.get(uri.toString()) ?: return false
-        if (item.id.isEmpty() || item.authorId.isEmpty()) return false
-        val myId = _cachedUserDto?.id ?: return false
-        return item.authorId == myId
+        return item.id.isNotEmpty()
     }
 
     /** Delete a memory the current user uploaded. Updates local state on success. */
@@ -2104,6 +2280,27 @@ class ProfileViewModel : ViewModel() {
                         )
                     )
                     if (updateResult.isSuccess) {
+                        // Reflect what the backend actually saved back into VM state so the
+                        // UI stays consistent (e.g. backend may transform profileImageBase64 → URL).
+                        val saved = updateResult.getOrNull()
+                        if (saved != null) {
+                            if (!saved.name.isNullOrBlank()) _userName.value = saved.name
+                            if (saved.bio != null) _bio.value = saved.bio
+                            if (!saved.profileImageUrl.isNullOrBlank()) _profileImageUri.value = saved.profileImageUrl
+                            if (saved.preferredTags != null) _preferredTags.value = saved.preferredTags
+                            if (saved.theme.isNotBlank()) {
+                                val t = com.dmb.bestbefore.ui.theme.AppThemes.getThemeByName(saved.theme)
+                                _selectedTheme.value = t
+                                com.dmb.bestbefore.ui.theme.ThemeState.selectTheme(context, t)
+                            }
+                            if (saved.accentColor.isNotBlank()) {
+                                runCatching {
+                                    val c = Color(android.graphics.Color.parseColor(saved.accentColor))
+                                    _accentColor.value = c
+                                    com.dmb.bestbefore.ui.theme.ThemeState.selectAccent(context, c)
+                                }
+                            }
+                        }
                         Toast.makeText(context, "Profile updated!", Toast.LENGTH_SHORT).show()
                     } else {
                         val errorMsg = updateResult.exceptionOrNull()?.message ?: "Unknown error"
@@ -2357,20 +2554,7 @@ class ProfileViewModel : ViewModel() {
         } == true
     }
 
-    private fun parseISO8601(dateString: String?): Long {
-        if (dateString == null) return 0L
-        return try {
-            val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
-            sdf.timeZone = TimeZone.getTimeZone("UTC")
-            sdf.parse(dateString)?.time ?: 0L
-        } catch (_: Exception) {
-            try {
-                val sdf2 = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
-                sdf2.timeZone = TimeZone.getTimeZone("UTC")
-                sdf2.parse(dateString)?.time ?: 0L
-            } catch (__: Exception) { 0L }
-        }
-    }
+    private fun parseISO8601(dateString: String?): Long = parseIso8601(dateString)
 }
 
 

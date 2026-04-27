@@ -22,7 +22,7 @@ class RoomDtoJsonDeserializer : JsonDeserializer<RoomDto> {
             ownerUserType = readFlexibleString(obj, "ownerUserType"),
             ownerProfilePic = readFlexibleString(obj, "ownerProfilePic"),
             createdAt = readFlexibleString(obj, "createdAt"),
-            photos = readPhotoUrlList(obj, "photos"),
+            photos = readMemoryPreviewList(obj, "photos"),
             capsuleDurationDays = readInt(obj, "capsuleDurationDays"),
             capsuleDurationHours = readInt(obj, "capsuleDurationHours"),
             capsuleDurationMinutes = readInt(obj, "capsuleDurationMinutes"),

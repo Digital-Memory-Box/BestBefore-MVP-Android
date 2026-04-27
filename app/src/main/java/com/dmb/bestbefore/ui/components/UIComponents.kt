@@ -30,8 +30,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
+import com.dmb.bestbefore.utils.Base64BitmapCache
 import com.dmb.bestbefore.ui.theme.LocalBestBeforeColors
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 enum class UserPrivacyStatus { NONE, PUBLIC_ACCOUNT, PRIVATE_ACCOUNT }
 
@@ -278,31 +284,44 @@ fun ProfileAvatar(
             .then(clickableModifier),
         contentAlignment = Alignment.Center
     ) {
-        val isNotBlank = when(imageUri) {
-            is String -> imageUri.isNotBlank()
-            else -> imageUri != null
-        }
-        if (isNotBlank) {
-            val modelStr = imageUri.toString()
-            if (modelStr.startsWith("data:image")) {
-                // Large base64 handling is better with specialized decoder or bytes
-                if (modelStr.length > 22) {
-                     AsyncImage(
-                        model = imageUri,
+        val modelStr = imageUri?.toString()
+        if (!modelStr.isNullOrBlank()) {
+            if (modelStr.startsWith("data:") && modelStr.contains("base64,")) {
+                // Decode base64 on IO thread and cache result — avoids janking the main thread
+                // with large profile images stored as data URIs (same pattern as AsyncBase64Image).
+                var bitmap by remember(modelStr) {
+                    mutableStateOf(Base64BitmapCache.get(modelStr))
+                }
+                LaunchedEffect(modelStr) {
+                    if (bitmap == null) {
+                        val decoded = withContext(Dispatchers.Default) {
+                            try {
+                                val clean = modelStr.substringAfter("base64,")
+                                val bytes = android.util.Base64.decode(clean, android.util.Base64.DEFAULT)
+                                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                            } catch (_: Exception) { null }
+                        }
+                        if (decoded != null) {
+                            Base64BitmapCache.put(modelStr, decoded)
+                            bitmap = decoded
+                        }
+                    }
+                }
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap!!.asImageBitmap(),
                         contentDescription = "Avatar",
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                        error = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Default.Person)
+                        contentScale = ContentScale.Crop
                     )
-                } else {
-                    Icon(Icons.Default.Person, null, tint = accentColor, modifier = Modifier.size(size * 0.5f))
                 }
+                // While decoding: accent-colored circle (already the Box background)
             } else {
                 AsyncImage(
                     model = imageUri,
                     contentDescription = "Avatar",
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    contentScale = ContentScale.Crop,
                     error = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Default.Person)
                 )
             }
