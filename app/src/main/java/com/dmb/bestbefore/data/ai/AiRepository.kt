@@ -250,12 +250,26 @@ class AiRepository {
         isTimeCapsule: Boolean = false
     ): Result<String> {
         return try {
-            val request = GenerateDescriptionRequest(roomName, tags, isPrivate, isTimeCapsule)
+            // Python'a gidecek paketi hazırlıyoruz
+            val request = GenerateDescriptionRequest(
+                roomName = roomName,
+                tags = tags,
+                isPrivate = isPrivate,
+                isTimeCapsule = isTimeCapsule
+            )
+
+            Log.d(TAG, "AI Description request sending: $roomName")
+
             val response = api.generateDescription(request)
+
             if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!.description)
+                val description = response.body()!!.description
+                Log.d(TAG, "AI Description successfully get: $description")
+                Result.success(description)
             } else {
-                Result.failure(Exception("Description generation failed: HTTP ${response.code()}"))
+                val errorMsg = response.errorBody()?.string() ?: "Unknown error"
+                Log.e(TAG, "AI Description error (HTTP ${response.code()}): $errorMsg")
+                Result.failure(Exception("Description generation failed: $errorMsg"))
             }
         } catch (e: Exception) {
             Log.e(TAG, "generateRoomDescription exception", e)

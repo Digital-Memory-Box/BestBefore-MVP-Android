@@ -835,14 +835,14 @@ class ProfileViewModel : ViewModel() {
     fun finalizeRoom(context: Context? = null) {
         // Request notification permission before creating room
         onRequestNotificationPermission?.invoke()
-        
+
         // Calculate duration depending on the unlock method
         val now = System.currentTimeMillis()
         val days: Int
         val hours: Int
         val minutes: Int
         val finalTargetTime: Long
-        
+
         if (_unlockMethod.value == UnlockMethod.DURATION) {
             days = _capsuleDays.value
             hours = _capsuleHours.value
@@ -856,116 +856,146 @@ class ProfileViewModel : ViewModel() {
             minutes = ((durationMillis % (3600 * 1000)) / (60 * 1000)).toInt()
             finalTargetTime = _targetTime.value
         }
-        
-        val newRoom = TimeCapsuleRoom(
-            id = java.util.UUID.randomUUID().toString(),
-            roomName = _roomName.value,
-            capsuleDays = days,
-            capsuleHours = hours,
-            capsuleMinutes = minutes,
-            notificationDays = days,
-            notificationHours = hours,
-            notificationMinutes = minutes,
-            isPublic = _isPublic.value,
-            isCollaboration = _isTimeCapsuleEnabled.value,
-            unlockTime = finalTargetTime,
-            scheduledClosureTime = if (_scheduledClosureEnabled.value) _scheduledClosureTime.value else 0L,
-            theme = _roomAtmosphereTheme.value,
-            tags = _roomTags.value,
-            description = _roomDescription.value,
-            music = _selectedMusic.value,
-            rollingExpiration = _rollingExpiration.value,
-            isOwnedByMe = true,
-            isCollaborator = false
-        )
-        // Create Room via API
+
         viewModelScope.launch {
-             // Convert scheduledClosureTime millis -> ISO-8601 string for backend
-             val closureIso: String? = if (_scheduledClosureEnabled.value) {
-                 java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
-                     timeZone = java.util.TimeZone.getTimeZone("UTC")
-                 }.format(java.util.Date(_scheduledClosureTime.value))
-             } else null
+            // --- 1. AI KORSAN SIZINTISI BAŞLIYOR ---
+            val name = _roomName.value
+            val tags = _roomTags.value
+            val isPrivateMode = !_isPublic.value
+            val isTimeCap = _isTimeCapsuleEnabled.value
+            var finalDescription = _roomDescription.value
 
-             val unlockIso: String = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
-                 timeZone = java.util.TimeZone.getTimeZone("UTC")
-             }.format(java.util.Date(newRoom.unlockTime))
+            try {
+                // Şairane yapay zekayı gizlice çağırıyoruz
+                val aiResult = aiRepository.generateRoomDescription(
+                    roomName = name,
+                    tags = tags,
+                    isPrivate = isPrivateMode,
+                    isTimeCapsule = isTimeCap
+                )
 
-             val rollingDays = when (newRoom.rollingExpiration) {
-                 "24 hours" -> 1
-                 "1 week" -> 7
-                 "30 days" -> 30
-                 "1 year" -> 365
-                 else -> 0
-             }
+                aiResult.onSuccess { generatedText ->
+                    if (finalDescription.isBlank()) {
+                        finalDescription = generatedText
+                    } else {
+                        // Kullanıcı zaten bir şeyler yazmışsa, AI'ın metnini altına ekle
+                        finalDescription = "$finalDescription\n\n$generatedText"
+                    }
+                    // UI state'i de güncelleyelim
+                    _roomDescription.value = finalDescription
+                    android.util.Log.d("ProfileViewModel", "AI Description başarıyla eklendi!")
+                }.onFailure {
+                    // Eğer AI sunucusunda bir anlık takılma olursa uygulama çökmesin, devam etsin
+                    android.util.Log.e("ProfileViewModel", "AI otomatik oluşturulamadı: ${it.message}")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ProfileViewModel", "AI Call failed", e)
+            }
+            // --- AI KORSAN SIZINTISI BİTTİ ---
 
-             val result = roomRepository.createRoom(
-                 newRoom.roomName,
-                 newRoom.capsuleDays,
-                 newRoom.capsuleHours,
-                 newRoom.capsuleMinutes,
-                 newRoom.isPublic,
-                 newRoom.isCollaboration,
-                 newRoom.theme,
-                 collaborators = _invitedUsers.value.filter { it.role == "collaborator" }.map { it.email },
-                 viewers = _invitedUsers.value.filter { it.role == "viewer" }.map { it.email },
-                 scheduledClosureIso = closureIso,
-                 unlockDateIso = unlockIso,
-                 rollingExpiryDays = rollingDays,
-                 description = newRoom.description,
-                 tags = newRoom.tags,
-                 music = newRoom.music
-             )
+            // 2. ODA OBJESİNİ OLUŞTUR (Artık zenginleştirilmiş finalDescription ile)
+            val newRoom = TimeCapsuleRoom(
+                id = java.util.UUID.randomUUID().toString(),
+                roomName = _roomName.value,
+                capsuleDays = days,
+                capsuleHours = hours,
+                capsuleMinutes = minutes,
+                notificationDays = days,
+                notificationHours = hours,
+                notificationMinutes = minutes,
+                isPublic = _isPublic.value,
+                isCollaboration = _isTimeCapsuleEnabled.value,
+                unlockTime = finalTargetTime,
+                scheduledClosureTime = if (_scheduledClosureEnabled.value) _scheduledClosureTime.value else 0L,
+                theme = _roomAtmosphereTheme.value,
+                tags = _roomTags.value,
+                description = finalDescription, // <-- SİHİR BURADA: AI Metni buraya giriyor
+                music = _selectedMusic.value,
+                rollingExpiration = _rollingExpiration.value,
+                isOwnedByMe = true,
+                isCollaborator = false
+            )
 
-             val finalRoom = if (result.isSuccess) {
-                 val realId = result.getOrNull()
-                 Log.d("ProfileViewModel", "Room created with id=$realId")
-                 if (realId != null) {
-                     newRoom.copy(id = realId, isOwnedByMe = true, isCollaborator = false)
-                 } else {
-                     newRoom
-                 }
-             } else {
-                 Log.e("ProfileViewModel", "createRoom failed: ${result.exceptionOrNull()?.message}")
-                 newRoom
-             }
-             
-             // Add to local list
-             val updatedList = _createdRooms.value + finalRoom
-             refreshRoomLists(updatedList)
-             
-             // Keep user in flow by navigating to the new room detail
-             selectRoom(finalRoom)
+            // Convert scheduledClosureTime millis -> ISO-8601 string for backend
+            val closureIso: String? = if (_scheduledClosureEnabled.value) {
+                java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
+                    timeZone = java.util.TimeZone.getTimeZone("UTC")
+                }.format(java.util.Date(_scheduledClosureTime.value))
+            } else null
 
-             context?.let { ctx ->
-                 com.dmb.bestbefore.data.repository.NotificationRepository(ctx).addNotification(
-                     com.dmb.bestbefore.data.models.AppNotification(
-                         title = "Room Created",
-                         message = "You successfully created the room \"${finalRoom.roomName}\"",
-                         type = com.dmb.bestbefore.data.models.NotificationType.ROOM_CREATED,
-                         relatedRoomId = finalRoom.id,
-                         relatedRoomName = finalRoom.roomName
-                     )
-                 )
-             }
-         }
+            val unlockIso: String = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
+                timeZone = java.util.TimeZone.getTimeZone("UTC")
+            }.format(java.util.Date(newRoom.unlockTime))
+
+            val rollingDays = when (newRoom.rollingExpiration) {
+                "24 hours" -> 1
+                "1 week" -> 7
+                "30 days" -> 30
+                "1 year" -> 365
+                else -> 0
+            }
+
+            // 3. BACKEND'E KAYDET
+            val result = roomRepository.createRoom(
+                newRoom.roomName,
+                newRoom.capsuleDays,
+                newRoom.capsuleHours,
+                newRoom.capsuleMinutes,
+                newRoom.isPublic,
+                newRoom.isCollaboration,
+                newRoom.theme,
+                collaborators = _invitedUsers.value.filter { it.role == "collaborator" }.map { it.email },
+                viewers = _invitedUsers.value.filter { it.role == "viewer" }.map { it.email },
+                scheduledClosureIso = closureIso,
+                unlockDateIso = unlockIso,
+                rollingExpiryDays = rollingDays,
+                description = newRoom.description, // Artık AI metnini de içeriyor!
+                tags = newRoom.tags,
+                music = newRoom.music
+            )
+
+            val finalRoom = if (result.isSuccess) {
+                val realId = result.getOrNull()
+                android.util.Log.d("ProfileViewModel", "Room created with id=$realId")
+                if (realId != null) {
+                    newRoom.copy(id = realId, isOwnedByMe = true, isCollaborator = false)
+                } else {
+                    newRoom
+                }
+            } else {
+                android.util.Log.e("ProfileViewModel", "createRoom failed: ${result.exceptionOrNull()?.message}")
+                newRoom
+            }
+
+            // Add to local list
+            val updatedList = _createdRooms.value + finalRoom
+            refreshRoomLists(updatedList)
+
+            // Keep user in flow by navigating to the new room detail
+            selectRoom(finalRoom)
+
+            context?.let { ctx ->
+                com.dmb.bestbefore.data.repository.NotificationRepository(ctx).addNotification(
+                    com.dmb.bestbefore.data.models.AppNotification(
+                        title = "Room Created",
+                        message = "You successfully created the room \"${finalRoom.roomName}\"",
+                        type = com.dmb.bestbefore.data.models.NotificationType.ROOM_CREATED,
+                        relatedRoomId = finalRoom.id,
+                        relatedRoomName = finalRoom.roomName
+                    )
+                )
+            }
+        }
 
         // Schedule notification (Fixed: Added back)
         context?.let { ctx ->
             val unlockTimeMillis = _targetTime.value
             com.dmb.bestbefore.notifications.NotificationScheduler.scheduleRoomUnlockNotification(
                 ctx,
-                newRoom.roomName.hashCode().toString(),
-                newRoom.roomName,
+                _roomName.value.hashCode().toString(),
+                _roomName.value,
                 unlockTimeMillis
             )
-            
-            // Calendar event
-            // Calendar event creation in User's calendar is now handled via Backend-App integration if desired,
-            // or we simply trust the user to have it.
-            // Since we deleted local CalendarHelper and user said "move to backend",
-            // we skip local calendar write logic. Backend could potentially create it if we added that endpoint.
-            // For now, removing local calendar write logic.
         }
     }
     

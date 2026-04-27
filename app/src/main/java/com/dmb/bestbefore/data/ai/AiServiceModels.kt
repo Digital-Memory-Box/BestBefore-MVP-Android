@@ -158,13 +158,23 @@ data class SemanticSearchResponse(
 // ── Description Generation (generative_schemas.py) ───────────────────────────
 
 data class GenerateDescriptionRequest(
+    @SerializedName("roomName")
     val roomName: String,
+
+    @SerializedName("tags")
     val tags: List<String> = emptyList(),
+
+    @SerializedName("isPrivate")
     val isPrivate: Boolean = false,
+
+    @SerializedName("isTimeCapsule")
     val isTimeCapsule: Boolean = false
 )
 
 data class GenerateDescriptionResponse(
+    @SerializedName("description")
     val description: String,
-    val roomName: String
+
+    @SerializedName("roomName")
+    val roomName: String? = null
 )
