@@ -605,7 +605,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                                     timeCapsuleDays = room.capsuleDurationDays,
                                     description = if (!room.description.isNullOrBlank()) room.description
                                                   else (room.generatedDescription ?: searchResult.description ?: ""),
-                                    imageUrl = room.photos?.firstOrNull(),
+                                    imageUrl = room.photos?.firstOrNull()?.url,
                                     photos = room.photos ?: emptyList(),
                                     themeColorHex = room.theme,
                                     tags = room.tags ?: searchResult.tags ?: emptyList(),
@@ -774,12 +774,12 @@ private fun List<com.dmb.bestbefore.data.api.models.RoomDto>.photoStats(): Strin
     val allPhotos = flatMap { it.photos ?: emptyList() }
     if (allPhotos.isEmpty()) return "no photos"
 
-    val base64Photos = allPhotos.filter { it.startsWith("data:") }
-    val urlPhotos    = allPhotos.filter { it.startsWith("http") }
+    val base64Photos = allPhotos.filter { it.url.startsWith("data:") }
+    val urlPhotos    = allPhotos.filter { it.url.startsWith("http") }
     val otherPhotos  = allPhotos.size - base64Photos.size - urlPhotos.size
 
     val avgBase64Kb  = if (base64Photos.isNotEmpty())
-        base64Photos.sumOf { it.length }.toLong() / base64Photos.size / 1024
+        base64Photos.sumOf { it.url.length }.toLong() / base64Photos.size / 1024
     else 0L
 
     val b64Warn = if (base64Photos.isNotEmpty()) " ⚠ BASE64" else ""

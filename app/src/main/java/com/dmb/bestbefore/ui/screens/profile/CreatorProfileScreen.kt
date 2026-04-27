@@ -103,36 +103,26 @@ fun CreatorProfileScreen(
                 contentPadding = PaddingValues(bottom = 32.dp)
             ) {
                 // User Card (Prominent Header)
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFF1C1C1E).copy(alpha = 0.8f), RoundedCornerShape(24.dp))
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // Profile Photo
-                    ProfileAvatar(
-                        imageUri = p.profileImageUrl,
-                        size = 100.dp,
-                        accentColor = Color.White
-                    )
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    // Name and Artist tag
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val nameText = if (p.name?.startsWith("@") == true) p.name else "@${p.name ?: "user"}"
-                        Text(
-                            text = nameText,
-                            color = Color.White,
-                            fontSize = 26.sp,
-                            fontWeight = FontWeight.Bold
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF1C1C1E).copy(alpha = 0.8f), RoundedCornerShape(24.dp))
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Profile Photo
+                        ProfileAvatar(
+                            imageUri = p.profileImageUrl,
+                            size = 100.dp,
+                            accentColor = Color.White
                         )
                         
                         Spacer(modifier = Modifier.height(16.dp))
                         
+                        // Name and Artist tag
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            val nameText = p.name?.takeIf { it.isNotBlank() } ?: "User"
+                            val nameText = if (p.name?.startsWith("@") == true) p.name else "@${p.name ?: "user"}"
                             Text(
                                 text = nameText,
                                 color = Color.White,
@@ -140,57 +130,69 @@ fun CreatorProfileScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             
-                            if (p.userType?.lowercase() == "artist") {
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .background(Color(0xFF007AFF), RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                val nameText2 = p.name?.takeIf { it.isNotBlank() } ?: "User"
+                                Text(
+                                    text = nameText2,
+                                    color = Color.White,
+                                    fontSize = 26.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                
+                                if (p.userType?.lowercase() == "artist") {
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .background(Color(0xFF007AFF), RoundedCornerShape(8.dp))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = "Artist",
+                                            color = Color.White,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            if (!p.bio.isNullOrEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = p.bio!!,
+                                    color = Color(0xFF8E8E93),
+                                    fontSize = 15.sp,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.height(24.dp))
+                            
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(text = "Rooming", color = Color.Gray, fontSize = 12.sp)
                                     Text(
-                                        text = "Artist",
+                                        text = formatCount(p.roomingCount),
                                         color = Color.White,
-                                        fontSize = 12.sp,
+                                        fontSize = 18.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
-                            }
-                        }
-                        
-                        if (!p.bio.isNullOrEmpty()) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = p.bio!!,
-                                color = Color(0xFF8E8E93),
-                                fontSize = 15.sp,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(horizontal = 16.dp)
-                            )
-                        }
-                        
-                        Spacer(modifier = Modifier.height(24.dp))
-                        
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = "Rooming", color = Color.Gray, fontSize = 12.sp)
-                                Text(
-                                    text = formatCount(p.roomingCount),
-                                    color = Color.White,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = "Roomers", color = Color.Gray, fontSize = 12.sp)
-                                Text(
-                                    text = formatCount(p.roomersCount),
-                                    color = Color.White,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(text = "Roomers", color = Color.Gray, fontSize = 12.sp)
+                                    Text(
+                                        text = formatCount(p.roomersCount),
+                                        color = Color.White,
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
                     }
@@ -302,7 +304,7 @@ fun PublicRoomCard(room: PublicRoomDto, onClick: () -> Unit) {
         ) {
             if (room.photos.isNotEmpty()) {
                 AsyncImage(
-                    model = room.photos.first(),
+                    model = room.photos.first().url,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop

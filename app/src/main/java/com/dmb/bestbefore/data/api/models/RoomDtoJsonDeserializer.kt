@@ -85,17 +85,19 @@ class RoomDtoJsonDeserializer : JsonDeserializer<RoomDto> {
         return runCatching { obj.get(key).asBoolean }.getOrNull()
     }
 
-    // Backend returns photos as [{ id: "...", url: "..." }] — extract url field.
-    private fun readPhotoUrlList(obj: JsonObject, key: String): List<String>? {
+    // Backend returns photos as [{ id: "...", url: "..." }] — extract id + url fields as MemoryPreview.
+    private fun readPhotoUrlList(obj: JsonObject, key: String): List<MemoryPreview>? {
         if (!obj.has(key) || obj.get(key).isJsonNull || !obj.get(key).isJsonArray) return null
         return obj.getAsJsonArray(key).mapNotNull { element ->
             when {
-                element.isJsonPrimitive -> element.asString
+                element.isJsonPrimitive -> MemoryPreview("", element.asString)
                 element.isJsonObject -> {
                     val photoObj = element.asJsonObject
+                    val id = jsonElementToString(photoObj.get("id") ?: photoObj.get("_id")).orEmpty()
                     val url = photoObj.get("url")
-                    if (url != null && !url.isJsonNull) url.asString
-                    else jsonElementToString(element)
+                    val urlStr = if (url != null && !url.isJsonNull) url.asString
+                                 else jsonElementToString(element).orEmpty()
+                    MemoryPreview(id, urlStr)
                 }
                 else -> null
             }

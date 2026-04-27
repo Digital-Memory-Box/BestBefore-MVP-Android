@@ -311,16 +311,6 @@ class RoomRepository {
         }
     }
 
-    suspend fun deleteMemory(roomId: String, memoryId: String): Result<Unit> {
-        return try {
-            val response = api.deleteMemory(freshBearer(), roomId, memoryId)
-            if (response.isSuccessful) Result.success(Unit)
-            else Result.failure(Exception("Failed to delete memory: ${response.code()}"))
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
     suspend fun acceptSuggestion(roomId: String, suggestionId: String): Result<Unit> {
         return try {
             val response = api.acceptSuggestion(freshBearer(), roomId, suggestionId)
