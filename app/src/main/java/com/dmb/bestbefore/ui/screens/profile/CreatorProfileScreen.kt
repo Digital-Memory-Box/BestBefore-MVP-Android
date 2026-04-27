@@ -102,78 +102,97 @@ fun CreatorProfileScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 32.dp)
             ) {
-                // ── Profile header card — must be in item {} so LazyColumn renders it ──
+                // User Card (Prominent Header)
                 item {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
                             .background(Color(0xFF1C1C1E).copy(alpha = 0.8f), RoundedCornerShape(24.dp))
                             .padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Profile photo
+                        // Profile Photo
                         ProfileAvatar(
                             imageUri = p.profileImageUrl,
                             size = 100.dp,
                             accentColor = Color.White
                         )
-
+                        
                         Spacer(modifier = Modifier.height(16.dp))
-
-                        // Name + optional Artist badge — horizontal row
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            val displayName = p.name?.takeIf { it.isNotBlank() } ?: "User"
+                        
+                        // Name and Artist tag
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val nameText = if (p.name?.startsWith("@") == true) p.name else "@${p.name ?: "user"}"
                             Text(
-                                text = if (displayName.startsWith("@")) displayName else "@$displayName",
+                                text = nameText,
                                 color = Color.White,
-                                fontSize = 24.sp,
+                                fontSize = 26.sp,
                                 fontWeight = FontWeight.Bold
                             )
-                            if (p.userType?.lowercase() == "artist") {
-                                Box(
-                                    modifier = Modifier
-                                        .background(Color(0xFF007AFF), RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Text("Artist", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            
+                            Spacer(modifier = Modifier.height(16.dp))
+                            
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                val nameText2 = p.name?.takeIf { it.isNotBlank() } ?: "User"
+                                Text(
+                                    text = nameText2,
+                                    color = Color.White,
+                                    fontSize = 26.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                
+                                if (p.userType?.lowercase() == "artist") {
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .background(Color(0xFF007AFF), RoundedCornerShape(8.dp))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = "Artist",
+                                            color = Color.White,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
-                        }
-
-                        // Bio — below name, vertically
-                        if (!p.bio.isNullOrEmpty()) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = p.bio!!,
-                                color = Color(0xFF8E8E93),
-                                fontSize = 14.sp,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(horizontal = 8.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        // Stats row — below bio, vertically
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(formatCount(p.roomingCount), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                                Text("Rooming", color = Color.Gray, fontSize = 12.sp)
+                            
+                            if (!p.bio.isNullOrEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = p.bio!!,
+                                    color = Color(0xFF8E8E93),
+                                    fontSize = 15.sp,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                )
                             }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(formatCount(p.roomersCount), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                                Text("Roomers", color = Color.Gray, fontSize = 12.sp)
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(formatCount(p.memoriesCount), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                                Text("Memories", color = Color.Gray, fontSize = 12.sp)
+                            
+                            Spacer(modifier = Modifier.height(24.dp))
+                            
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(text = "Rooming", color = Color.Gray, fontSize = 12.sp)
+                                    Text(
+                                        text = formatCount(p.roomingCount),
+                                        color = Color.White,
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(text = "Roomers", color = Color.Gray, fontSize = 12.sp)
+                                    Text(
+                                        text = formatCount(p.roomersCount),
+                                        color = Color.White,
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
                     }
