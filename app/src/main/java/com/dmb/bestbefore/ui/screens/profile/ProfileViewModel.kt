@@ -17,6 +17,10 @@ import java.util.TimeZone
 import android.content.Intent
 import android.net.Uri
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaPlayer
+import android.util.Base64
 import android.widget.Toast
 import android.util.Log
 import java.io.File
@@ -27,15 +31,38 @@ import com.dmb.bestbefore.ui.theme.AppTheme
 import com.dmb.bestbefore.ui.theme.AppThemes
 import com.dmb.bestbefore.data.local.PreferencesManager
 import androidx.compose.ui.graphics.Color
+import com.dmb.bestbefore.CalendarHelper
+import com.dmb.bestbefore.data.ai.AiRepository
+import com.dmb.bestbefore.data.ai.AiRoomSuggestion
+import com.dmb.bestbefore.data.ai.UpdatePreferenceResponse
+import com.dmb.bestbefore.data.api.RetrofitClient
+import com.dmb.bestbefore.data.api.models.MemoryPreview
+import com.dmb.bestbefore.data.api.models.RoomDto
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.EmailAuthProvider
 import com.dmb.bestbefore.data.api.models.UserDto
 import com.dmb.bestbefore.data.api.models.UpdateMeRequest
 import com.dmb.bestbefore.data.api.models.RoomSuggestionDto
 import com.dmb.bestbefore.data.api.models.RoomSuggestionsResponse
+import com.dmb.bestbefore.data.local.SessionManager
+import com.dmb.bestbefore.data.models.AppNotification
+import com.dmb.bestbefore.data.models.HallwayCard
+import com.dmb.bestbefore.data.models.NotificationType
+import com.dmb.bestbefore.data.repository.AuthRepository
+import com.dmb.bestbefore.data.repository.NotificationRepository
+import com.dmb.bestbefore.data.repository.RoomRepository
+import com.dmb.bestbefore.notifications.NotificationScheduler
+import com.dmb.bestbefore.ui.theme.ThemeState
+import com.dmb.bestbefore.utils.AudioRecorderHelper
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import java.io.ByteArrayOutputStream
+import java.time.OffsetDateTime
+import java.time.ZonedDateTime
+import java.util.Calendar
+import java.util.Date
+import java.util.UUID
 
 class ProfileViewModel : ViewModel() {
     companion object {
@@ -51,10 +78,10 @@ class ProfileViewModel : ViewModel() {
     private fun parseIso8601(dateString: String?): Long {
         if (dateString == null) return 0L
         return try {
-            java.time.OffsetDateTime.parse(dateString).toInstant().toEpochMilli()
+            OffsetDateTime.parse(dateString).toInstant().toEpochMilli()
         } catch (_: Exception) {
             try {
-                java.time.ZonedDateTime.parse(dateString).toInstant().toEpochMilli()
+                ZonedDateTime.parse(dateString).toInstant().toEpochMilli()
             } catch (__: Exception) { 0L }
         }
     }
@@ -65,20 +92,20 @@ class ProfileViewModel : ViewModel() {
     }
 
     // RoomRepository — no token arg; fetches fresh Firebase token per request (matches iOS pattern)
-    private val roomRepository = com.dmb.bestbefore.data.repository.RoomRepository()
-    private val notificationRepository = com.dmb.bestbefore.data.repository.NotificationRepository()
+    private val roomRepository = RoomRepository()
+    private val notificationRepository = NotificationRepository()
     // Initialised in initDatabase(context) so we can persist preference updates from AI responses.
-    private var authRepository: com.dmb.bestbefore.data.repository.AuthRepository? = null
+    private var authRepository: AuthRepository? = null
 
     // ── AI Service integration ────────────────────────────────────────────────
-    private val aiRepository = com.dmb.bestbefore.data.ai.AiRepository()
+    private val aiRepository = AiRepository()
 
     /** Last UserDto fetched from the backend – used to supply preference context to AI calls. */
-    private var _cachedUserDto: com.dmb.bestbefore.data.api.models.UserDto? = null
+    private var _cachedUserDto: UserDto? = null
 
     /** AI-powered personalised room suggestions (sorted by combined similarity). */
-    private val _aiSuggestions = MutableStateFlow<List<com.dmb.bestbefore.data.ai.AiRoomSuggestion>>(emptyList())
-    val aiSuggestions: StateFlow<List<com.dmb.bestbefore.data.ai.AiRoomSuggestion>> = _aiSuggestions.asStateFlow()
+    private val _aiSuggestions = MutableStateFlow<List<AiRoomSuggestion>>(emptyList())
+    val aiSuggestions: StateFlow<List<AiRoomSuggestion>> = _aiSuggestions.asStateFlow()
 
     private val _isLoadingAiSuggestions = MutableStateFlow(false)
     val isLoadingAiSuggestions: StateFlow<Boolean> = _isLoadingAiSuggestions.asStateFlow()
@@ -98,8 +125,8 @@ class ProfileViewModel : ViewModel() {
     val isLoadingConnectionSuggestions: StateFlow<Boolean> = _isLoadingConnectionSuggestions.asStateFlow()
     // ─────────────────────────────────────────────────────────────────────────
     
-    private val _notifications = MutableStateFlow<List<com.dmb.bestbefore.data.models.AppNotification>>(emptyList())
-    val notifications: StateFlow<List<com.dmb.bestbefore.data.models.AppNotification>> = _notifications.asStateFlow()
+    private val _notifications = MutableStateFlow<List<AppNotification>>(emptyList())
+    val notifications: StateFlow<List<AppNotification>> = _notifications.asStateFlow()
     
     // Switch createdRooms to loading from DB/API
     private val _createdRooms = MutableStateFlow<List<TimeCapsuleRoom>>(emptyList())
@@ -126,7 +153,7 @@ class ProfileViewModel : ViewModel() {
     private val _isRecordingAudio = MutableStateFlow(false)
     val isRecordingAudio: StateFlow<Boolean> = _isRecordingAudio.asStateFlow()
 
-    private var audioRecorderHelper: com.dmb.bestbefore.utils.AudioRecorderHelper? = null
+    private var audioRecorderHelper: AudioRecorderHelper? = null
     
     private var creationSource: RoomCreationSource = RoomCreationSource.HALLWAY
     // Remembers which step was active before navigating into ROOM_DETAIL so goBack()
@@ -201,12 +228,12 @@ class ProfileViewModel : ViewModel() {
     
     fun toggleApplyAccent(context: Context, enabled: Boolean) {
         _applyAccentToAll.value = enabled
-        com.dmb.bestbefore.ui.theme.ThemeState.updateApplyAccentToAll(enabled)
+        ThemeState.updateApplyAccentToAll(enabled)
     }
 
     fun toggleSyncAccent(context: Context, enabled: Boolean) {
         _syncAccentWithRoom.value = enabled
-        com.dmb.bestbefore.ui.theme.ThemeState.updateSyncAccentWithRoom(enabled)
+        ThemeState.updateSyncAccentWithRoom(enabled)
     }
 
     // Helper for resolving connected rooms names
@@ -295,22 +322,22 @@ class ProfileViewModel : ViewModel() {
     val selectedPreset: StateFlow<String?> = _selectedPreset.asStateFlow()
 
     // Calendar events
-    private val _calendarEvents = MutableStateFlow<List<com.dmb.bestbefore.data.models.CalendarEvent>>(emptyList())
-    val calendarEvents: StateFlow<List<com.dmb.bestbefore.data.models.CalendarEvent>> = _calendarEvents.asStateFlow()
+    private val _calendarEvents = MutableStateFlow<List<CalendarEvent>>(emptyList())
+    val calendarEvents: StateFlow<List<CalendarEvent>> = _calendarEvents.asStateFlow()
 
     fun loadCalendarEvents(context: Context) {
-        _calendarEvents.value = com.dmb.bestbefore.CalendarHelper.getUpcomingEvents(context)
+        _calendarEvents.value = CalendarHelper.getUpcomingEvents(context)
     }
 
-    fun applyCalendarEvent(event: com.dmb.bestbefore.data.models.CalendarEvent) {
+    fun applyCalendarEvent(event: CalendarEvent) {
         _roomName.value = event.title
         _unlockMethod.value = UnlockMethod.SPECIFIC_DATE
         _targetTime.value = event.startTime.time
         
-        val cal = java.util.Calendar.getInstance()
+        val cal = Calendar.getInstance()
         cal.timeInMillis = event.startTime.time
-        _targetHour.value = cal.get(java.util.Calendar.HOUR_OF_DAY)
-        _targetMinute.value = cal.get(java.util.Calendar.MINUTE)
+        _targetHour.value = cal.get(Calendar.HOUR_OF_DAY)
+        _targetMinute.value = cal.get(Calendar.MINUTE)
     }
 
     // Atmosphere room theme (string name, separate from AppTheme)
@@ -415,15 +442,15 @@ class ProfileViewModel : ViewModel() {
     fun saveProfileMusic(context: Context, trackName: String?) {
         viewModelScope.launch {
             val updateMusic = if (trackName == "None") null else trackName
-            val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
-            val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
-            val result = authRepo.updateMe(com.dmb.bestbefore.data.api.models.UpdateMeRequest(profileMusic = updateMusic))
+            val authRepo = AuthRepository(context)
+            val sessionManager = SessionManager(context)
+            val result = authRepo.updateMe(UpdateMeRequest(profileMusic = updateMusic))
             if (result.isSuccess) {
                 _profileMusic.value = trackName ?: "None"
                 sessionManager.saveProfileMusic(updateMusic)
-                android.widget.Toast.makeText(context, "Profile music updated", android.widget.Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Profile music updated", Toast.LENGTH_SHORT).show()
             } else {
-                android.widget.Toast.makeText(context, "Failed to update profile music", android.widget.Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Failed to update profile music", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -502,7 +529,7 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
-    fun handleRespondToNotification(context: Context, notification: com.dmb.bestbefore.data.models.AppNotification, accept: Boolean) {
+    fun handleRespondToNotification(context: Context, notification: AppNotification, accept: Boolean) {
         viewModelScope.launch {
             try {
                 _isLoading.value = true
@@ -531,8 +558,8 @@ class ProfileViewModel : ViewModel() {
 
     // Helper context for DB init (Simple MVP approach)
     fun initDatabase(context: Context) {
-        if (authRepository == null) authRepository = com.dmb.bestbefore.data.repository.AuthRepository(context)
-        val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
+        if (authRepository == null) authRepository = AuthRepository(context)
+        val sessionManager = SessionManager(context)
         val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
         val savedName = sessionManager.getUserName()
         val savedMusic = sessionManager.getProfileMusic()
@@ -552,17 +579,17 @@ class ProfileViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
-                val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
+                val authRepo = AuthRepository(context)
                 
                 // Use coroutineScope for structured concurrency and proper async resolution
-                kotlinx.coroutines.coroutineScope {
+                coroutineScope {
                     val meDeferred = async { authRepo.getMe() }
                     val roomsDeferred = async { roomRepository.getRooms() }
                     val notificationsDeferred = async { fetchNotifications() }
                     val tagsDeferred = async { fetchTagsLocally(context) }
                     
                     val meResult: Result<UserDto> = meDeferred.await()
-                    val roomsResult: Result<List<com.dmb.bestbefore.data.api.models.RoomDto>> = roomsDeferred.await()
+                    val roomsResult: Result<List<RoomDto>> = roomsDeferred.await()
                     notificationsDeferred.await()
                     val tagsList: List<String> = tagsDeferred.await()
                     _availableTags.value = tagsList
@@ -586,15 +613,15 @@ class ProfileViewModel : ViewModel() {
                         // Sync theme, accentColor, profileMusic from backend so any
                         // changes made on other devices (or iOS) are applied here too.
                         if (userDto.theme.isNotBlank()) {
-                            val serverTheme = com.dmb.bestbefore.ui.theme.AppThemes.getThemeByName(userDto.theme)
+                            val serverTheme = AppThemes.getThemeByName(userDto.theme)
                             _selectedTheme.value = serverTheme
-                            com.dmb.bestbefore.ui.theme.ThemeState.selectTheme(context, serverTheme)
+                            ThemeState.selectTheme(context, serverTheme)
                         }
                         if (userDto.accentColor.isNotBlank()) {
                             runCatching {
                                 val c = Color(android.graphics.Color.parseColor(userDto.accentColor))
                                 _accentColor.value = c
-                                com.dmb.bestbefore.ui.theme.ThemeState.selectAccent(context, c)
+                                ThemeState.selectAccent(context, c)
                             }
                         }
                         if (!userDto.profileMusic.isNullOrBlank() && userDto.profileMusic != "None") {
@@ -661,10 +688,10 @@ class ProfileViewModel : ViewModel() {
     private suspend fun fetchTagsLocally(context: Context): List<String> {
         val parsedTags = mutableListOf<String>()
         try {
-            val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
+            val authRepo = AuthRepository(context)
             val token = authRepo.getFirebaseIdToken(false)
             if (token != null) {
-                val tagsResponse = com.dmb.bestbefore.data.api.RetrofitClient.apiService.getTags("Bearer $token")
+                val tagsResponse = RetrofitClient.apiService.getTags("Bearer $token")
                 if (tagsResponse.isSuccessful) {
                     val bodyElement = tagsResponse.body()
                     if (bodyElement != null) {
@@ -709,7 +736,7 @@ class ProfileViewModel : ViewModel() {
     }
 
 
-    private fun mapDtosToRooms(dtos: List<com.dmb.bestbefore.data.api.models.RoomDto>, isSaved: Boolean): List<TimeCapsuleRoom> {
+    private fun mapDtosToRooms(dtos: List<RoomDto>, isSaved: Boolean): List<TimeCapsuleRoom> {
         val currentUserEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
         return dtos.map { dto ->
             val createdMs = parseCreatedAt(dto.createdAt)
@@ -814,10 +841,10 @@ class ProfileViewModel : ViewModel() {
     }
     
     // Camera capture state
-    private val _capturedImageUri = kotlinx.coroutines.flow.MutableStateFlow<android.net.Uri?>(null)
-    val capturedImageUri: kotlinx.coroutines.flow.StateFlow<android.net.Uri?> = _capturedImageUri.asStateFlow()
+    private val _capturedImageUri = MutableStateFlow<Uri?>(null)
+    val capturedImageUri: StateFlow<Uri?> = _capturedImageUri.asStateFlow()
     
-    fun setCapturedImage(uri: android.net.Uri) {
+    fun setCapturedImage(uri: Uri) {
         _capturedImageUri.value = uri
     }
     
@@ -883,19 +910,19 @@ class ProfileViewModel : ViewModel() {
                     }
                     // UI state'i de güncelleyelim
                     _roomDescription.value = finalDescription
-                    android.util.Log.d("ProfileViewModel", "AI Description başarıyla eklendi!")
+                    Log.d("ProfileViewModel", "AI Description başarıyla eklendi!")
                 }.onFailure {
                     // Eğer AI sunucusunda bir anlık takılma olursa uygulama çökmesin, devam etsin
-                    android.util.Log.e("ProfileViewModel", "AI otomatik oluşturulamadı: ${it.message}")
+                    Log.e("ProfileViewModel", "AI otomatik oluşturulamadı: ${it.message}")
                 }
             } catch (e: Exception) {
-                android.util.Log.e("ProfileViewModel", "AI Call failed", e)
+                Log.e("ProfileViewModel", "AI Call failed", e)
             }
             // --- AI KORSAN SIZINTISI BİTTİ ---
 
             // 2. ODA OBJESİNİ OLUŞTUR (Artık zenginleştirilmiş finalDescription ile)
             val newRoom = TimeCapsuleRoom(
-                id = java.util.UUID.randomUUID().toString(),
+                id = UUID.randomUUID().toString(),
                 roomName = _roomName.value,
                 capsuleDays = days,
                 capsuleHours = hours,
@@ -918,14 +945,14 @@ class ProfileViewModel : ViewModel() {
 
             // Convert scheduledClosureTime millis -> ISO-8601 string for backend
             val closureIso: String? = if (_scheduledClosureEnabled.value) {
-                java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
-                    timeZone = java.util.TimeZone.getTimeZone("UTC")
-                }.format(java.util.Date(_scheduledClosureTime.value))
+                SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }.format(Date(_scheduledClosureTime.value))
             } else null
 
-            val unlockIso: String = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
-                timeZone = java.util.TimeZone.getTimeZone("UTC")
-            }.format(java.util.Date(newRoom.unlockTime))
+            val unlockIso: String = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }.format(Date(newRoom.unlockTime))
 
             val rollingDays = when (newRoom.rollingExpiration) {
                 "24 hours" -> 1
@@ -956,14 +983,14 @@ class ProfileViewModel : ViewModel() {
 
             val finalRoom = if (result.isSuccess) {
                 val realId = result.getOrNull()
-                android.util.Log.d("ProfileViewModel", "Room created with id=$realId")
+                Log.d("ProfileViewModel", "Room created with id=$realId")
                 if (realId != null) {
                     newRoom.copy(id = realId, isOwnedByMe = true, isCollaborator = false)
                 } else {
                     newRoom
                 }
             } else {
-                android.util.Log.e("ProfileViewModel", "createRoom failed: ${result.exceptionOrNull()?.message}")
+                Log.e("ProfileViewModel", "createRoom failed: ${result.exceptionOrNull()?.message}")
                 newRoom
             }
 
@@ -975,11 +1002,11 @@ class ProfileViewModel : ViewModel() {
             selectRoom(finalRoom)
 
             context?.let { ctx ->
-                com.dmb.bestbefore.data.repository.NotificationRepository(ctx).addNotification(
-                    com.dmb.bestbefore.data.models.AppNotification(
+                NotificationRepository(ctx).addNotification(
+                    AppNotification(
                         title = "Room Created",
                         message = "You successfully created the room \"${finalRoom.roomName}\"",
-                        type = com.dmb.bestbefore.data.models.NotificationType.ROOM_CREATED,
+                        type = NotificationType.ROOM_CREATED,
                         relatedRoomId = finalRoom.id,
                         relatedRoomName = finalRoom.roomName
                     )
@@ -990,7 +1017,7 @@ class ProfileViewModel : ViewModel() {
         // Schedule notification (Fixed: Added back)
         context?.let { ctx ->
             val unlockTimeMillis = _targetTime.value
-            com.dmb.bestbefore.notifications.NotificationScheduler.scheduleRoomUnlockNotification(
+            NotificationScheduler.scheduleRoomUnlockNotification(
                 ctx,
                 _roomName.value.hashCode().toString(),
                 _roomName.value,
@@ -1011,8 +1038,8 @@ class ProfileViewModel : ViewModel() {
      * Results are exposed via [aiSuggestions].
      */
     private suspend fun fetchAiSuggestions(
-        user: com.dmb.bestbefore.data.api.models.UserDto,
-        candidateRooms: List<com.dmb.bestbefore.data.api.models.RoomDto>
+        user: UserDto,
+        candidateRooms: List<RoomDto>
     ) {
         _isLoadingAiSuggestions.value = true
         try {
@@ -1038,7 +1065,7 @@ class ProfileViewModel : ViewModel() {
         val room = _selectedRoom.value ?: return
         val userDto = _cachedUserDto ?: return
         viewModelScope.launch {
-            val candidateDto = com.dmb.bestbefore.data.api.models.RoomDto(
+            val candidateDto = RoomDto(
                 id = room.id,
                 name = room.roomName,
                 ownerEmail = null,
@@ -1062,10 +1089,10 @@ class ProfileViewModel : ViewModel() {
      * Track a VIEW interaction for [room] (called when a room detail is opened).
      * Fire-and-forget: persists preference signals without blocking the UI.
      */
-    fun trackViewForRoom(room: com.dmb.bestbefore.data.models.TimeCapsuleRoom) {
+    fun trackViewForRoom(room: TimeCapsuleRoom) {
         val userDto = _cachedUserDto ?: return
         viewModelScope.launch {
-            val candidateDto = com.dmb.bestbefore.data.api.models.RoomDto(
+            val candidateDto = RoomDto(
                 id = room.id, name = room.roomName, ownerEmail = null, createdAt = null,
                 isPrivate = !room.isPublic, isTimeCapsule = room.isCollaboration, tags = room.tags
             )
@@ -1112,14 +1139,14 @@ class ProfileViewModel : ViewModel() {
      * Fields written: preferredTags, preferenceTagWeights, preferenceRoomTypes,
      * preferenceEmbedding, preferenceUpdatedAt, lastLat, lastLon.
      */
-    private fun persistPreferenceUpdate(prefs: com.dmb.bestbefore.data.ai.UpdatePreferenceResponse) {
+    private fun persistPreferenceUpdate(prefs: UpdatePreferenceResponse) {
         val repo = authRepository ?: return
         viewModelScope.launch {
-            val now = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
-                .also { it.timeZone = java.util.TimeZone.getTimeZone("UTC") }
-                .format(java.util.Date())
+            val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+                .also { it.timeZone = TimeZone.getTimeZone("UTC") }
+                .format(Date())
             repo.updateMe(
-                com.dmb.bestbefore.data.api.models.UpdateMeRequest(
+                UpdateMeRequest(
                     preferredTags       = prefs.preferredTags,
                     preferenceTagWeights = prefs.preferenceTagWeights,
                     preferenceRoomTypes = prefs.preferenceRoomTypes,
@@ -1257,7 +1284,7 @@ class ProfileViewModel : ViewModel() {
                         }
 
                         if (mimeType.startsWith("audio/")) {
-                            val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                            val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
                             val memoryData: Map<String, Any> = mapOf(
                                 "type" to "audio",
                                 "title" to "Audio Drop",
@@ -1269,7 +1296,7 @@ class ProfileViewModel : ViewModel() {
                                 uploadedDataUris.add("data:$mimeType;base64,$base64")
                             }
                         } else if (mimeType.startsWith("video/")) {
-                            val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                            val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
                             val memoryData: Map<String, Any> = mapOf(
                                 "type" to "video",
                                 "title" to "Video Drop",
@@ -1282,8 +1309,8 @@ class ProfileViewModel : ViewModel() {
                             }
                         } else {
                             // Downsample image payloads for safer upload and render.
-                            val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
 
                             var inSampleSize = 1
                             while (options.outWidth / inSampleSize > 1024 || options.outHeight / inSampleSize > 1024) {
@@ -1292,13 +1319,13 @@ class ProfileViewModel : ViewModel() {
 
                             options.inJustDecodeBounds = false
                             options.inSampleSize = inSampleSize
-                            val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
                             if (bitmap == null) return@forEach
 
-                            val bos = java.io.ByteArrayOutputStream()
-                            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 60, bos)
+                            val bos = ByteArrayOutputStream()
+                            bitmap.compress(Bitmap.CompressFormat.JPEG, 60, bos)
                             val compressed = bos.toByteArray()
-                            val base64 = android.util.Base64.encodeToString(compressed, android.util.Base64.NO_WRAP)
+                            val base64 = Base64.encodeToString(compressed, Base64.NO_WRAP)
 
                             val memoryData: Map<String, Any> = mapOf(
                                 "type" to "photo",
@@ -1418,7 +1445,7 @@ class ProfileViewModel : ViewModel() {
                     url.startsWith("http") || url.startsWith("data:image")
                 }
                 if (latestPhotoUrl != null) {
-                    val coverPreview = com.dmb.bestbefore.data.api.models.MemoryPreview("latest", latestPhotoUrl)
+                    val coverPreview = MemoryPreview("latest", latestPhotoUrl)
                     _selectedRoom.value = _selectedRoom.value?.takeIf { it.id == currentRoomId }
                         ?.let { r ->
                             val existing = r.photos.filter { it.id != "latest" }
@@ -1552,7 +1579,7 @@ class ProfileViewModel : ViewModel() {
 
     fun startAudioRecording(context: Context) {
         if (audioRecorderHelper == null) {
-            audioRecorderHelper = com.dmb.bestbefore.utils.AudioRecorderHelper(context)
+            audioRecorderHelper = AudioRecorderHelper(context)
         }
         audioRecorderHelper?.startRecording()
         _isRecordingAudio.value = true
@@ -1567,7 +1594,7 @@ class ProfileViewModel : ViewModel() {
             viewModelScope.launch {
                 try {
                     val bytes = file.readBytes()
-                    val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
                     val memoryData = mapOf(
                         "type" to "audio",
                         "title" to "Voice Memory",
@@ -1603,14 +1630,14 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
-    private var mediaPlayer: android.media.MediaPlayer? = null
+    private var mediaPlayer: MediaPlayer? = null
 
     fun playBase64Audio(context: Context, dataUri: String) {
         try {
             mediaPlayer?.release()
 
             val base64String = dataUri.substringAfter("base64,")
-            val decodedBytes = android.util.Base64.decode(base64String, android.util.Base64.DEFAULT)
+            val decodedBytes = Base64.decode(base64String, Base64.DEFAULT)
 
             val extension = when {
                 dataUri.startsWith("data:audio/mpeg") -> ".mp3"
@@ -1618,10 +1645,10 @@ class ProfileViewModel : ViewModel() {
                 dataUri.startsWith("data:audio/ogg") -> ".ogg"
                 else -> ".m4a"
             }
-            val tempFile = java.io.File.createTempFile("playing_audio", extension, context.cacheDir)
+            val tempFile = File.createTempFile("playing_audio", extension, context.cacheDir)
             tempFile.writeBytes(decodedBytes)
 
-            mediaPlayer = android.media.MediaPlayer().apply {
+            mediaPlayer = MediaPlayer().apply {
                 setDataSource(tempFile.absolutePath)
                 setOnPreparedListener { it.start() }
                 setOnCompletionListener {
@@ -1643,7 +1670,7 @@ class ProfileViewModel : ViewModel() {
         }
         try {
             mediaPlayer?.release()
-            mediaPlayer = android.media.MediaPlayer().apply {
+            mediaPlayer = MediaPlayer().apply {
                 setDataSource(context, Uri.parse(source))
                 setOnPreparedListener { it.start() }
                 setOnCompletionListener {
@@ -1776,7 +1803,7 @@ class ProfileViewModel : ViewModel() {
         viewModelScope.launch {
             val userDto = _cachedUserDto ?: return@launch
             // Find matching RoomDto from rooms if available for tag/type context
-            val candidateDto = com.dmb.bestbefore.data.api.models.RoomDto(
+            val candidateDto = RoomDto(
                 id = room.id,
                 name = room.roomName,
                 ownerEmail = null,
@@ -1797,7 +1824,7 @@ class ProfileViewModel : ViewModel() {
 
     /** Opens a room from the Hallway card stack. Finds the matching TimeCapsuleRoom from createdRooms
      *  or creates a lightweight placeholder so the detail screen can load memories from the backend. */
-    fun selectRoomFromHallway(card: com.dmb.bestbefore.data.models.HallwayCard) {
+    fun selectRoomFromHallway(card: HallwayCard) {
         val existing = _createdRooms.value.find { it.id == card.id }
         val room = existing ?: TimeCapsuleRoom(
             id = card.id,
@@ -1865,10 +1892,10 @@ class ProfileViewModel : ViewModel() {
     fun updateTargetTime(hour: Int, minute: Int) {
         _targetHour.value = hour
         _targetMinute.value = minute
-        val calendar = java.util.Calendar.getInstance()
+        val calendar = Calendar.getInstance()
         calendar.timeInMillis = _targetTime.value
-        calendar.set(java.util.Calendar.HOUR_OF_DAY, hour)
-        calendar.set(java.util.Calendar.MINUTE, minute)
+        calendar.set(Calendar.HOUR_OF_DAY, hour)
+        calendar.set(Calendar.MINUTE, minute)
         _targetTime.value = calendar.timeInMillis
     }
 
@@ -1884,16 +1911,16 @@ class ProfileViewModel : ViewModel() {
     fun updateScheduledClosureTime(millis: Long) { _scheduledClosureTime.value = millis }
     fun updateScheduledClosureHour(h: Int) {
         _scheduledClosureHour.value = h
-        val cal = java.util.Calendar.getInstance()
+        val cal = Calendar.getInstance()
         cal.timeInMillis = _scheduledClosureTime.value
-        cal.set(java.util.Calendar.HOUR_OF_DAY, h)
+        cal.set(Calendar.HOUR_OF_DAY, h)
         _scheduledClosureTime.value = cal.timeInMillis
     }
     fun updateScheduledClosureMinute(m: Int) {
         _scheduledClosureMinute.value = m
-        val cal = java.util.Calendar.getInstance()
+        val cal = Calendar.getInstance()
         cal.timeInMillis = _scheduledClosureTime.value
-        cal.set(java.util.Calendar.MINUTE, m)
+        cal.set(Calendar.MINUTE, m)
         _scheduledClosureTime.value = cal.timeInMillis
     }
     fun selectPreset(preset: String) {
@@ -1971,7 +1998,7 @@ class ProfileViewModel : ViewModel() {
         val localUri = copyPickedImageToAppStorage(context, uri)
         if (localUri != null) {
             _profileImageUri.value = localUri
-            val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
+            val sessionManager = SessionManager(context)
             sessionManager.saveProfilePhotoUri(localUri.toString())
             
             // Upload to backend for global visibility
@@ -1979,10 +2006,10 @@ class ProfileViewModel : ViewModel() {
                 try {
                     val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                     if (bytes != null) {
-                        val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                        val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
                         val dataUri = "data:image/jpeg;base64,$base64"
-                        val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
-                        authRepo.updateMe(com.dmb.bestbefore.data.api.models.UpdateMeRequest(profileImageUrl = dataUri))
+                        val authRepo = AuthRepository(context)
+                        authRepo.updateMe(UpdateMeRequest(profileImageUrl = dataUri))
                         Log.d("ProfileViewModel", "Profile photo synced to backend")
                     }
                 } catch (e: Exception) {
@@ -2050,21 +2077,88 @@ class ProfileViewModel : ViewModel() {
     // ── Connect Rooms Actions ─────────────────────────────────────────────────
 
     /** Opens the Connect Rooms screen and fetches AI suggestions for [roomId]. */
+    // '+' butonuna basıldığında çalışan fonksiyon
     fun openConnectRooms(roomId: String) {
         _showConnectRooms.value = true
+        _isLoadingConnectionSuggestions.value = true
         _connectionSuggestions.value = emptyList()
+
         viewModelScope.launch {
-            _isLoadingConnectionSuggestions.value = true
-            val result = roomRepository.getRoomSuggestions(roomId)
-            result.onSuccess { response ->
-                _connectionSuggestions.value = response.suggestions
-            }.onFailure { e ->
-                Log.w("ProfileViewModel", "Failed to load connection suggestions: ${e.message}")
+            try {
+                val sourceRoom = _createdRooms.value.find { it.id == roomId } ?: return@launch
+
+                // 1. KENDİ ODALARINI ÇEVİR
+                val myCandidateRooms = _createdRooms.value.filter {
+                    it.id != roomId && !sourceRoom.connectedRooms.contains(it.id)
+                }.map { room ->
+                    com.dmb.bestbefore.data.api.models.RoomDto(
+                        id = room.id,
+                        name = room.roomName,
+                        tags = room.tags,
+                        isPrivate = !room.isPublic,
+                        isTimeCapsule = room.isCollaboration,
+                        description = room.description ?: "",
+                        ownerEmail = "",
+                        createdAt = ""
+                    )
+                }
+
+                // 2. HERKESE AÇIK (PUBLIC) ODALARI ÇEK VE ÇEVİR
+                val publicRooms = try {
+                    roomRepository.getDiscoverRooms().getOrNull() ?: emptyList()
+                } catch (e: Exception) {
+                    emptyList()
+                }
+
+                val publicCandidateRooms = publicRooms.mapNotNull { room ->
+                    if (room.id == roomId || sourceRoom.connectedRooms.contains(room.id)) return@mapNotNull null
+
+                    com.dmb.bestbefore.data.api.models.RoomDto(
+                        id = room.id,
+                        name = room.name, // HATANIN ÇÖZÜLDÜĞÜ YER: roomName yerine name yazıldı
+                        tags = room.tags ?: emptyList(),
+                        isPrivate = false,
+                        isTimeCapsule = false,
+                        description = room.description ?: "",
+                        ownerEmail = "",
+                        createdAt = ""
+                    )
+                }
+
+                // 3. İKİ LİSTEYİ BİRLEŞTİR (Senin odaların + Başkalarının odaları)
+                val candidateRooms = (myCandidateRooms + publicCandidateRooms).distinctBy { it.id }
+
+                if (candidateRooms.isNotEmpty()) {
+                    val userDto = authRepository?.getMe()?.getOrNull()
+                        ?: com.dmb.bestbefore.data.api.models.UserDto(id="", email="", name="")
+
+                    val result = aiRepository.getPersonalisedSuggestions(
+                        user = userDto,
+                        candidateRooms = candidateRooms,
+                        sourceRoomId = roomId
+                    )
+
+                    result.onSuccess { response ->
+                        _connectionSuggestions.value = response.suggestions.map { aiSuggestion ->
+                            com.dmb.bestbefore.data.api.models.RoomSuggestionDto(
+                                targetRoomId = aiSuggestion.targetRoomId,
+                                targetRoomName = aiSuggestion.targetRoomName,
+                                score = aiSuggestion.score,
+                                category = aiSuggestion.category,
+                                reasoning = aiSuggestion.reasoning
+                            )
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ProfileViewModel", "Bağlantı önerisi hatası", e)
+            } finally {
+                _isLoadingConnectionSuggestions.value = false
             }
-            _isLoadingConnectionSuggestions.value = false
         }
     }
 
+    // Ekranı kapatma fonksiyonun (zaten varsa dokunmana gerek yok)
     fun closeConnectRooms() {
         _showConnectRooms.value = false
         _connectionSuggestions.value = emptyList()
@@ -2217,9 +2311,9 @@ class ProfileViewModel : ViewModel() {
     fun saveRoomEdits(context: Context) {
         val room = _selectedRoom.value ?: return
         val closureIso: String? = if (_scheduledClosureEnabled.value) {
-            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
-                timeZone = java.util.TimeZone.getTimeZone("UTC")
-            }.format(java.util.Date(_scheduledClosureTime.value))
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }.format(Date(_scheduledClosureTime.value))
         } else null
 
         val fields: Map<String, Any?> = mapOf(
@@ -2280,10 +2374,10 @@ class ProfileViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 _isUpdatingCredential.value = true
-                val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
+                val authRepo = AuthRepository(context)
                 val firebaseToken = authRepo.getFirebaseIdToken(false)
                 if (firebaseToken != null) {
-                    val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
+                    val sessionManager = SessionManager(context)
                     val rawProfileImageUri = _profileImageUri.value?.toString()
                     val profileImageUrlForBackend = if (
                         rawProfileImageUri != null &&
@@ -2293,11 +2387,11 @@ class ProfileViewModel : ViewModel() {
                     ) rawProfileImageUri else null
                     
                     val profileImageBase64 = _profileImageUri.value?.let { uri ->
-                        if (profileImageUrlForBackend == null && uri is android.net.Uri) encodeProfileImageBase64(context, uri) else null
+                        if (profileImageUrlForBackend == null && uri is Uri) encodeProfileImageBase64(context, uri) else null
                     }
                     
                     val updateResult = authRepo.updateMe(
-                        com.dmb.bestbefore.data.api.models.UpdateMeRequest(
+                        UpdateMeRequest(
                             name = _userName.value,
                             bio = _bio.value,
                             profileImageUrl = profileImageUrlForBackend,
@@ -2319,15 +2413,15 @@ class ProfileViewModel : ViewModel() {
                             if (!saved.profileImageUrl.isNullOrBlank()) _profileImageUri.value = saved.profileImageUrl
                             if (saved.preferredTags != null) _preferredTags.value = saved.preferredTags
                             if (saved.theme.isNotBlank()) {
-                                val t = com.dmb.bestbefore.ui.theme.AppThemes.getThemeByName(saved.theme)
+                                val t = AppThemes.getThemeByName(saved.theme)
                                 _selectedTheme.value = t
-                                com.dmb.bestbefore.ui.theme.ThemeState.selectTheme(context, t)
+                                ThemeState.selectTheme(context, t)
                             }
                             if (saved.accentColor.isNotBlank()) {
                                 runCatching {
                                     val c = Color(android.graphics.Color.parseColor(saved.accentColor))
                                     _accentColor.value = c
-                                    com.dmb.bestbefore.ui.theme.ThemeState.selectAccent(context, c)
+                                    ThemeState.selectAccent(context, c)
                                 }
                             }
                         }
@@ -2347,22 +2441,23 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
-    private suspend fun encodeProfileImageBase64(context: Context, uri: Uri): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    private suspend fun encodeProfileImageBase64(context: Context, uri: Uri): String? = withContext(
+        Dispatchers.IO) {
         runCatching {
             val stream = context.contentResolver.openInputStream(uri) ?: return@runCatching null
             val raw = stream.use { it.readBytes() }
-            val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            android.graphics.BitmapFactory.decodeByteArray(raw, 0, raw.size, options)
+            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(raw, 0, raw.size, options)
             var inSampleSize = 1
             while (options.outWidth / inSampleSize > 512 || options.outHeight / inSampleSize > 512) {
                 inSampleSize *= 2
             }
             options.inJustDecodeBounds = false
             options.inSampleSize = inSampleSize
-            val bitmap = android.graphics.BitmapFactory.decodeByteArray(raw, 0, raw.size, options) ?: return@runCatching null
-            val bos = java.io.ByteArrayOutputStream()
-            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, bos)
-            android.util.Base64.encodeToString(bos.toByteArray(), android.util.Base64.NO_WRAP)
+            val bitmap = BitmapFactory.decodeByteArray(raw, 0, raw.size, options) ?: return@runCatching null
+            val bos = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 70, bos)
+            Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP)
         }.getOrNull()
     }
 
@@ -2380,20 +2475,20 @@ class ProfileViewModel : ViewModel() {
     // ========== THEME & CUSTOMIZATION FUNCTIONS ==========
     
     fun loadThemePreferences(context: Context) {
-        com.dmb.bestbefore.ui.theme.ThemeState.init(context)
-        _selectedTheme.value = com.dmb.bestbefore.ui.theme.ThemeState.currentTheme
-        _accentColor.value = com.dmb.bestbefore.ui.theme.ThemeState.currentAccent
-        _applyAccentToAll.value = com.dmb.bestbefore.ui.theme.ThemeState.applyAccentToAll
-        _syncAccentWithRoom.value = com.dmb.bestbefore.ui.theme.ThemeState.syncAccentWithRoom
+        ThemeState.init(context)
+        _selectedTheme.value = ThemeState.currentTheme
+        _accentColor.value = ThemeState.currentAccent
+        _applyAccentToAll.value = ThemeState.applyAccentToAll
+        _syncAccentWithRoom.value = ThemeState.syncAccentWithRoom
     }
     
     fun selectTheme(context: Context, theme: AppTheme) {
-        com.dmb.bestbefore.ui.theme.ThemeState.selectTheme(context, theme)
+        ThemeState.selectTheme(context, theme)
         _selectedTheme.value = theme
     }
     
     fun selectAccentColor(context: Context, color: Color) {
-        com.dmb.bestbefore.ui.theme.ThemeState.selectAccent(context, color)
+        ThemeState.selectAccent(context, color)
         _accentColor.value = color
     }
     
@@ -2425,15 +2520,15 @@ class ProfileViewModel : ViewModel() {
                                 // Update email in backend MongoDB via PATCH /auth/me
                                 viewModelScope.launch {
                                     try {
-                                        val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
+                                        val authRepo = AuthRepository(context)
                                         val firebaseToken = authRepo.getFirebaseIdToken(true) // force refresh after email change
                                         if (firebaseToken != null) {
                                             val updateResult = authRepo.updateMe(
-                                                com.dmb.bestbefore.data.api.models.UpdateMeRequest(email = newEmail)
+                                                UpdateMeRequest(email = newEmail)
                                             )
                                             if (updateResult.isSuccess) {
                                                 _credentialUpdateSuccess.value = "Verification email sent to $newEmail. Please verify to complete the change."
-                                                val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
+                                                val sessionManager = SessionManager(context)
                                                 sessionManager.saveUserEmail(newEmail)
                                             } else {
                                                 _credentialUpdateError.value = "Backend update failed"
@@ -2516,7 +2611,7 @@ class ProfileViewModel : ViewModel() {
 
     fun logout(context: Context) {
         // Clear session data
-        val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
+        val sessionManager = SessionManager(context)
         sessionManager.clearSession()
         
         // Clear auth repository prefs as well if they are separate (they seem to be inconsistent in the codebase)
@@ -2538,7 +2633,7 @@ class ProfileViewModel : ViewModel() {
         val current = _roomEmotions.value.toMutableMap()
         if (emotion == null) current.remove(roomId) else current[roomId] = emotion
         _roomEmotions.value = current
-        com.dmb.bestbefore.data.local.SessionManager(context).saveRoomEmotions(uid, current)
+        SessionManager(context).saveRoomEmotions(uid, current)
 
         // Best-effort backend signal so artists can later aggregate emotional responses.
         if (emotion != null) {
@@ -2555,10 +2650,10 @@ class ProfileViewModel : ViewModel() {
     }
 
     suspend fun getAuthToken(context: Context): String? {
-        val authRepo = com.dmb.bestbefore.data.repository.AuthRepository(context)
+        val authRepo = AuthRepository(context)
         return authRepo.getFirebaseIdToken(false)
     }
-    private fun isCollaborator(room: com.dmb.bestbefore.data.api.models.RoomDto, currentUserEmail: String): Boolean {
+    private fun isCollaborator(room: RoomDto, currentUserEmail: String): Boolean {
         if (currentUserEmail.isBlank()) return false
         return room.collaborators?.any { element ->
             if (element.isJsonPrimitive) {
@@ -2571,7 +2666,7 @@ class ProfileViewModel : ViewModel() {
         } == true
     }
 
-    private fun isViewer(room: com.dmb.bestbefore.data.api.models.RoomDto, currentUserEmail: String): Boolean {
+    private fun isViewer(room: RoomDto, currentUserEmail: String): Boolean {
         if (currentUserEmail.isBlank()) return false
         return room.viewers?.any { element ->
             if (element.isJsonPrimitive) {
