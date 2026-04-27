@@ -98,6 +98,7 @@ fun HallwayScreen(
     val serverStatus by viewModel.serverStatus.collectAsState()
     val notificationViewModel: NotificationViewModel = viewModel()
     val notificationCount by notificationViewModel.notifications.collectAsState()
+    val isSemanticSearching by viewModel.isSemanticSearching.collectAsState()
     // Responsive orb diameter to avoid collapse/clipping on narrow phones.
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val orbWidth = (screenWidthDp * 0.82f).dp.coerceIn(300.dp, 420.dp)
@@ -196,6 +197,7 @@ fun HallwayScreen(
                     } else {
                         HallwayContent(
                             cards = cards,
+                            isSemanticSearching = isSemanticSearching,
                             searchQuery = searchQuery,
                             onSearchQueryChange = viewModel::setSearchQuery,
                             currentTab = currentTab,
@@ -518,7 +520,6 @@ private fun RoomingContent(
             
             item { Spacer(modifier = Modifier.height(28.dp)) }
         }
-
         // ─── COLLABORATORS SECTION ────────────────────────────────────────
         if (roomingFilter != HallwayViewModel.RoomingFilter.SAVED_ONLY) {
             item {
@@ -864,6 +865,7 @@ private fun RoomingCard(
 @Composable
 private fun HallwayContent(
     cards: List<HallwayCard>,
+    isSemanticSearching: Boolean, // ADD THIS LINE
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     currentTab: BottomTab,
@@ -918,7 +920,17 @@ private fun HallwayContent(
             onExitSimilarMode = onExitSimilarMode
         )
 
-        if (cards.isEmpty()) {
+        if (isSemanticSearching) {
+            // Show a spinner while semantic search is thinking
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = colors.primary)
+            }
+        } else if (cards.isEmpty()) {
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -1321,15 +1333,12 @@ fun ActiveCardDetails(
     onShowSimilarRooms: () -> Unit = {},
     isSimilarMode: Boolean = false,
     onConnectRoom: () -> Unit = {}
-    ) {
+) {
     val colors = LocalBestBeforeColors.current
-    val context = androidx.compose.ui.platform.LocalContext.current
     val isCollabRoom = card.collaboratorCount > 0
     val hasDescription = card.description.isNotBlank()
     val hasTags = card.tags.isNotEmpty()
 
-    // BB-UI-07: Entire details section is wrapped in a Box to allow
-    // collaborator overlay to stack on TOP with highest z-index
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1345,12 +1354,10 @@ fun ActiveCardDetails(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Left: Avatar + Username + Collaborator button
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Avatar
                     ProfileAvatar(
                         imageUri = card.ownerProfilePic,
                         size = 44.dp,
@@ -1358,10 +1365,9 @@ fun ActiveCardDetails(
                         onClick = { card.ownerId?.let { onNavigateToCreatorProfile(it) } }
                     )
 
-                    // Username
                     val nameText = (card.ownerName?.takeIf { it.isNotBlank() }
-                                   ?: card.ownerEmail?.substringBefore("@")
-                                   ?: "artist")
+                        ?: card.ownerEmail?.substringBefore("@")
+                        ?: "artist")
                     Text(
                         text = nameText,
                         color = Color.White,
@@ -1370,25 +1376,16 @@ fun ActiveCardDetails(
                         modifier = Modifier.padding(end = 4.dp)
                     )
 
-                    // BB-UI-07: Collaborator toggle button
                     if (isCollabRoom) {
                         Box(
                             modifier = Modifier
-                                .background(
-                                    themeColor.copy(alpha = 0.2f),
-                                    RoundedCornerShape(12.dp)
-                                )
-                                .border(
-                                    1.dp,
-                                    themeColor.copy(alpha = 0.5f),
-                                    RoundedCornerShape(12.dp)
-                                )
+                                .background(themeColor.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                                .border(1.dp, themeColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                                 .clickable { onToggleCollaborators() }
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = if (showAllCollaborators) "show less"
-                                else "+${card.collaboratorCount} more",
+                                text = if (showAllCollaborators) "show less" else "+${card.collaboratorCount} more",
                                 color = themeColor,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium
@@ -1397,45 +1394,27 @@ fun ActiveCardDetails(
                     }
                 }
 
-                // Right: Tags
-                // BB-UI-08: Max 2 tags + "+" for non-collab rooms
-                // BB-UI-08: Only "+ tags" for collab rooms
-                // BB-UI-09: Empty when no tags
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (!isCollabRoom && hasTags) {
-                        card.tags.take(2).forEach { tag ->
-                            TagChip("#$tag", themeColor)
-                        }
-                        if (card.tags.size > 2) {
-                            TagChip("+", themeColor)
-                        }
+                        card.tags.take(2).forEach { tag -> TagChip("#$tag", themeColor) }
+                        if (card.tags.size > 2) TagChip("+", themeColor)
                     } else if (isCollabRoom && hasTags) {
                         TagChip("+ tags", themeColor)
                     }
-                    // BB-UI-09: No tags → nothing rendered (empty)
                 }
             }
 
             // ── Description ─────────────────────────────────────────
-            // BB-UI-08: Location rooms → max 1 line
-            // BB-UI-08: Collab rooms → max 1 line
-            // BB-UI-09: No description → show placeholder
-            val descMaxLines = when {
-                hasLocation || isCollabRoom -> 1
-                else -> 2
-            }
+            val descMaxLines = if (hasLocation || isCollabRoom) 1 else 2
 
             Text(
-                text = if (hasDescription) card.description
-                else "No description provided.",
-                color = if (hasDescription) colors.textPrimary.copy(alpha = 0.7f)
-                else colors.textSecondary,
+                text = if (hasDescription) card.description else "No description provided.",
+                color = if (hasDescription) colors.textPrimary.copy(alpha = 0.7f) else colors.textSecondary,
                 fontSize = 14.sp,
                 maxLines = descMaxLines,
                 overflow = TextOverflow.Ellipsis
             )
 
-            // Real Time Capsule status
             val isLocked = com.dmb.bestbefore.utils.DateUtils.isLocked(card.unlockDate)
             if (isLocked) {
                 Row(
@@ -1453,141 +1432,77 @@ fun ActiveCardDetails(
                 }
             }
 
-            if (hasDescription || (hasTags && card.tags.size > 2)) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // "See All" — pill background for readability
+            // ── Actions Row ─────────────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Left Side: See All (Only shows if there is extra content)
+                if (hasDescription || (hasTags && card.tags.size > 2)) {
                     Box(
                         modifier = Modifier
-                            .background(
-                                accentColor.copy(alpha = 0.18f),
-                                RoundedCornerShape(20.dp)
-                            )
+                            .background(accentColor.copy(alpha = 0.18f), RoundedCornerShape(20.dp))
                             .border(1.dp, accentColor.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
                             .clickable { onSeeAllClick() }
                             .padding(horizontal = 14.dp, vertical = 6.dp)
                     ) {
-                        Text(
-                            text = "See All",
-                            color = accentColor,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Text("See All", color = accentColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
-
-                    if (!isSimilarMode) {
-                        Row(
-                            modifier = Modifier
-                                .clickable { onShowSimilarRooms() }
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text("✨", fontSize = 12.sp)
-                            Text(
-                                text = "Show Similar Rooms",
-                                color = Color(0xFF007AFF),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    } else {
-                        // "Connection" button in Similarity Mode
-                        Box(
-                            modifier = Modifier
-                                .background(accentColor, RoundedCornerShape(100.dp))
-                                .clickable { onConnectRoom() }
-                                .padding(horizontal = 14.dp, vertical = 6.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Icon(Icons.Default.Link, null, tint = Color.Black, modifier = Modifier.size(14.dp))
-                                Text(
-                                    text = "Connection",
-                                    color = Color.Black,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
+                } else {
+                    Spacer(modifier = Modifier.width(8.dp)) // Keeps right-side elements aligned
                 }
-            } else if (isSimilarMode) {
-                // If description is short but we are in similar mode, still show Connection button
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.End)
-                        .background(accentColor, RoundedCornerShape(100.dp))
-                        .clickable { onConnectRoom() }
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(Icons.Default.Link, null, tint = Color.Black, modifier = Modifier.size(14.dp))
-                        Text(
-                            text = "Connection",
-                            color = Color.Black,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+
+                // Right Side: Similar Rooms / Connection (ALWAYS SHOWS)
+                if (!isSimilarMode) {
+                    Row(
+                        modifier = Modifier.clickable { onShowSimilarRooms() }.padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text("✨", fontSize = 12.sp)
+                        Text("Show Similar Rooms", color = Color(0xFF007AFF), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .background(accentColor, RoundedCornerShape(100.dp))
+                            .clickable { onConnectRoom() }
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Icon(Icons.Default.Link, null, tint = Color.Black, modifier = Modifier.size(14.dp))
+                            Text("Connection", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
         }
 
-        // ── BB-UI-07: Collaborator Overlay ──────────────────────────
-        // Stacks UPWARD from the owner row, highest z-index layer
-        // Dark background behind each avatar+nickname
+        // ── Collaborator Overlay ──────────────────────────
         AnimatedVisibility(
             visible = showAllCollaborators,
-            enter = fadeIn(tween(200)) + expandVertically(
-                expandFrom = Alignment.Bottom,
-                animationSpec = tween(300)
-            ),
-            exit = fadeOut(tween(200)) + shrinkVertically(
-                shrinkTowards = Alignment.Bottom,
-                animationSpec = tween(200)
-            ),
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .offset(y = (-50).dp)
-                .zIndex(100f)
+            enter = fadeIn(tween(200)) + expandVertically(expandFrom = Alignment.Bottom, animationSpec = tween(300)),
+            exit = fadeOut(tween(200)) + shrinkVertically(shrinkTowards = Alignment.Bottom, animationSpec = tween(200)),
+            modifier = Modifier.align(Alignment.BottomStart).offset(y = (-50).dp).zIndex(100f)
         ) {
-            // Tap-to-dismiss wrapper
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) { onDismissCollaborators() }
+                    .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onDismissCollaborators() }
             ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(start = 4.dp)
-                ) {
-                    // Show actual collaborator accounts stacking upward
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(start = 4.dp)) {
                     card.collaborators.forEach { collaborator ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier
-                                .background(
-                                    Color.Black.copy(alpha = 0.85f),
-                                    RoundedCornerShape(20.dp)
-                                )
+                                .background(Color.Black.copy(alpha = 0.85f), RoundedCornerShape(20.dp))
                                 .padding(horizontal = 8.dp, vertical = 6.dp)
                         ) {
-                            // Profile Avatar
-                            ProfileAvatar(
-                                imageUri = collaborator.profileImageUrl,
-                                size = 32.dp,
-                                accentColor = themeColor
-                            )
-
+                            ProfileAvatar(imageUri = collaborator.profileImageUrl, size = 32.dp, accentColor = themeColor)
                             Text(
                                 text = collaborator.name ?: collaborator.email.substringBefore("@"),
                                 color = colors.textPrimary,

@@ -78,7 +78,9 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
             val matchesSearch = if (normalizedQuery.isBlank() || (normalizedQuery.length >= 3 && semanticCards.isNotEmpty())) {
                 true
             } else {
-                card.title.contains(normalizedQuery, ignoreCase = true)
+                card.title.contains(normalizedQuery, ignoreCase = true) ||
+                        card.description.contains(normalizedQuery, ignoreCase = true) ||
+                        card.tags.any { it.contains(normalizedQuery, ignoreCase = true) }
             }
             matchesTagFilter && matchesSearch
         }

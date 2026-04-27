@@ -177,7 +177,10 @@ class AiRepository {
                 mapOf<String, Any>(
                     "id" to room.id,
                     "name" to room.name,
-                    "embedding" to (emptyList<Float>())
+                    // AI'ın anlamsal eşleştirme yapabilmesi için description ve tags ekliyoruz:
+                    "description" to (room.description ?: ""),
+                    "tags" to (room.tags ?: emptyList<String>()),
+                    "embedding" to emptyList<Float>()
                 )
             }
             val request = SemanticSearchRequest(
