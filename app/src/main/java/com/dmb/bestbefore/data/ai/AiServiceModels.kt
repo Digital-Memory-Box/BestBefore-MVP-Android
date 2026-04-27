@@ -111,7 +111,9 @@ data class GenerateSuggestionsRequest(
 )
 
 data class AiRoomSuggestion(
+    @SerializedName(value = "targetRoomId", alternate = ["roomId", "id", "target_room_id"])
     val targetRoomId: String,
+    @SerializedName(value = "targetRoomName", alternate = ["name", "roomName"])
     val targetRoomName: String,
     val score: Int,
     val category: String,

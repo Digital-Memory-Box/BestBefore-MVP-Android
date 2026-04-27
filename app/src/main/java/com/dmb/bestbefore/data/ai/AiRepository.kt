@@ -83,31 +83,59 @@ class AiRepository {
                 return Result.success(GenerateSuggestionsResponse("discovery", emptyList(), 0))
             }
 
-            val userProfile = UserPreferenceSchema(
-                preferredTags = user.preferredTags ?: emptyList(),
-                lastLat = userLat ?: user.lastLat,
-                lastLon = userLon ?: user.lastLon,
-                interactionRoomTypes = user.preferenceRoomTypes ?: emptyList(),
-                preferenceEmbedding = emptyList()
-            )
+            // Tıpkı Arama (Semantic Search) fonksiyonunda yaptığımız gibi odaları hazırla
+            coroutineScope {
+                val aiCandidates = candidateRooms.map { room ->
+                    async {
+                        val tagsText = room.tags?.joinToString(" ") ?: ""
+                        val weightedTags = "$tagsText $tagsText".trim()
+                        val descText = room.description?.trim() ?: ""
+                        val combinedText = "Room name: ${room.name}. Description: $descText. Core tags: $weightedTags."
 
-            val aiCandidates = candidateRooms.map { it.toAiRoomDto() }
+                        val embedResponse = api.embed(EmbeddingRequest(combinedText))
+                        val embeddingList = if (embedResponse.isSuccessful) {
+                            embedResponse.body()?.embedding ?: emptyList()
+                        } else {
+                            emptyList()
+                        }
 
-            val request = GenerateSuggestionsRequest(
-                sourceRoomId = sourceRoomId,
-                userProfile = userProfile,
-                candidateRooms = aiCandidates,
-                userLat = userLat ?: user.lastLat,
-                userLon = userLon ?: user.lastLon
-            )
+                        AiRoomDto(
+                            id = room.id,
+                            name = room.name ?: "",
+                            tags = room.tags ?: emptyList(),
+                            isPrivate = room.isPrivate == true,
+                            isTimeCapsule = room.isTimeCapsule == true,
+                            lat = 0.0,
+                            lon = 0.0,
+                            description = room.description,
+                            embedding = embeddingList,
+                            dwellTime = 0
+                        )
+                    }
+                }.awaitAll().filter { it.embedding?.isNotEmpty() == true }
 
-            val response = api.getSuggestions(request)
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
-            } else {
-                val err = response.errorBody()?.string() ?: "HTTP ${response.code()}"
-                Log.w(TAG, "getSuggestions failed: $err")
-                Result.failure(Exception(err))
+                val userProfile = UserPreferenceSchema(
+                    preferredTags = user.preferredTags ?: emptyList(),
+                    lastLat = userLat ?: user.lastLat,
+                    lastLon = userLon ?: user.lastLon,
+                    interactionRoomTypes = user.preferenceRoomTypes ?: emptyList(),
+                    preferenceEmbedding = emptyList()
+                )
+
+                val request = GenerateSuggestionsRequest(
+                    sourceRoomId = sourceRoomId,
+                    userProfile = userProfile,
+                    candidateRooms = aiCandidates,
+                    userLat = userLat ?: user.lastLat,
+                    userLon = userLon ?: user.lastLon
+                )
+
+                val response = api.getSuggestions(request)
+                if (response.isSuccessful && response.body() != null) {
+                    Result.success(response.body()!!)
+                } else {
+                    Result.failure(Exception("Suggestions failed: HTTP ${response.code()}"))
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "getPersonalisedSuggestions exception", e)

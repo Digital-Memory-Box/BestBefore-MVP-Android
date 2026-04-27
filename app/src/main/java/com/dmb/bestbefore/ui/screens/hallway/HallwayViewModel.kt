@@ -204,12 +204,33 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
         _similarModeSource.value = card
         _selectedCardIndex.value = 0
         _activePagerPage.value = 0
-        
+
         viewModelScope.launch {
-            val result = roomRepository.getRoomSuggestions(card.id)
+            // Ana Backend'i aradan çıkarıyoruz!
+
+            // AI için profil bilgisini hızlıca çekiyoruz (Giriş yapılmamışsa boş yollarız)
+            val userDto = authRepository.getMe().getOrNull() ?: com.dmb.bestbefore.data.api.models.UserDto(
+                id = "",
+                email = "",
+                name = ""
+            )
+            // Aranacak tüm aday odalar
+            val allAvailable = (myRoomsList + discoverRoomsList).distinctBy { it.id }
+
+            // Eski sorunlu kod: val result = roomRepository.getRoomSuggestions(card.id)
+            // YENİ KOD: Doğrudan kendi bağladığımız AI servisine soruyoruz:
+            val result = aiRepository.getPersonalisedSuggestions(
+                user = userDto,
+                candidateRooms = allAvailable,
+                sourceRoomId = card.id
+            )
+
             result.onSuccess { response ->
+                // Skoru 0'dan büyük olan, AI'ın "benzer" bulduğu odaları filtrele
                 _similarityScores.value = response.suggestions.associate { it.targetRoomId to it.score }
                 filterCards(_currentTab.value)
+            }.onFailure {
+                Log.e("HallwayViewModel", "Similar rooms failed: ${it.message}")
             }
         }
     }
