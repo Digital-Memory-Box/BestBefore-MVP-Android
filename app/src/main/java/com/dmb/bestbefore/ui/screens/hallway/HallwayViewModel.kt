@@ -561,7 +561,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                     if (element.isJsonObject) {
                         try {
                             com.google.gson.Gson().fromJson(element, com.dmb.bestbefore.data.api.models.UserDto::class.java)
-                        } catch (e: Exception) { null }
+                        } catch (_: Exception) { null }
                     } else null
                 } ?: emptyList(),
                 location = null,
@@ -593,7 +593,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                     val allAvailable = (myRoomsList + discoverRoomsList).distinctBy { it.id }
                     val result = roomRepository.semanticSearchRooms(query)
                     result.onSuccess { response ->
-                        val ranked = response.results.map { searchResult ->
+                        val ranked: List<HallwayCard> = response.results.mapNotNull { searchResult ->
                             allAvailable.find { it.id == searchResult.roomId }?.let { room ->
                                 val currentUserEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
                                 val isOwner = room.ownerEmail?.equals(currentUserEmail, ignoreCase = true) == true
@@ -623,7 +623,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                                     isCollaborator = isCollabFlag
                                 )
                             }
-                        }.filterNotNull()
+                        }
                         _semanticSearchCards.value = ranked
                         Log.d("HallwayViewModel", "Semantic search: ${ranked.size} results for '$query'")
                     }.onFailure { e ->
