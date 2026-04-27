@@ -3,6 +3,9 @@ package com.dmb.bestbefore.data.ai
 import android.util.Log
 import com.dmb.bestbefore.data.api.models.RoomDto
 import com.dmb.bestbefore.data.api.models.UserDto
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 
 private const val TAG = "AiRepository"
 
@@ -10,13 +13,13 @@ private const val TAG = "AiRepository"
  * Repository wrapping the BestBefore AI Service.
  *
  * Key responsibilities:
- *  1. [trackRoomInteraction]     — Fire-and-forget: report a VIEW/LIKE/IGNORE for preference learning.
- *  2. [getPersonalisedSuggestions] — Build a candidate list from the user's rooms and ask the AI
- *                                    service for ranked suggestions using the hybrid score + embeddings.
- *  3. [scoreRoomPair]            — Raw hybrid score between two rooms.
- *  4. [semanticSearch]           — Full-text semantic search over a list of rooms.
- *  5. [generateRoomDescription]  — GPT-generated description for a room being created.
- *  6. [updateUserPreference]     — Explicitly update the stored preference model after an interaction.
+ * 1. [trackRoomInteraction]     — Fire-and-forget: report a VIEW/LIKE/IGNORE for preference learning.
+ * 2. [getPersonalisedSuggestions] — Build a candidate list from the user's rooms and ask the AI
+ * service for ranked suggestions using the hybrid score + embeddings.
+ * 3. [scoreRoomPair]            — Raw hybrid score between two rooms.
+ * 4. [semanticSearch]           — Full-text semantic search over a list of rooms.
+ * 5. [generateRoomDescription]  — GPT-generated description for a room being created.
+ * 6. [updateUserPreference]     — Explicitly update the stored preference model after an interaction.
  */
 class AiRepository {
 
@@ -26,13 +29,6 @@ class AiRepository {
     // 1. Track Interaction → update preference model
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Report that the current user interacted with [room].
-     * [interactionType] should be one of: VIEW, LIKE, IGNORE, MEMORY_ADD,
-     *   SUGGESTION_ACCEPT, SUGGESTION_REJECT
-     *
-     * Returns the updated preference snapshot so the caller can persist it.
-     */
     suspend fun trackRoomInteraction(
         user: UserDto,
         room: RoomDto,
@@ -75,12 +71,6 @@ class AiRepository {
     // 2. Personalised Suggestions
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Given the user's saved preferences and a list of candidate [RoomDto]s (all
-     * publicly discoverable rooms), return AI-ranked room suggestions.
-     *
-     * The returned list is sorted by combined similarity (embedding + hybrid score).
-     */
     suspend fun getPersonalisedSuggestions(
         user: UserDto,
         candidateRooms: List<RoomDto>,
@@ -129,11 +119,6 @@ class AiRepository {
     // 3. Raw Hybrid Scoring
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Score [sourceRoom] against [targetRoom] using the 5-factor hybrid model:
-     * tag overlap + dwell time + interaction signal + location proximity + time-of-day.
-     * Score 80+ = direct_match, 40–79 = critical_zone (GPT-4o-mini used), <40 = reject.
-     */
     suspend fun scoreRoomPair(
         sourceRoom: RoomDto,
         targetRoom: RoomDto,
@@ -163,36 +148,62 @@ class AiRepository {
     // 4. Semantic Search
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Search [candidateRooms] semantically for [query].
-     * Each room needs at least an id and name; embedding is optional (server will handle missing).
-     */
     suspend fun semanticSearch(
         query: String,
         candidateRooms: List<RoomDto>,
         topK: Int = 5
     ): Result<SemanticSearchResponse> {
         return try {
-            val candidates = candidateRooms.map { room ->
-                mapOf<String, Any>(
-                    "id" to room.id,
-                    "name" to room.name,
-                    // AI'ın anlamsal eşleştirme yapabilmesi için description ve tags ekliyoruz:
-                    "description" to (room.description ?: ""),
-                    "tags" to (room.tags ?: emptyList<String>()),
-                    "embedding" to emptyList<Float>()
+            // coroutineScope ile işlemleri paralel (aynı anda) yaparak hızı artırıyoruz
+            coroutineScope {
+                // 1. ADIM: Her oda için /v1/embed endpoint'inden "embedding" değerlerini al
+                val candidatesWithEmbeddings = candidateRooms.map { room ->
+                    async {
+                        // Python'un arka planda beklediği formatta metni hazırlıyoruz
+                        val tagsText = room.tags?.joinToString(" ") ?: ""
+                        val weightedTags = "$tagsText $tagsText".trim()
+                        val descText = room.description?.trim() ?: ""
+                        val combinedText = "Room name: ${room.name}. Description: $descText. Core tags: $weightedTags."
+
+                        // Embedding'i (1536'lık sayıyı) Python'dan istiyoruz
+                        val embedResponse = api.embed(EmbeddingRequest(combinedText))
+                        val embeddingList = if (embedResponse.isSuccessful) {
+                            embedResponse.body()?.embedding ?: emptyList()
+                        } else {
+                            emptyList()
+                        }
+
+                        // Sunucuya göndereceğimiz tam ve eksiksiz sözlük (dictionary)
+                        mapOf<String, Any>(
+                            "id" to room.id,
+                            "roomId" to room.id,
+                            "name" to room.name,
+                            "embedding" to embeddingList
+                        )
+                    }
+                }.awaitAll().filter {
+                    // Sadece embedding'i başarıyla alınmış odaları listeye koy (Boşları at)
+                    @Suppress("UNCHECKED_CAST")
+                    (it["embedding"] as List<Float>).isNotEmpty()
+                }
+
+                if (candidatesWithEmbeddings.isEmpty()) {
+                    return@coroutineScope Result.failure(Exception("Hiçbir oda için embedding oluşturulamadı."))
+                }
+
+                // 2. ADIM: Artık elimizde "dolu" embeddingler var! Aramayı başlatabiliriz.
+                val request = SemanticSearchRequest(
+                    queryText = query,
+                    candidateEmbeddings = candidatesWithEmbeddings,
+                    topK = topK
                 )
-            }
-            val request = SemanticSearchRequest(
-                queryText = query,
-                candidateEmbeddings = candidates,
-                topK = topK
-            )
-            val response = api.semanticSearch(request)
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
-            } else {
-                Result.failure(Exception("Semantic search failed: HTTP ${response.code()}"))
+
+                val response = api.semanticSearch(request)
+                if (response.isSuccessful && response.body() != null) {
+                    Result.success(response.body()!!)
+                } else {
+                    Result.failure(Exception("Semantic search failed: HTTP ${response.code()}"))
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "semanticSearch exception", e)
@@ -204,10 +215,6 @@ class AiRepository {
     // 5. Generate Room Description
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Ask the AI service to write a short description for a new room.
-     * Useful during room creation (Step 1 / Step 4 of the wizard).
-     */
     suspend fun generateRoomDescription(
         roomName: String,
         tags: List<String> = emptyList(),
@@ -229,7 +236,7 @@ class AiRepository {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 6. Explicit Preference Update (called from ViewModels after save)
+    // 6. Explicit Preference Update
     // ─────────────────────────────────────────────────────────────────────────
 
     suspend fun updateUserPreference(
@@ -259,9 +266,9 @@ fun RoomDto.toAiRoomDto(): AiRoomDto = AiRoomDto(
     tags = this.tags ?: emptyList(),
     isPrivate = this.isPrivate,
     isTimeCapsule = this.isTimeCapsule,
-    lat = 0.0,   // No geolocation stored in room — service gracefully handles 0,0
+    lat = 0.0,
     lon = 0.0,
     description = this.description,
-    embedding = null,  // Let server side handle missing embeddings
+    embedding = null,
     dwellTime = 0
 )

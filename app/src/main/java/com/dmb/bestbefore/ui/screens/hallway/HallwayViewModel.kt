@@ -21,6 +21,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 class HallwayViewModel(application: Application) : AndroidViewModel(application) {
 
     private val roomRepository = RoomRepository()
+    private val aiRepository = com.dmb.bestbefore.data.ai.AiRepository()
     private val authRepository: com.dmb.bestbefore.data.repository.AuthRepository by lazy {
         com.dmb.bestbefore.data.repository.AuthRepository(getApplication())
     }
@@ -586,6 +587,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
     }
 
     // Debounced semantic search: fires when query reaches 3+ chars, clears on shorter input.
+    // Debounced semantic search: fires when query reaches 3+ chars, clears on shorter input.
     private fun watchSearchQueryForSemanticSearch() {
         viewModelScope.launch {
             @Suppress("OPT_IN_USAGE")
@@ -593,9 +595,13 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 if (query.length >= 3) {
                     _isSemanticSearching.value = true
                     val allAvailable = (myRoomsList + discoverRoomsList).distinctBy { it.id }
-                    val result = roomRepository.semanticSearchRooms(query)
+
+                    // DEĞİŞEN KISIM: Ana backend'i atlayıp doğrudan AI sunucusuna (Railway) soruyoruz!
+                    // topK = 10 diyerek yapay zekadan en alakalı 10 odayı getirmesini istiyoruz.
+                    val result = aiRepository.semanticSearch(query, allAvailable, topK = 10)
+
                     result.onSuccess { response ->
-                        val ranked: List<HallwayCard> = response.results.mapNotNull { searchResult ->
+                        val ranked = response.results.map { searchResult ->
                             allAvailable.find { it.id == searchResult.roomId }?.let { room ->
                                 val currentUserEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
                                 val isOwner = room.ownerEmail?.equals(currentUserEmail, ignoreCase = true) == true
@@ -606,11 +612,11 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                                     title = room.name,
                                     timeCapsuleDays = room.capsuleDurationDays,
                                     description = if (!room.description.isNullOrBlank()) room.description
-                                                  else (room.generatedDescription ?: searchResult.description ?: ""),
+                                    else (room.generatedDescription ?: ""),
                                     imageUrl = room.photos?.firstOrNull()?.url,
                                     photos = room.photos ?: emptyList(),
                                     themeColorHex = room.theme,
-                                    tags = room.tags ?: searchResult.tags ?: emptyList(),
+                                    tags = room.tags ?: emptyList(),
                                     ownerId = room.ownerId,
                                     ownerEmail = room.ownerEmail,
                                     ownerName = room.ownerName,
@@ -625,7 +631,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                                     isCollaborator = isCollabFlag
                                 )
                             }
-                        }
+                        }.filterNotNull()
                         _semanticSearchCards.value = ranked
                         Log.d("HallwayViewModel", "Semantic search: ${ranked.size} results for '$query'")
                     }.onFailure { e ->
