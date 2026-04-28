@@ -28,6 +28,8 @@ class SessionManager(context: Context) {
         private const val KEY_SAVED_ROOMS = "saved_room_ids"
         private const val KEY_ROOM_EMOTIONS_PREFIX = "room_emotions_"
         private const val KEY_PROFILE_IMAGE_URL = "profile_image_url" // from backend
+        private const val KEY_CACHED_USER = "cached_user_dto"
+        private const val KEY_CACHED_HALLWAY = "cached_hallway_cards"
     }
 
     fun saveAuthToken(token: String) {
@@ -46,12 +48,39 @@ class SessionManager(context: Context) {
             putString(KEY_ACCENT_COLOR, user.accentColor)
             putString(KEY_USER_TYPE, user.userType)
             putString(KEY_BIO, user.bio)
+            putString(KEY_CACHED_USER, gson.toJson(user))
             putString(KEY_IGNORED_ROOMS, gson.toJson(user.ignoredRoomIds))
             putString(KEY_SAVED_ROOMS, gson.toJson(user.savedRoomIds))
-            // Persist profileImageUrl from backend so it survives app restarts
+            // Persist profileImageUrl from backend so it survives app restarts.
             if (!user.profileImageUrl.isNullOrBlank()) {
                 putString(KEY_PROFILE_IMAGE_URL, user.profileImageUrl)
+            } else if (!user.profileImageData.isNullOrBlank()) {
+                // If only raw data is present, store it as a data URI
+                putString(KEY_PROFILE_IMAGE_URL, "data:image/jpeg;base64,${user.profileImageData}")
             }
+        }
+    }
+
+    fun getCachedUser(): UserDto? {
+        val json = prefs.getString(KEY_CACHED_USER, null) ?: return null
+        return try {
+            gson.fromJson(json, UserDto::class.java)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun saveHallwayCards(cards: List<com.dmb.bestbefore.data.models.HallwayCard>) {
+        prefs.edit { putString(KEY_CACHED_HALLWAY, gson.toJson(cards)) }
+    }
+
+    fun getHallwayCards(): List<com.dmb.bestbefore.data.models.HallwayCard> {
+        val json = prefs.getString(KEY_CACHED_HALLWAY, null) ?: return emptyList()
+        val type = object : TypeToken<List<com.dmb.bestbefore.data.models.HallwayCard>>() {}.type
+        return try {
+            gson.fromJson(json, type) ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
         }
     }
 

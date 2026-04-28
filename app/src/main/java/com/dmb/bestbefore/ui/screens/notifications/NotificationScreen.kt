@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dmb.bestbefore.data.models.AppNotification
 import com.dmb.bestbefore.data.models.NotificationType
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 
 private val AccentBlue = Color(0xFF1A7AF8)
@@ -43,6 +45,7 @@ fun NotificationScreen(
     viewModel: NotificationViewModel = viewModel()
 ) {
     val notifications by viewModel.notifications.collectAsState()
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         viewModel.refresh()
@@ -167,13 +170,21 @@ fun NotificationScreen(
                                 onAccept = { n -> n.relatedRoomId?.let { viewModel.acceptInvite(it, n.id) } },
                                 onDecline = { n -> n.relatedRoomId?.let { viewModel.declineInvite(it, n.id) } },
                                 onApproveJoin = { n ->
-                                    val roomId = n.relatedRoomId ?: return@CollapsibleNotificationCard
-                                    val requester = n.requesterEmail ?: return@CollapsibleNotificationCard
+                                    val roomId = n.relatedRoomId
+                                    val requester = n.requesterEmail
+                                    if (roomId.isNullOrBlank() || requester.isNullOrBlank()) {
+                                        Toast.makeText(context, "Cannot process: notification data incomplete. Pull down to refresh.", Toast.LENGTH_LONG).show()
+                                        return@CollapsibleNotificationCard
+                                    }
                                     viewModel.approveJoinRequest(roomId, requester, n.id)
                                 },
                                 onDenyJoin = { n ->
-                                    val roomId = n.relatedRoomId ?: return@CollapsibleNotificationCard
-                                    val requester = n.requesterEmail ?: return@CollapsibleNotificationCard
+                                    val roomId = n.relatedRoomId
+                                    val requester = n.requesterEmail
+                                    if (roomId.isNullOrBlank() || requester.isNullOrBlank()) {
+                                        Toast.makeText(context, "Cannot process: notification data incomplete. Pull down to refresh.", Toast.LENGTH_LONG).show()
+                                        return@CollapsibleNotificationCard
+                                    }
                                     viewModel.denyJoinRequest(roomId, requester, n.id)
                                 }
                             )
@@ -308,8 +319,8 @@ fun CollapsibleNotificationCard(
         // ── Expandable body ────────────────────────────────────────────────────
         AnimatedVisibility(
             visible = expanded,
-            enter = expandVertically(animationSpec = tween(200)),
-            exit = shrinkVertically(animationSpec = tween(200))
+            enter = expandVertically(animationSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessLow)),
+            exit = shrinkVertically(animationSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessLow))
         ) {
             Column(
                 modifier = Modifier

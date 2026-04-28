@@ -38,7 +38,8 @@ fun OrbMenuPremium(
     onEventClick: () -> Unit = {},
     onSearchClick: () -> Unit = {},
     onAddClick: () -> Unit = {},
-    onProfileClick: () -> Unit = {}
+    onProfileClick: () -> Unit = {},
+    profileImageUrl: String? = null
 ) {
     // Kaydirma miktarini tutan state
     var dragOffsetX by remember { mutableFloatStateOf(0f) }
@@ -139,7 +140,12 @@ fun OrbMenuPremium(
                 }
 
                 Box(modifier = Modifier.align(Alignment.Center).offset(x = (-63).dp, y = 63.dp)) {
-                    OrbButton(icon = Icons.Default.Person, contentDescription = "Profile", onClick = onProfileClick, tint = iconTint)
+                    ProfileAvatar(
+                        imageUri = profileImageUrl,
+                        size = 44.dp,
+                        accentColor = if (isMidnight || isGlass) accentColor else Color.White,
+                        onClick = onProfileClick
+                    )
                 }
             }
         }

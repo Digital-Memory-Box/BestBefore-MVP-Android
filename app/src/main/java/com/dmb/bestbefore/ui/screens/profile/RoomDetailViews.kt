@@ -661,7 +661,7 @@ fun RoomDetailScreen(
                                         .combinedClickable(
                                             onClick = { viewModel.openGalleryViewer(displayMedia, i) },
                                             onLongClick = {
-                                                if (canContribute && viewModel.isMyMemory(room!!.id, item1)) {
+                                                if (canContribute) {
                                                     memoryToDelete = item1
                                                     showDeleteMemoryConfirm = true
                                                 }
@@ -722,7 +722,7 @@ fun RoomDetailScreen(
                                             .combinedClickable(
                                                 onClick = { viewModel.openGalleryViewer(displayMedia, i + 1) },
                                                 onLongClick = {
-                                                    if (viewModel.isMyMemory(room!!.id, item2)) {
+                                                    if (canContribute) {
                                                         memoryToDelete = item2
                                                         showDeleteMemoryConfirm = true
                                                     }
@@ -890,7 +890,7 @@ fun RoomDetailScreen(
                                         // canContribute is out of scope here (defined inside the Column)
                                         // so derive it directly from room which IS accessible at Box level
                                         val isContrib = room?.isOwnedByMe == true || room?.isCollaborator == true
-                                        if (isContrib && viewModel.isMyMemory(room!!.id, item)) {
+                                        if (isContrib) {
                                             memoryToDelete = item
                                             showDeleteMemoryConfirm = true
                                         }

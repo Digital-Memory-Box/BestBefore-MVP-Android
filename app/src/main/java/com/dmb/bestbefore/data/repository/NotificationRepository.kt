@@ -84,14 +84,16 @@ class NotificationRepository(private val context: Context? = null) {
                         ?: ""
 
                     AppNotification(
-                        id = map["_id"] as? String ?: java.util.UUID.randomUUID().toString(),
+                        id = extractStringId(map["_id"]),
                         title = title,
                         message = message,
                         timestamp = parseTimestamp(map),
                         type = type,
-                        relatedRoomId = map["roomId"] as? String,
+                        relatedRoomId = extractStringId(map["roomId"] ?: map["relatedRoomId"])
+                            .takeIf { it.isNotEmpty() },
                         relatedRoomName = map["roomName"] as? String,
-                        requesterEmail = (map["requesterEmail"] as? String) ?: (map["fromEmail"] as? String)
+                        requesterEmail = (map["requesterEmail"] as? String)
+                            ?: (map["fromEmail"] as? String)
                     )
                 }
                 mergeNotifications(notifications)
@@ -192,6 +194,13 @@ class NotificationRepository(private val context: Context? = null) {
             )
         }
         prefs.edit().putString(KEY_NOTIFICATIONS, jsonArray.toString()).apply()
+    }
+
+    /** Safely extracts a String ID from either a plain String or a MongoDB ObjectId map. */
+    private fun extractStringId(value: Any?): String = when (value) {
+        is String -> value
+        is Map<*, *> -> (value["\$oid"] ?: value["oid"])?.toString() ?: ""
+        else -> ""
     }
 
     private fun parseType(value: String): NotificationType {

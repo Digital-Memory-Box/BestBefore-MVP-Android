@@ -148,13 +148,11 @@ fun OrbMenu(
                 .align(Alignment.Center)
                 .offset(x = -buttonRadius, y = 0.dp)
         ) {
-            OrbButton(
-                icon = Icons.Default.Person,
-                contentDescription = "Profile",
-                onClick = onProfileClick,
+            ProfileAvatar(
+                imageUri = profileImageUrl,
                 size = 60.dp,
-                iconSize = 38.dp,
-                tint = iconTint
+                accentColor = if (isMidnight || isGlass) accentColor else Color.White,
+                onClick = onProfileClick
             )
         }
 

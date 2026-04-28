@@ -246,15 +246,31 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             val result = roomRepository.acceptSuggestion(sourceCard.id, targetCard.id)
             result.onSuccess {
-                // Success! Maybe show a toast or update local state
                 Log.d("HallwayViewModel", "Connected ${sourceCard.title} to ${targetCard.title}")
+                exitSimilarMode()
+                android.widget.Toast.makeText(getApplication(), "Rooms connected!", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            result.onFailure { e ->
+                Log.e("HallwayViewModel", "connectRoom failed: ${e.message}")
+                android.widget.Toast.makeText(getApplication(), "Failed to connect rooms", android.widget.Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     init {
+        loadCachedData()
         fetchRooms()
         watchSearchQueryForSemanticSearch()
+    }
+
+    private fun loadCachedData() {
+        val sessionManager = com.dmb.bestbefore.data.local.SessionManager(getApplication())
+        val cachedCards = sessionManager.getHallwayCards()
+        if (cachedCards.isNotEmpty()) {
+            _cards.value = cachedCards
+            // We still show initial loading if the cache is empty
+            _isInitialLoading.value = false
+        }
     }
 
     private fun fetchRooms() {
@@ -405,6 +421,11 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 
                 Log.i(TAG_PERF, "[${ms()}ms] calling filterCards")
                 filterCards(_currentTab.value)
+                
+                // Persist the filtered cards to cache for the next app launch
+                val sessionManager = com.dmb.bestbefore.data.local.SessionManager(getApplication())
+                sessionManager.saveHallwayCards(_cards.value)
+                
                 Log.i(TAG_PERF, "[${ms()}ms] filterCards done → ${_cards.value.size} cards visible")
             } catch (e: Exception) {
                 Log.e(TAG_PERF, "[${ms()}ms] fetchRooms EXCEPTION: ${e.message}", e)

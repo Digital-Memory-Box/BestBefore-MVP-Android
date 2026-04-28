@@ -113,7 +113,7 @@ fun CreatorProfileScreen(
                     ) {
                         // Profile Photo
                         ProfileAvatar(
-                            imageUri = p.profileImageUrl,
+                            imageUri = p.profileImageUrl ?: p.profileImageData,
                             size = 100.dp,
                             accentColor = Color.White
                         )

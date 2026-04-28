@@ -18,12 +18,15 @@ data class UserDto(
     val userType: String? = "normal",
     val bio: String? = null,
     val profileImageUrl: String? = null,
+    val profileImageData: String? = null, // Raw Base64 data from iOS/Backend
     val ignoredRoomIds: List<String>? = emptyList(),
     val savedRoomIds: List<String>? = emptyList(),
     val preferredTags: List<String>? = emptyList(),
     // AI Preference fields (matches iOS + backend schema)
     val preferenceTagWeights: Map<String, Double>? = null,
     val preferenceRoomTypes: List<String>? = null,
+    val preferenceEmbedding: List<Float>? = null,
+    val preferenceInteractions: List<String>? = null,
     val preferenceUpdatedAt: String? = null,
     val lastLat: Double? = null,
     val lastLon: Double? = null
@@ -40,6 +43,7 @@ data class UpdateMeRequest(
     val bio: String? = null,
     val profileImageUrl: String? = null,
     val profileImageBase64: String? = null,
+    val profileImageData: String? = null,
     val ignoredRoomIds: List<String>? = null,
     val savedRoomIds: List<String>? = null,
     val preferredTags: List<String>? = null,
@@ -47,6 +51,7 @@ data class UpdateMeRequest(
     val preferenceTagWeights: Map<String, Double>? = null,
     val preferenceRoomTypes: List<String>? = null,
     val preferenceEmbedding: List<Float>? = null,
+    val preferenceInteractions: List<String>? = null,
     val preferenceUpdatedAt: String? = null,
     val lastLat: Double? = null,
     val lastLon: Double? = null

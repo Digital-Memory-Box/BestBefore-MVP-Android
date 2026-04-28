@@ -267,7 +267,7 @@ fun MusicPresetOption(title: String, isSelected: Boolean, tintColor: Color, onCl
 }
 @Composable
 fun ProfileAvatar(
-    imageUri: Any?, // Can be Uri, String (URL or Base64), or null
+    imageUri: Any?, // Can be Uri, String (URL, Data URI, or raw Base64), or null
     size: androidx.compose.ui.unit.Dp,
     accentColor: Color = Color(0xFF007AFF),
     modifier: Modifier = Modifier,
@@ -286,45 +286,24 @@ fun ProfileAvatar(
     ) {
         val modelStr = imageUri?.toString()
         if (!modelStr.isNullOrBlank()) {
-            if (modelStr.startsWith("data:") && modelStr.contains("base64,")) {
-                // Decode base64 on IO thread and cache result — avoids janking the main thread
-                // with large profile images stored as data URIs (same pattern as AsyncBase64Image).
-                var bitmap by remember(modelStr) {
-                    mutableStateOf(Base64BitmapCache.get(modelStr))
-                }
-                LaunchedEffect(modelStr) {
-                    if (bitmap == null) {
-                        val decoded = withContext(Dispatchers.Default) {
-                            try {
-                                val clean = modelStr.substringAfter("base64,")
-                                val bytes = android.util.Base64.decode(clean, android.util.Base64.DEFAULT)
-                                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                            } catch (_: Exception) { null }
-                        }
-                        if (decoded != null) {
-                            Base64BitmapCache.put(modelStr, decoded)
-                            bitmap = decoded
-                        }
-                    }
-                }
-                if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap!!.asImageBitmap(),
-                        contentDescription = "Avatar",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-                // While decoding: accent-colored circle (already the Box background)
-            } else {
-                AsyncImage(
-                    model = imageUri,
-                    contentDescription = "Avatar",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    error = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Default.Person)
-                )
+            // Normalize the model: ensure base64 strings have the data: URI prefix
+            val model = when {
+                modelStr.startsWith("http") -> modelStr
+                modelStr.startsWith("data:") -> modelStr
+                // Heuristic: if it's long and doesn't look like a URL/Path, it's probably raw base64
+                modelStr.length > 50 && !modelStr.contains("/") -> "data:image/jpeg;base64,$modelStr"
+                else -> imageUri // Pass Uri or other types as-is to Coil
             }
+
+            AsyncImage(
+                model = model,
+                contentDescription = "Avatar",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                error = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Default.Person),
+                // Optimization: crossfade for smoother transition
+                // (Coil handles data URIs on its own background thread)
+            )
         } else {
             val isLight = accentColor.luminance() > 0.5f
             Icon(

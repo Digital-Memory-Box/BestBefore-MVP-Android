@@ -596,37 +596,8 @@ class ProfileViewModel : ViewModel() {
 
                     if (meResult.isSuccess) {
                         val userDto: UserDto = meResult.getOrThrow()
-                        _cachedUserDto = userDto  // cache for AI calls
-                        if (userDto.name != null && userDto.name.isNotBlank()) _userName.value = userDto.name
-                        if (userDto.bio != null) {
-                            _bio.value = userDto.bio
-                        } else {
-                            _bio.value = ""
-                        }
-                        if (userDto.profileImageUrl != null && userDto.profileImageUrl.isNotBlank()) {
-                            _profileImageUri.value = userDto.profileImageUrl
-                        }
-                        // Load profile tags from backend
-                        if (userDto.preferredTags != null) {
-                            _preferredTags.value = userDto.preferredTags
-                        }
-                        // Sync theme, accentColor, profileMusic from backend so any
-                        // changes made on other devices (or iOS) are applied here too.
-                        if (userDto.theme.isNotBlank()) {
-                            val serverTheme = AppThemes.getThemeByName(userDto.theme)
-                            _selectedTheme.value = serverTheme
-                            ThemeState.selectTheme(context, serverTheme)
-                        }
-                        if (userDto.accentColor.isNotBlank()) {
-                            runCatching {
-                                val c = Color(android.graphics.Color.parseColor(userDto.accentColor))
-                                _accentColor.value = c
-                                ThemeState.selectAccent(context, c)
-                            }
-                        }
-                        if (!userDto.profileMusic.isNullOrBlank() && userDto.profileMusic != "None") {
-                            _profileMusic.value = userDto.profileMusic
-                        }
+                        applyUserDtoToState(userDto, context)
+                    }
                     }
 
                     val allRooms = mutableListOf<TimeCapsuleRoom>()
@@ -683,6 +654,46 @@ class ProfileViewModel : ViewModel() {
                 Log.e("ProfileViewModel", "initDatabase failed", e)
             }
         }
+    }
+
+    private fun applyUserDtoToState(userDto: UserDto, context: Context) {
+        _cachedUserDto = userDto  // cache for AI calls
+        if (!userDto.name.isNullOrBlank()) _userName.value = userDto.name
+        _bio.value = userDto.bio ?: ""
+        
+        // Allow both HTTP URLs and data: URIs (Base64) from backend.
+        if (!userDto.profileImageUrl.isNullOrBlank()) {
+            _profileImageUri.value = userDto.profileImageUrl
+        } else if (!userDto.profileImageData.isNullOrBlank()) {
+            // Fallback to raw base64 data if present
+            _profileImageUri.value = "data:image/jpeg;base64,${userDto.profileImageData}"
+        }
+        
+        // Load profile tags
+        if (userDto.preferredTags != null) {
+            _preferredTags.value = userDto.preferredTags
+        }
+        
+        // Sync theme, accentColor
+        if (!userDto.theme.isNullOrBlank()) {
+            val serverTheme = AppThemes.getThemeByName(userDto.theme)
+            _selectedTheme.value = serverTheme
+            ThemeState.selectTheme(context, serverTheme)
+        }
+        if (!userDto.accentColor.isNullOrBlank()) {
+            runCatching {
+                val c = Color(android.graphics.Color.parseColor(userDto.accentColor))
+                _accentColor.value = c
+                ThemeState.selectAccent(context, c)
+            }
+        }
+
+        if (!userDto.profileMusic.isNullOrBlank() && userDto.profileMusic != "None") {
+            _profileMusic.value = userDto.profileMusic
+        }
+        
+        // Save to cache via SessionManager (for updates)
+        SessionManager(context).saveUser(userDto)
     }
 
     private suspend fun fetchTagsLocally(context: Context): List<String> {
@@ -2396,11 +2407,20 @@ class ProfileViewModel : ViewModel() {
                             bio = _bio.value,
                             profileImageUrl = profileImageUrlForBackend,
                             profileImageBase64 = profileImageBase64,
+                            profileImageData = _cachedUserDto?.profileImageData,
                             preferredTags = _preferredTags.value, // send empty list instead of null to be safe
                             theme = _selectedTheme.value.name,
                             accentColor = colorToHex(_accentColor.value),
                             savedRoomIds = sessionManager.getSavedRoomIds(),
-                            ignoredRoomIds = sessionManager.getIgnoredRoomIds()
+                            ignoredRoomIds = sessionManager.getIgnoredRoomIds(),
+                            // Include AI Preference fields to ensure they are preserved on update
+                            preferenceTagWeights = _cachedUserDto?.preferenceTagWeights,
+                            preferenceRoomTypes = _cachedUserDto?.preferenceRoomTypes,
+                            preferenceEmbedding = _cachedUserDto?.preferenceEmbedding,
+                            preferenceInteractions = _cachedUserDto?.preferenceInteractions,
+                            preferenceUpdatedAt = _cachedUserDto?.preferenceUpdatedAt,
+                            lastLat = _cachedUserDto?.lastLat,
+                            lastLon = _cachedUserDto?.lastLon
                         )
                     )
                     if (updateResult.isSuccess) {

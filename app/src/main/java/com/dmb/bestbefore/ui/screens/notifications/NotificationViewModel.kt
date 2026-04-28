@@ -49,11 +49,19 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     fun approveJoinRequest(roomId: String, requesterEmail: String, notificationId: String) {
         viewModelScope.launch {
             val result = roomRepository.approveJoinRequest(roomId, requesterEmail)
-            if (result.isSuccess) {
-                android.widget.Toast.makeText(getApplication(), "Join request approved!", android.widget.Toast.LENGTH_SHORT).show()
-                removeNotification(notificationId)
-            } else {
-                android.widget.Toast.makeText(getApplication(), "Failed to approve: ${result.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_SHORT).show()
+            when {
+                result.isSuccess -> {
+                    android.widget.Toast.makeText(getApplication(), "Join request approved!", android.widget.Toast.LENGTH_SHORT).show()
+                    removeNotification(notificationId)
+                }
+                result.exceptionOrNull()?.message?.contains("404") == true -> {
+                    // 404 = request no longer pending (stale notification); dismiss it
+                    android.widget.Toast.makeText(getApplication(), "This request is no longer pending.", android.widget.Toast.LENGTH_SHORT).show()
+                    removeNotification(notificationId)
+                }
+                else -> {
+                    android.widget.Toast.makeText(getApplication(), "Failed to approve: ${result.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
@@ -61,11 +69,18 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     fun denyJoinRequest(roomId: String, requesterEmail: String, notificationId: String) {
         viewModelScope.launch {
             val result = roomRepository.denyJoinRequest(roomId, requesterEmail)
-            if (result.isSuccess) {
-                android.widget.Toast.makeText(getApplication(), "Join request denied.", android.widget.Toast.LENGTH_SHORT).show()
-                removeNotification(notificationId)
-            } else {
-                android.widget.Toast.makeText(getApplication(), "Failed to deny: ${result.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_SHORT).show()
+            when {
+                result.isSuccess -> {
+                    android.widget.Toast.makeText(getApplication(), "Join request denied.", android.widget.Toast.LENGTH_SHORT).show()
+                    removeNotification(notificationId)
+                }
+                result.exceptionOrNull()?.message?.contains("404") == true -> {
+                    android.widget.Toast.makeText(getApplication(), "This request is no longer pending.", android.widget.Toast.LENGTH_SHORT).show()
+                    removeNotification(notificationId)
+                }
+                else -> {
+                    android.widget.Toast.makeText(getApplication(), "Failed to deny: ${result.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }

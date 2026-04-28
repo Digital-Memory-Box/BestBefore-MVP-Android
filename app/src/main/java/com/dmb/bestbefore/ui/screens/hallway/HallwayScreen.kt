@@ -977,43 +977,42 @@ private fun HallwayContent(
                     .fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     // ── Room Name + Location ────────────────────────
-                    Box(
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .padding(horizontal = 24.dp)
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = activeCard.title,
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.textPrimary,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(vertical = 8.dp)
-                            )
-                            if (!activeCard.location.isNullOrEmpty()) {
-                                Row(
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text("📍", fontSize = 12.sp)
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = activeCard.location,
-                                        fontSize = 14.sp,
-                                        color = colors.textSecondary,
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = activeCard.title,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.textPrimary,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                        if (!activeCard.location.isNullOrEmpty()) {
+                            Row(
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("📍", fontSize = 12.sp)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = activeCard.location,
+                                    fontSize = 14.sp,
+                                    color = colors.textSecondary,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
+                            Spacer(modifier = Modifier.height(4.dp))
                         }
                     }
 
@@ -1027,12 +1026,13 @@ private fun HallwayContent(
                         pageSpacing = 8.dp
                     ) { page ->
                         val card = cards[page]
-                        val pageOffset = ((pagerState.currentPage - page) +
-                                pagerState.currentPageOffsetFraction).absoluteValue
+                        val fraction = pagerState.currentPageOffsetFraction
+                        val pageOffset = ((pagerState.currentPage - page) + (if (fraction.isNaN()) 0f else fraction)).absoluteValue
                         val parsedColor = parseThemeColor(card.themeColorHex)
 
                         // BB-UI-05: Glow dims as card moves off-center
-                        val glowAlpha = 1f - (pageOffset * 1.5f).coerceIn(0f, 1f)
+                        val glowAlphaRaw = 1f - (pageOffset * 1.5f).coerceIn(0f, 1f)
+                        val glowAlpha = if (glowAlphaRaw.isNaN()) 1f else glowAlphaRaw
 
                         Box(
                             modifier = Modifier.fillMaxWidth(),
@@ -1053,22 +1053,24 @@ private fun HallwayContent(
                         }
                     }
 
-                    // ── Card Details ────────────────────────────────
+                    // ── Card Details — fills remaining space between card and nav ──
                     Spacer(modifier = Modifier.height(16.dp))
-                    ActiveCardDetails(
-                        card = activeCard,
-                        themeColor = themeColor,
-                        accentColor = colors.primary,
-                        hasLocation = !activeCard.location.isNullOrEmpty(),
-                        showAllCollaborators = areCollaboratorsExpanded,
-                        onToggleCollaborators = onToggleCollaborators,
-                        onDismissCollaborators = onCollapseCollaborators,
-                        onSeeAllClick = onExpandDescription,
-                        onNavigateToCreatorProfile = onNavigateToCreatorProfile,
-                        onShowSimilarRooms = { onEnterSimilarMode(activeCard) },
-                        isSimilarMode = similarModeSource != null,
-                        onConnectRoom = { onConnectRoom(activeCard) }
-                    )
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        ActiveCardDetails(
+                            card = activeCard,
+                            themeColor = themeColor,
+                            accentColor = colors.primary,
+                            hasLocation = !activeCard.location.isNullOrEmpty(),
+                            showAllCollaborators = areCollaboratorsExpanded,
+                            onToggleCollaborators = onToggleCollaborators,
+                            onDismissCollaborators = onCollapseCollaborators,
+                            onSeeAllClick = onExpandDescription,
+                            onNavigateToCreatorProfile = onNavigateToCreatorProfile,
+                            onShowSimilarRooms = { onEnterSimilarMode(activeCard) },
+                            isSimilarMode = similarModeSource != null,
+                            onConnectRoom = { onConnectRoom(activeCard) }
+                        )
+                    }
                 }
 
                 // ── CD Button ───────────────────────────────────────
@@ -1110,26 +1112,24 @@ fun HallwayActiveCard(
 ) {
     val colors = LocalBestBeforeColors.current
 
-    // Subtle pulse to mimic the richer Swift glow language.
-    val glowPulse = rememberInfiniteTransition(label = "hallwayGlowPulse")
-    val pulseScale by glowPulse.animateFloat(
-        initialValue = 0.96f,
-        targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseScale"
-    )
-    val pulseAlpha by glowPulse.animateFloat(
-        initialValue = 0.9f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1300, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseAlpha"
-    )
+    // Drive pulse animations from a single withInfiniteAnimationFrameMillis loop.
+    // Avoids InfiniteTransition + tween() which reports targetBasedFrameRate=NaN,
+    // causing setRequestedFrameRate(NaN) spam and the GPU running at max rate.
+    var pulseScale by remember { mutableFloatStateOf(1f) }
+    var pulseAlpha by remember { mutableFloatStateOf(0.95f) }
+
+    LaunchedEffect(Unit) {
+        while (kotlinx.coroutines.isActive) {
+            androidx.compose.animation.core.withInfiniteAnimationFrameMillis { ms ->
+                // Scale: 0.96 → 1.06, period 2800 ms (1400 ms each way)
+                val sf = (ms % 2800L).toFloat() / 1400f
+                pulseScale = 0.96f + (if (sf <= 1f) sf else 2f - sf) * 0.10f
+                // Alpha: 0.90 → 1.00, period 2600 ms (1300 ms each way)
+                val af = (ms % 2600L).toFloat() / 1300f
+                pulseAlpha = 0.90f + (if (af <= 1f) af else 2f - af) * 0.10f
+            }
+        }
+    }
 
     val dynamicGlowAlpha = glowAlpha * pulseAlpha
 
@@ -1256,11 +1256,19 @@ fun HallwayActiveCard(
                 },
             contentAlignment = Alignment.BottomCenter
         ) {
-            val latestPhoto = card.photos.firstOrNull()
-            if (latestPhoto != null) {
-                val mediaUrl = latestPhoto.url
-                val isVideo = mediaUrl.endsWith(".mp4", ignoreCase = true) || 
-                              mediaUrl.endsWith(".mov", ignoreCase = true) || 
+            // Prefer imageUrl (most recently uploaded, set by backend or updateCardCover),
+            // fall back to first photo in the photos list.
+            val rawMediaUrl = card.imageUrl?.takeIf { it.isNotBlank() }
+                ?: card.photos.firstOrNull()?.url?.takeIf { it.isNotBlank() }
+
+            if (rawMediaUrl != null) {
+                val mediaUrl = when {
+                    rawMediaUrl.startsWith("http") || rawMediaUrl.startsWith("data:") -> rawMediaUrl
+                    rawMediaUrl.length > 100 -> "data:image/jpeg;base64,$rawMediaUrl"
+                    else -> rawMediaUrl
+                }
+                val isVideo = mediaUrl.endsWith(".mp4", ignoreCase = true) ||
+                              mediaUrl.endsWith(".mov", ignoreCase = true) ||
                               mediaUrl.endsWith(".webm", ignoreCase = true) ||
                               mediaUrl.contains("/video/", ignoreCase = true)
 
@@ -1278,18 +1286,24 @@ fun HallwayActiveCard(
                     )
                 }
             } else {
-                // Fallback to LoremFlickr
-                val searchKeyword = card.title.lowercase()
+                // Fallback: prefer tags for a relevant placeholder, then room name keywords
+                val tagKeyword = card.tags
+                    .filter { it.length > 2 }
+                    .take(2)
+                    .joinToString(",")
+                    .takeIf { it.isNotBlank() }
+                val nameKeyword = card.title.lowercase()
                     .replace("'s", "")
                     .split(" ")
                     .filter { it.length > 3 && it !in listOf("room", "hallway", "best", "before", "collection") }
                     .take(2)
                     .joinToString(",")
-                    .takeIf { it.isNotBlank() } ?: "abstract"
-                
+                    .takeIf { it.isNotBlank() }
+                val searchKeyword = tagKeyword ?: nameKeyword ?: "abstract"
+
                 coil.compose.AsyncImage(
                     model = "https://loremflickr.com/640/800/$searchKeyword",
-                    contentDescription = "Dummy Media",
+                    contentDescription = "Placeholder",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                     alpha = 0.6f
@@ -1484,8 +1498,10 @@ fun ActiveCardDetails(
         // ── Collaborator Overlay ──────────────────────────
         AnimatedVisibility(
             visible = showAllCollaborators,
-            enter = fadeIn(tween(200)) + expandVertically(expandFrom = Alignment.Bottom, animationSpec = tween(300)),
-            exit = fadeOut(tween(200)) + shrinkVertically(shrinkTowards = Alignment.Bottom, animationSpec = tween(200)),
+            enter = fadeIn(spring(stiffness = Spring.StiffnessLow)) + 
+                    expandVertically(expandFrom = Alignment.Bottom, animationSpec = spring(stiffness = Spring.StiffnessLow)),
+            exit = fadeOut(spring(stiffness = Spring.StiffnessLow)) + 
+                   shrinkVertically(shrinkTowards = Alignment.Bottom, animationSpec = spring(stiffness = Spring.StiffnessLow)),
             modifier = Modifier.align(Alignment.BottomStart).offset(y = (-50).dp).zIndex(100f)
         ) {
             Box(

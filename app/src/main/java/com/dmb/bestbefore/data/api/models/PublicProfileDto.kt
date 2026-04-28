@@ -8,6 +8,7 @@ data class PublicProfileDto(
     @SerializedName("userType") val userType: String?,
     @SerializedName("bio") val bio: String?,
     @SerializedName("profileImageUrl") val profileImageUrl: String?,
+    @SerializedName("profileImageData") val profileImageData: String?,
     @SerializedName("roomingCount") val roomingCount: Int,
     @SerializedName("roomersCount") val roomersCount: Int,
     @SerializedName("memoriesCount") val memoriesCount: Int,

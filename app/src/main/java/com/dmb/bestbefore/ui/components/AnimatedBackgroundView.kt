@@ -1,7 +1,8 @@
 package com.dmb.bestbefore.ui.components
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -67,9 +68,10 @@ fun AnimatedBackgroundView(theme: String = "default") {
         "glass"              -> Color(0xFFBBBBBB)
         else                 -> Color(0xFF1A7AF8)
     }
+    // spring() reports a real frame rate from physics; tween() always reports NaN.
     val animatedCenterColor by animateColorAsState(
         targetValue = targetCenterColor,
-        animationSpec = tween(durationMillis = 700),
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
         label = "bgCenterGlow"
     )
     val orb1Colors = remember(isArtistTheme) {
