@@ -598,7 +598,7 @@ class ProfileViewModel : ViewModel() {
                         val userDto: UserDto = meResult.getOrThrow()
                         applyUserDtoToState(userDto, context)
                     }
-                    }
+
 
                     val allRooms = mutableListOf<TimeCapsuleRoom>()
                     if (roomsResult.isSuccess) {
@@ -653,8 +653,8 @@ class ProfileViewModel : ViewModel() {
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "initDatabase failed", e)
             }
-        }
-    }
+        }}
+
 
     private fun applyUserDtoToState(userDto: UserDto, context: Context) {
         _cachedUserDto = userDto  // cache for AI calls
@@ -2701,7 +2701,6 @@ class ProfileViewModel : ViewModel() {
 
     private fun parseISO8601(dateString: String?): Long = parseIso8601(dateString)
 }
-
 
 enum class ProfileStep {
     NONE,

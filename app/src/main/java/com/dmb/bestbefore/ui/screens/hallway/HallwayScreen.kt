@@ -60,6 +60,7 @@ import com.dmb.bestbefore.ui.theme.ThemeState
 import androidx.core.graphics.toColorInt
 import com.dmb.bestbefore.ui.components.VideoPlayer
 import kotlin.math.absoluteValue
+import kotlinx.coroutines.isActive
 
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1119,7 +1120,7 @@ fun HallwayActiveCard(
     var pulseAlpha by remember { mutableFloatStateOf(0.95f) }
 
     LaunchedEffect(Unit) {
-        while (kotlinx.coroutines.isActive) {
+        while (isActive) {
             androidx.compose.animation.core.withInfiniteAnimationFrameMillis { ms ->
                 // Scale: 0.96 → 1.06, period 2800 ms (1400 ms each way)
                 val sf = (ms % 2800L).toFloat() / 1400f
