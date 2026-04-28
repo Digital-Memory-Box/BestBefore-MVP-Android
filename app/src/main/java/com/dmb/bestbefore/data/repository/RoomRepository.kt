@@ -110,6 +110,7 @@ class RoomRepository {
         collaborators: List<String> = emptyList(),
         viewers: List<String> = emptyList(),
         scheduledClosureIso: String? = null,
+        uploadStartDateIso: String? = null,
         unlockDateIso: String? = null,
         rollingExpiryDays: Int = 0,
         description: String? = null,
@@ -129,6 +130,7 @@ class RoomRepository {
                 viewers = viewers,
                 unlockDate = unlockDateIso,
                 expirationDate = scheduledClosureIso,
+                uploadStartDate = uploadStartDateIso,
                 rollingExpiryDays = rollingExpiryDays,
                 description = description,
                 tags = tags,
@@ -214,16 +216,21 @@ class RoomRepository {
         return try {
             val response = api.getMemoriesByRoomRaw(freshBearer(), roomId, limit, offset)
             if (response.isSuccessful && response.body() != null) {
-                val reader = response.body()!!.charStream()
-                val listType = object : TypeToken<List<Map<String, Any>>>() {}.type
-                val body: List<Map<String, Any>> = Gson().fromJson(reader, listType)
+                val body = response.body()!!.use { responseBody ->
+                    val reader = responseBody.charStream()
+                    val listType = object : TypeToken<List<Map<String, Any>>>() {}.type
+                    Gson().fromJson<List<Map<String, Any>>>(reader, listType) ?: emptyList()
+                }
                 
                 android.util.Log.d("RoomRepository", "Successfully fetched ${body.size} memories via stream. Status: ${response.code()}")
                 Result.success(body)
             } else {
-                android.util.Log.e("RoomRepository", "Failed to fetch memories. Status: ${response.code()}, Error: ${response.errorBody()?.string()}")
+                android.util.Log.w("RoomRepository", "Failed to fetch memories. Status: ${response.code()}, Error: ${response.errorBody()?.string()}")
                 Result.failure(Exception("Failed to fetch memories: ${response.code()}"))
             }
+        } catch (e: IOException) {
+            android.util.Log.w("RoomRepository", "Network issue fetching memories via stream: ${e.message}")
+            Result.failure(e)
         } catch (e: Exception) {
             android.util.Log.e("RoomRepository", "Exception fetching memories via stream", e)
             Result.failure(e)

@@ -102,97 +102,91 @@ fun CreatorProfileScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 32.dp)
             ) {
-                // User Card (Prominent Header)
                 item {
+                    val displayName = p.name?.takeIf { it.isNotBlank() } ?: "user"
+                    val handleText = if (displayName.startsWith("@")) displayName else "@$displayName"
+                    val avatarImage = p.profileImageUrl
+                        ?: p.profileImageData?.let {
+                            if (it.startsWith("data:")) it else "data:image/jpeg;base64,$it"
+                        }
+
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
                             .background(Color(0xFF1C1C1E).copy(alpha = 0.8f), RoundedCornerShape(24.dp))
                             .padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Profile Photo
                         ProfileAvatar(
-                            imageUri = p.profileImageUrl ?: p.profileImageData,
+                            imageUri = avatarImage,
                             size = 100.dp,
                             accentColor = Color.White
                         )
                         
                         Spacer(modifier = Modifier.height(16.dp))
-                        
-                        // Name and Artist tag
+
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            val nameText = if (p.name?.startsWith("@") == true) p.name else "@${p.name ?: "user"}"
                             Text(
-                                text = nameText,
+                                text = handleText,
                                 color = Color.White,
                                 fontSize = 26.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                            
-                            Spacer(modifier = Modifier.height(16.dp))
-                            
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                val nameText2 = p.name?.takeIf { it.isNotBlank() } ?: "User"
+
+                            if (p.userType?.lowercase() == "artist") {
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .background(Color(0xFF007AFF), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = "Artist",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+
+                        if (!p.bio.isNullOrEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = p.bio!!,
+                                color = Color(0xFF8E8E93),
+                                fontSize = 15.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = "Rooming", color = Color.Gray, fontSize = 12.sp)
                                 Text(
-                                    text = nameText2,
+                                    text = formatCount(p.roomingCount),
                                     color = Color.White,
-                                    fontSize = 26.sp,
+                                    fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold
                                 )
-                                
-                                if (p.userType?.lowercase() == "artist") {
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .background(Color(0xFF007AFF), RoundedCornerShape(8.dp))
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(
-                                            text = "Artist",
-                                            color = Color.White,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
                             }
-                            
-                            if (!p.bio.isNullOrEmpty()) {
-                                Spacer(modifier = Modifier.height(8.dp))
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = "Roomers", color = Color.Gray, fontSize = 12.sp)
                                 Text(
-                                    text = p.bio!!,
-                                    color = Color(0xFF8E8E93),
-                                    fontSize = 15.sp,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                    text = formatCount(p.roomersCount),
+                                    color = Color.White,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
-                            }
-                            
-                            Spacer(modifier = Modifier.height(24.dp))
-                            
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(text = "Rooming", color = Color.Gray, fontSize = 12.sp)
-                                    Text(
-                                        text = formatCount(p.roomingCount),
-                                        color = Color.White,
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(text = "Roomers", color = Color.Gray, fontSize = 12.sp)
-                                    Text(
-                                        text = formatCount(p.roomersCount),
-                                        color = Color.White,
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
                             }
                         }
                     }
@@ -274,7 +268,9 @@ fun PublicRoomCard(room: PublicRoomDto, onClick: () -> Unit) {
     val themeColor = parseThemeColor(room.theme)
     
     Column(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
     ) {
         val searchKeyword = room.name.lowercase()
             .replace("'s", "")
@@ -283,7 +279,7 @@ fun PublicRoomCard(room: PublicRoomDto, onClick: () -> Unit) {
             .take(2)
             .joinToString(",")
             .takeIf { it.isNotBlank() } ?: "abstract"
-        val roomImage = room.photos.firstOrNull()?.url ?: "https://loremflickr.com/640/800/$searchKeyword"
+        val roomImage = normalizeCreatorRoomPhoto(room.photos.firstOrNull()?.url)
 
         Box(
             modifier = Modifier
@@ -298,16 +294,14 @@ fun PublicRoomCard(room: PublicRoomDto, onClick: () -> Unit) {
                             Color(0xFF121212)
                         )
                     )
-                )
-                .clickable { onClick() },
+                ),
             contentAlignment = Alignment.Center
         ) {
-            if (room.photos.isNotEmpty()) {
-                AsyncImage(
-                    model = room.photos.first().url,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+            if (roomImage != null) {
+                AsyncBase64Image(
+                    itemData = roomImage,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
                 )
             } else {
                 Icon(
@@ -339,6 +333,18 @@ fun PublicRoomCard(room: PublicRoomDto, onClick: () -> Unit) {
                 modifier = Modifier.padding(top = 2.dp)
             )
         }
+    }
+}
+
+private fun normalizeCreatorRoomPhoto(url: String?): String? {
+    if (url.isNullOrBlank()) return null
+    return when {
+        url.startsWith("http", ignoreCase = true) -> url
+        url.startsWith("data:image", ignoreCase = true) -> url
+        url.startsWith("data:", ignoreCase = true) && url.contains("base64,") ->
+            "data:image/jpeg;base64,${url.substringAfter("base64,")}"
+        url.length > 100 -> "data:image/jpeg;base64,$url"
+        else -> null
     }
 }
 

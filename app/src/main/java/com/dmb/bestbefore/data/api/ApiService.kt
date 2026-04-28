@@ -11,6 +11,7 @@ import retrofit2.http.DELETE
 import retrofit2.http.Multipart
 import retrofit2.http.Part
 import retrofit2.http.Path
+import retrofit2.http.Streaming
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.http.Url
@@ -142,6 +143,7 @@ interface ApiService {
         @Query("offset") offset: Int? = null
     ): Response<List<Map<String, @JvmSuppressWildcards Any>>>
 
+    @Streaming
     @GET("rooms/{roomId}/memories")
     suspend fun getMemoriesByRoomRaw(
         @Header("Authorization") token: String,

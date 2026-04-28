@@ -15,6 +15,7 @@ data class TimeCapsuleRoom(
     val dateCreated: Long = System.currentTimeMillis(),
     val unlockTime: Long = 0L,
     val scheduledClosureTime: Long = 0L,      // 0 = no scheduled closure
+    val uploadStartDate: Long = 0L,           // 0 = uploads allowed immediately
     val isSaved: Boolean = false,
     val theme: String = "Default",
     val tags: List<String> = emptyList(),

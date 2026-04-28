@@ -194,15 +194,19 @@ class ProfileViewModel : ViewModel() {
     private val _preferredTags = MutableStateFlow<List<String>>(emptyList())
     val preferredTags: StateFlow<List<String>> = _preferredTags.asStateFlow()
 
-    fun addProfileTag(tag: String) {
+    fun addProfileTag(tag: String, context: Context? = null) {
         val trimmed = tag.trim().lowercase()
         if (trimmed.isNotEmpty() && _preferredTags.value.none { it.equals(trimmed, ignoreCase = true) }) {
-            _preferredTags.value = _preferredTags.value + trimmed
+            val updated = _preferredTags.value + trimmed
+            _preferredTags.value = updated
+            context?.let { SessionManager(it).saveManualProfileTags(updated) }
         }
     }
 
-    fun removeProfileTag(tag: String) {
-        _preferredTags.value = _preferredTags.value.filter { !it.equals(tag, ignoreCase = true) }
+    fun removeProfileTag(tag: String, context: Context? = null) {
+        val updated = _preferredTags.value.filter { !it.equals(tag, ignoreCase = true) }
+        _preferredTags.value = updated
+        context?.let { SessionManager(it).saveManualProfileTags(updated) }
     }
 
     private val _showOnlySaved = MutableStateFlow(false)
@@ -391,6 +395,19 @@ class ProfileViewModel : ViewModel() {
 
     private val _scheduledClosureMinute = MutableStateFlow(59)
     val scheduledClosureMinute: StateFlow<Int> = _scheduledClosureMinute.asStateFlow()
+
+    // Upload Start Date — blocks uploads until this date
+    private val _uploadStartDateEnabled = MutableStateFlow(false)
+    val uploadStartDateEnabled: StateFlow<Boolean> = _uploadStartDateEnabled.asStateFlow()
+
+    private val _uploadStartDate = MutableStateFlow(System.currentTimeMillis() + 86400000L)
+    val uploadStartDate: StateFlow<Long> = _uploadStartDate.asStateFlow()
+
+    private val _uploadStartHour = MutableStateFlow(0)
+    val uploadStartHour: StateFlow<Int> = _uploadStartHour.asStateFlow()
+
+    private val _uploadStartMinute = MutableStateFlow(0)
+    val uploadStartMinute: StateFlow<Int> = _uploadStartMinute.asStateFlow()
 
     data class InvitedUser(
         val email: String,
@@ -657,7 +674,17 @@ class ProfileViewModel : ViewModel() {
 
 
     private fun applyUserDtoToState(userDto: UserDto, context: Context) {
-        _cachedUserDto = userDto  // cache for AI calls
+        val sessionManager = SessionManager(context)
+        val manualProfileTags = sessionManager.getManualProfileTags()
+        val backendTags = userDto.preferredTags.orEmpty()
+        val visibleProfileTags = when {
+            !manualProfileTags.isNullOrEmpty() -> manualProfileTags
+            backendTags.isNotEmpty() -> backendTags
+            manualProfileTags != null -> manualProfileTags
+            else -> emptyList()
+        }
+
+        _cachedUserDto = userDto.copy(preferredTags = visibleProfileTags)  // cache for AI calls
         if (!userDto.name.isNullOrBlank()) _userName.value = userDto.name
         _bio.value = userDto.bio ?: ""
         
@@ -669,10 +696,7 @@ class ProfileViewModel : ViewModel() {
             _profileImageUri.value = "data:image/jpeg;base64,${userDto.profileImageData}"
         }
         
-        // Load profile tags
-        if (userDto.preferredTags != null) {
-            _preferredTags.value = userDto.preferredTags
-        }
+        _preferredTags.value = visibleProfileTags
         
         // Sync theme, accentColor
         if (!userDto.theme.isNullOrBlank()) {
@@ -693,7 +717,7 @@ class ProfileViewModel : ViewModel() {
         }
         
         // Save to cache via SessionManager (for updates)
-        SessionManager(context).saveUser(userDto)
+        sessionManager.saveUser(userDto.copy(preferredTags = visibleProfileTags))
     }
 
     private suspend fun fetchTagsLocally(context: Context): List<String> {
@@ -754,11 +778,11 @@ class ProfileViewModel : ViewModel() {
             val unlock = createdMs + (dto.capsuleDurationDays * 24 * 3600 * 1000L) +
                           (dto.capsuleDurationHours * 3600 * 1000L) + (dto.capsuleDurationMinutes * 60 * 1000L)
             val closureMs = dto.expirationDate?.let { parseCreatedAt(it) } ?: 0L
+            val uploadStartMs = dto.uploadStartDate?.let { parseCreatedAt(it) } ?: 0L
             val rollingString = when (dto.rollingExpiryDays) {
-                1 -> "24 hours"
-                7 -> "1 week"
-                30 -> "30 days"
-                365 -> "1 year"
+                1 -> "1 Day (24...)"
+                7 -> "7 Days"
+                30 -> "30 Days"
                 else -> "Never"
             }
             val isViewerOnly = dto.viewers?.any { element ->
@@ -787,6 +811,7 @@ class ProfileViewModel : ViewModel() {
                 photos = dto.photos ?: emptyList(),
                 unlockTime = if (dto.unlockDate != null) parseCreatedAt(dto.unlockDate) else unlock,
                 scheduledClosureTime = closureMs,
+                uploadStartDate = uploadStartMs,
                 dateCreated = createdMs,
                 isSaved = isSaved,
                 theme = dto.theme ?: "Default",
@@ -881,7 +906,12 @@ class ProfileViewModel : ViewModel() {
         val minutes: Int
         val finalTargetTime: Long
 
-        if (_unlockMethod.value == UnlockMethod.DURATION) {
+        if (!_isTimeCapsuleEnabled.value) {
+            days = 0
+            hours = 0
+            minutes = 0
+            finalTargetTime = now
+        } else if (_unlockMethod.value == UnlockMethod.DURATION) {
             days = _capsuleDays.value
             hours = _capsuleHours.value
             minutes = _capsuleMins.value
@@ -901,7 +931,7 @@ class ProfileViewModel : ViewModel() {
             val tags = _roomTags.value
             val isPrivateMode = !_isPublic.value
             val isTimeCap = _isTimeCapsuleEnabled.value
-            var finalDescription = _roomDescription.value
+            var finalDescription = _roomDescription.value.trim()
 
             try {
                 // Şairane yapay zekayı gizlice çağırıyoruz
@@ -945,6 +975,7 @@ class ProfileViewModel : ViewModel() {
                 isCollaboration = _isTimeCapsuleEnabled.value,
                 unlockTime = finalTargetTime,
                 scheduledClosureTime = if (_scheduledClosureEnabled.value) _scheduledClosureTime.value else 0L,
+                uploadStartDate = if (_uploadStartDateEnabled.value) _uploadStartDate.value else 0L,
                 theme = _roomAtmosphereTheme.value,
                 tags = _roomTags.value,
                 description = finalDescription, // <-- SİHİR BURADA: AI Metni buraya giriyor
@@ -961,15 +992,20 @@ class ProfileViewModel : ViewModel() {
                 }.format(Date(_scheduledClosureTime.value))
             } else null
 
+            val uploadStartIso: String? = if (_uploadStartDateEnabled.value) {
+                SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }.format(Date(_uploadStartDate.value))
+            } else null
+
             val unlockIso: String = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
                 timeZone = TimeZone.getTimeZone("UTC")
             }.format(Date(newRoom.unlockTime))
 
             val rollingDays = when (newRoom.rollingExpiration) {
-                "24 hours" -> 1
-                "1 week" -> 7
-                "30 days" -> 30
-                "1 year" -> 365
+                "1 Day (24...)" -> 1
+                "7 Days" -> 7
+                "30 Days" -> 30
                 else -> 0
             }
 
@@ -985,6 +1021,7 @@ class ProfileViewModel : ViewModel() {
                 collaborators = _invitedUsers.value.filter { it.role == "collaborator" }.map { it.email },
                 viewers = _invitedUsers.value.filter { it.role == "viewer" }.map { it.email },
                 scheduledClosureIso = closureIso,
+                uploadStartDateIso = uploadStartIso,
                 unlockDateIso = unlockIso,
                 rollingExpiryDays = rollingDays,
                 description = newRoom.description, // Artık AI metnini de içeriyor!
@@ -1147,7 +1184,7 @@ class ProfileViewModel : ViewModel() {
      * Save the AI-returned preference snapshot back to MongoDB via PATCH /me.
      * This is what keeps Android's preference data in sync with iOS (same document schema).
      *
-     * Fields written: preferredTags, preferenceTagWeights, preferenceRoomTypes,
+     * Fields written: preferenceTagWeights, preferenceRoomTypes,
      * preferenceEmbedding, preferenceUpdatedAt, lastLat, lastLon.
      */
     private fun persistPreferenceUpdate(prefs: UpdatePreferenceResponse) {
@@ -1158,7 +1195,6 @@ class ProfileViewModel : ViewModel() {
                 .format(Date())
             repo.updateMe(
                 UpdateMeRequest(
-                    preferredTags       = prefs.preferredTags,
                     preferenceTagWeights = prefs.preferenceTagWeights,
                     preferenceRoomTypes = prefs.preferenceRoomTypes,
                     preferenceEmbedding = prefs.preferenceEmbedding,
@@ -1167,8 +1203,7 @@ class ProfileViewModel : ViewModel() {
                     lastLon = prefs.lastLon
                 )
             ).onSuccess { updatedUser ->
-                _cachedUserDto = updatedUser
-                _preferredTags.value = updatedUser.preferredTags ?: _preferredTags.value
+                _cachedUserDto = updatedUser.copy(preferredTags = _preferredTags.value)
                 Log.d("ProfileViewModel", "Preferences persisted → ${updatedUser.preferenceTagWeights?.keys?.take(5)}")
             }.onFailure { e ->
                 Log.w("ProfileViewModel", "Failed to persist preference update: ${e.message}")
@@ -1404,7 +1439,7 @@ class ProfileViewModel : ViewModel() {
 
                 val memoriesUrls = mutableListOf<String>()
                 val memoryItemMap = mutableMapOf<String, MemoryItem>()
-                val memoriesResult = roomRepository.getMemoriesByRoom(currentRoomId)
+                val memoriesResult = roomRepository.getMemoriesByRoom(currentRoomId, limit = 50)
                 memoriesResult.onSuccess { memories ->
                     memories.forEach { memory ->
                         val content = memory["content"] as? String
@@ -1764,6 +1799,10 @@ class ProfileViewModel : ViewModel() {
         _currentStep.value = ProfileStep.ROOM_NAME
         // Reset state
         _roomName.value = ""
+        _roomDescription.value = ""
+        _roomTags.value = emptyList()
+        _aiGeneratedDescription.value = null
+        _selectedRoom.value = null
         _isPublic.value = true
         _isTimeCapsuleEnabled.value = true
         _unlockMethod.value = UnlockMethod.DURATION
@@ -1775,6 +1814,10 @@ class ProfileViewModel : ViewModel() {
         _selectedMusic.value = "None"
         _rollingExpiration.value = "Never"
         _scheduledClosureEnabled.value = false
+        _uploadStartDateEnabled.value = false
+        _uploadStartDate.value = System.currentTimeMillis() + 86400000L
+        _uploadStartHour.value = 0
+        _uploadStartMinute.value = 0
         _invitedUsers.value = emptyList()
         _targetTime.value = System.currentTimeMillis() + 86400000
     }
@@ -1945,6 +1988,22 @@ class ProfileViewModel : ViewModel() {
     fun updateSelectedTheme(theme: String) { _roomAtmosphereTheme.value = theme }
     fun updateSelectedMusic(music: String) { _selectedMusic.value = music }
     fun updateRollingExpiration(option: String) { _rollingExpiration.value = option }
+    fun updateUploadStartDateEnabled(enabled: Boolean) { _uploadStartDateEnabled.value = enabled }
+    fun updateUploadStartDate(millis: Long) { _uploadStartDate.value = millis }
+    fun updateUploadStartHour(h: Int) {
+        _uploadStartHour.value = h
+        val cal = Calendar.getInstance()
+        cal.timeInMillis = _uploadStartDate.value
+        cal.set(Calendar.HOUR_OF_DAY, h)
+        _uploadStartDate.value = cal.timeInMillis
+    }
+    fun updateUploadStartMinute(m: Int) {
+        _uploadStartMinute.value = m
+        val cal = Calendar.getInstance()
+        cal.timeInMillis = _uploadStartDate.value
+        cal.set(Calendar.MINUTE, m)
+        _uploadStartDate.value = cal.timeInMillis
+    }
     fun addInvitedUser(user: InvitedUser) {
         if (!_invitedUsers.value.any { it.email == user.email }) {
             _invitedUsers.value = _invitedUsers.value + user
@@ -1992,6 +2051,9 @@ class ProfileViewModel : ViewModel() {
         _scheduledClosureEnabled.value = room.scheduledClosureTime > 0
         _scheduledClosureTime.value = if (room.scheduledClosureTime > 0) room.scheduledClosureTime
             else System.currentTimeMillis() + 7 * 86400000L
+        _uploadStartDateEnabled.value = room.uploadStartDate > 0
+        _uploadStartDate.value = if (room.uploadStartDate > 0) room.uploadStartDate
+            else System.currentTimeMillis() + 86400000L
         _roomTags.value = room.tags
         _roomDescription.value = room.description ?: ""
         // Time capsule duration restored from local model
@@ -2097,6 +2159,16 @@ class ProfileViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val sourceRoom = _createdRooms.value.find { it.id == roomId } ?: return@launch
+                val sourceRoomDto = com.dmb.bestbefore.data.api.models.RoomDto(
+                    id = sourceRoom.id,
+                    name = sourceRoom.roomName,
+                    tags = sourceRoom.tags,
+                    isPrivate = !sourceRoom.isPublic,
+                    isTimeCapsule = sourceRoom.isCollaboration,
+                    description = sourceRoom.description ?: "",
+                    ownerEmail = "",
+                    createdAt = ""
+                )
 
                 // 1. KENDİ ODALARINI ÇEVİR
                 val myCandidateRooms = _createdRooms.value.filter {
@@ -2146,7 +2218,8 @@ class ProfileViewModel : ViewModel() {
                     val result = aiRepository.getPersonalisedSuggestions(
                         user = userDto,
                         candidateRooms = candidateRooms,
-                        sourceRoomId = roomId
+                        sourceRoomId = roomId,
+                        sourceRoom = sourceRoomDto
                     )
 
                     result.onSuccess { response ->
@@ -2321,11 +2394,11 @@ class ProfileViewModel : ViewModel() {
     /** Save current VM state back to the backend for an existing room (Edit Room). */
     fun saveRoomEdits(context: Context) {
         val room = _selectedRoom.value ?: return
-        val closureIso: String? = if (_scheduledClosureEnabled.value) {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-                timeZone = TimeZone.getTimeZone("UTC")
-            }.format(Date(_scheduledClosureTime.value))
-        } else null
+        val isoFmt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+        val closureIso: String? = if (_scheduledClosureEnabled.value) isoFmt.format(Date(_scheduledClosureTime.value)) else null
+        val uploadStartIso: String? = if (_uploadStartDateEnabled.value) isoFmt.format(Date(_uploadStartDate.value)) else null
 
         val fields: Map<String, Any?> = mapOf(
             "name" to _roomName.value,
@@ -2337,7 +2410,8 @@ class ProfileViewModel : ViewModel() {
             "theme" to _roomAtmosphereTheme.value,
             "music" to _selectedMusic.value,
             "rollingExpiration" to _rollingExpiration.value,
-            "scheduledClosureTime" to closureIso,
+            "expirationDate" to closureIso,
+            "uploadStartDate" to uploadStartIso,
             "description" to _roomDescription.value.ifBlank { null },
             "tags" to _roomTags.value
         ).filterValues { it != null }
@@ -2358,6 +2432,7 @@ class ProfileViewModel : ViewModel() {
                     music = _selectedMusic.value,
                     rollingExpiration = _rollingExpiration.value,
                     scheduledClosureTime = if (_scheduledClosureEnabled.value) _scheduledClosureTime.value else 0L,
+                    uploadStartDate = if (_uploadStartDateEnabled.value) _uploadStartDate.value else 0L,
                     description = _roomDescription.value.ifBlank { null },
                     tags = _roomTags.value
                 )
@@ -2389,6 +2464,10 @@ class ProfileViewModel : ViewModel() {
                 val firebaseToken = authRepo.getFirebaseIdToken(false)
                 if (firebaseToken != null) {
                     val sessionManager = SessionManager(context)
+                    val manualProfileTags = _preferredTags.value
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                        .distinctBy { it.lowercase(Locale.US) }
                     val rawProfileImageUri = _profileImageUri.value?.toString()
                     val profileImageUrlForBackend = if (
                         rawProfileImageUri != null &&
@@ -2408,7 +2487,7 @@ class ProfileViewModel : ViewModel() {
                             profileImageUrl = profileImageUrlForBackend,
                             profileImageBase64 = profileImageBase64,
                             profileImageData = _cachedUserDto?.profileImageData,
-                            preferredTags = _preferredTags.value, // send empty list instead of null to be safe
+                            preferredTags = manualProfileTags, // send empty list instead of null to be safe
                             theme = _selectedTheme.value.name,
                             accentColor = colorToHex(_accentColor.value),
                             savedRoomIds = sessionManager.getSavedRoomIds(),
@@ -2428,10 +2507,14 @@ class ProfileViewModel : ViewModel() {
                         // UI stays consistent (e.g. backend may transform profileImageBase64 → URL).
                         val saved = updateResult.getOrNull()
                         if (saved != null) {
+                            val savedWithManualTags = saved.copy(preferredTags = manualProfileTags)
                             if (!saved.name.isNullOrBlank()) _userName.value = saved.name
                             if (saved.bio != null) _bio.value = saved.bio
                             if (!saved.profileImageUrl.isNullOrBlank()) _profileImageUri.value = saved.profileImageUrl
-                            if (saved.preferredTags != null) _preferredTags.value = saved.preferredTags
+                            _preferredTags.value = manualProfileTags
+                            _cachedUserDto = savedWithManualTags
+                            sessionManager.saveManualProfileTags(manualProfileTags)
+                            sessionManager.saveUser(savedWithManualTags)
                             if (saved.theme.isNotBlank()) {
                                 val t = AppThemes.getThemeByName(saved.theme)
                                 _selectedTheme.value = t
@@ -2448,7 +2531,7 @@ class ProfileViewModel : ViewModel() {
                         Toast.makeText(context, "Profile updated!", Toast.LENGTH_SHORT).show()
                     } else {
                         val errorMsg = updateResult.exceptionOrNull()?.message ?: "Unknown error"
-                        Log.e("ProfileViewModel", "Update failed: $errorMsg")
+                        Log.w("ProfileViewModel", "Update failed: $errorMsg")
                         Toast.makeText(context, "Failed to update profile", Toast.LENGTH_SHORT).show()
                     }
                 }

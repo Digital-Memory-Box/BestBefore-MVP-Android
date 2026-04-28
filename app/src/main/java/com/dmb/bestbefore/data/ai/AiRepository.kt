@@ -6,6 +6,8 @@ import com.dmb.bestbefore.data.api.models.UserDto
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private const val TAG = "AiRepository"
 
@@ -24,6 +26,10 @@ private const val TAG = "AiRepository"
 class AiRepository {
 
     private val api = AiServiceClient.api
+
+    private companion object {
+        const val MAX_SUGGESTION_CANDIDATES = 40
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // 1. Track Interaction → update preference model
@@ -76,43 +82,40 @@ class AiRepository {
         candidateRooms: List<RoomDto>,
         userLat: Double? = null,
         userLon: Double? = null,
-        sourceRoomId: String? = null
+        sourceRoomId: String? = null,
+        sourceRoom: RoomDto? = null
     ): Result<GenerateSuggestionsResponse> {
-        return try {
+        return withContext(Dispatchers.IO) {
+            try {
             if (candidateRooms.isEmpty()) {
-                return Result.success(GenerateSuggestionsResponse("discovery", emptyList(), 0))
+                return@withContext Result.success(GenerateSuggestionsResponse("discovery", emptyList(), 0))
+            }
+
+            val resolvedSourceRoom = sourceRoom ?: sourceRoomId?.let { id ->
+                candidateRooms.firstOrNull { it.id == id }
+            }
+            val rankedCandidateRooms = rankSuggestionCandidates(
+                sourceRoom = resolvedSourceRoom,
+                user = user,
+                rooms = candidateRooms
+                    .filter { it.id != sourceRoomId }
+                    .distinctBy { it.id }
+            ).take(MAX_SUGGESTION_CANDIDATES)
+
+            if (rankedCandidateRooms.isEmpty()) {
+                return@withContext Result.success(
+                    GenerateSuggestionsResponse(sourceRoomId ?: "discovery", emptyList(), 0)
+                )
             }
 
             // Tıpkı Arama (Semantic Search) fonksiyonunda yaptığımız gibi odaları hazırla
             coroutineScope {
-                val aiCandidates = candidateRooms.map { room ->
-                    async {
-                        val tagsText = room.tags?.joinToString(" ") ?: ""
-                        val weightedTags = "$tagsText $tagsText".trim()
-                        val descText = room.description?.trim() ?: ""
-                        val combinedText = "Room name: ${room.name}. Description: $descText. Core tags: $weightedTags."
-
-                        val embedResponse = api.embed(EmbeddingRequest(combinedText))
-                        val embeddingList = if (embedResponse.isSuccessful) {
-                            embedResponse.body()?.embedding ?: emptyList()
-                        } else {
-                            emptyList()
-                        }
-
-                        AiRoomDto(
-                            id = room.id,
-                            name = room.name ?: "",
-                            tags = room.tags ?: emptyList(),
-                            isPrivate = room.isPrivate == true,
-                            isTimeCapsule = room.isTimeCapsule == true,
-                            lat = 0.0,
-                            lon = 0.0,
-                            description = room.description,
-                            embedding = embeddingList,
-                            dwellTime = 0
-                        )
-                    }
-                }.awaitAll().filter { it.embedding?.isNotEmpty() == true }
+                val aiSourceRoom = resolvedSourceRoom?.let { room ->
+                    async { room.toAiRoomDtoWithEmbedding() }
+                }
+                val aiCandidates = rankedCandidateRooms.map { room ->
+                    async { room.toAiRoomDtoWithEmbedding() }
+                }.awaitAll()
 
                 val userProfile = UserPreferenceSchema(
                     preferredTags = user.preferredTags ?: emptyList(),
@@ -124,6 +127,7 @@ class AiRepository {
 
                 val request = GenerateSuggestionsRequest(
                     sourceRoomId = sourceRoomId,
+                    sourceRoom = aiSourceRoom?.await(),
                     userProfile = userProfile,
                     candidateRooms = aiCandidates,
                     userLat = userLat ?: user.lastLat,
@@ -132,20 +136,150 @@ class AiRepository {
 
                 val response = api.getSuggestions(request)
                 if (response.isSuccessful && response.body() != null) {
-                    Result.success(response.body()!!)
+                    val body = response.body()!!
+                    if (body.suggestions.isNotEmpty()) {
+                        Result.success(body)
+                    } else {
+                        Result.success(
+                            buildLocalSuggestionResponse(sourceRoomId, resolvedSourceRoom, rankedCandidateRooms, user)
+                        )
+                    }
                 } else {
-                    Result.failure(Exception("Suggestions failed: HTTP ${response.code()}"))
+                    val err = response.errorBody()?.string() ?: "HTTP ${response.code()}"
+                    Log.w(TAG, "getPersonalisedSuggestions failed: $err")
+                    Result.success(
+                        buildLocalSuggestionResponse(sourceRoomId, resolvedSourceRoom, rankedCandidateRooms, user)
+                    )
                 }
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "getPersonalisedSuggestions exception", e)
-            Result.failure(e)
+            } catch (e: Exception) {
+                Log.e(TAG, "getPersonalisedSuggestions exception", e)
+                Result.success(buildLocalSuggestionResponse(sourceRoomId, sourceRoom, candidateRooms, user))
+            }
         }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // 3. Raw Hybrid Scoring
     // ─────────────────────────────────────────────────────────────────────────
+
+    private suspend fun RoomDto.toAiRoomDtoWithEmbedding(): AiRoomDto {
+        val embeddingList = try {
+            val embedResponse = api.embed(EmbeddingRequest(buildRoomEmbeddingText(this)))
+            if (embedResponse.isSuccessful) {
+                embedResponse.body()?.embedding.orEmpty()
+            } else {
+                emptyList()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Embedding skipped for room $id: ${e.message}")
+            emptyList()
+        }
+
+        return AiRoomDto(
+            id = id,
+            name = name,
+            tags = tags ?: emptyList(),
+            isPrivate = isPrivate,
+            isTimeCapsule = isTimeCapsule,
+            lat = 0.0,
+            lon = 0.0,
+            description = description ?: generatedDescription,
+            embedding = embeddingList.takeIf { it.isNotEmpty() },
+            dwellTime = 0
+        )
+    }
+
+    private fun buildRoomEmbeddingText(room: RoomDto): String {
+        val tagsText = room.tags?.joinToString(" ").orEmpty()
+        val weightedTags = "$tagsText $tagsText".trim()
+        val descText = (room.description ?: room.generatedDescription).orEmpty().trim()
+        return "Room name: ${room.name}. Description: $descText. Core tags: $weightedTags."
+    }
+
+    private fun buildLocalSuggestionResponse(
+        sourceRoomId: String?,
+        sourceRoom: RoomDto?,
+        candidateRooms: List<RoomDto>,
+        user: UserDto
+    ): GenerateSuggestionsResponse {
+        val ranked = rankSuggestionCandidates(sourceRoom, user, candidateRooms)
+            .filter { it.id != sourceRoomId }
+            .take(12)
+            .map { room ->
+                val score = localSuggestionScore(sourceRoom, user, room).coerceIn(1, 100)
+                AiRoomSuggestion(
+                    targetRoomId = room.id,
+                    targetRoomName = room.name,
+                    score = score,
+                    category = if (score >= 70) "direct_match" else "critical_zone",
+                    reasoning = buildLocalReason(sourceRoom, user, room),
+                    similarity = score / 100.0
+                )
+            }
+
+        return GenerateSuggestionsResponse(
+            sourceRoomId = sourceRoomId ?: sourceRoom?.id ?: "discovery",
+            suggestions = ranked,
+            count = ranked.size
+        )
+    }
+
+    private fun rankSuggestionCandidates(
+        sourceRoom: RoomDto?,
+        user: UserDto,
+        rooms: List<RoomDto>
+    ): List<RoomDto> {
+        return rooms
+            .filter { it.id.isNotBlank() && it.name.isNotBlank() }
+            .sortedByDescending { localSuggestionScore(sourceRoom, user, it) }
+    }
+
+    private fun localSuggestionScore(
+        sourceRoom: RoomDto?,
+        user: UserDto,
+        candidate: RoomDto
+    ): Int {
+        val sourceTags = sourceRoom?.tags.orEmpty().map { it.normalizedToken() }.filter { it.isNotBlank() }.toSet()
+        val candidateTags = candidate.tags.orEmpty().map { it.normalizedToken() }.filter { it.isNotBlank() }.toSet()
+        val preferredTags = user.preferredTags.orEmpty().map { it.normalizedToken() }.filter { it.isNotBlank() }.toSet()
+        val sourceWords = tokenizeRoom(sourceRoom)
+        val candidateWords = tokenizeRoom(candidate)
+
+        val sharedTagScore = sourceTags.intersect(candidateTags).size * 24
+        val preferredTagScore = preferredTags.intersect(candidateTags).size * 10
+        val sharedWordScore = sourceWords.intersect(candidateWords).size * 4
+        val timeCapsuleScore = if (sourceRoom != null && sourceRoom.isTimeCapsule == candidate.isTimeCapsule) 8 else 0
+        val privacyScore = if (sourceRoom != null && sourceRoom.isPrivate == candidate.isPrivate) 4 else 0
+
+        return (18 + sharedTagScore + preferredTagScore + sharedWordScore + timeCapsuleScore + privacyScore)
+            .coerceIn(1, 100)
+    }
+
+    private fun buildLocalReason(sourceRoom: RoomDto?, user: UserDto, candidate: RoomDto): String {
+        val sourceTags = sourceRoom?.tags.orEmpty().map { it.normalizedToken() }.filter { it.isNotBlank() }.toSet()
+        val candidateTags = candidate.tags.orEmpty().map { it.normalizedToken() }.filter { it.isNotBlank() }.toSet()
+        val preferredTags = user.preferredTags.orEmpty().map { it.normalizedToken() }.filter { it.isNotBlank() }.toSet()
+        val sharedTags = sourceTags.intersect(candidateTags).take(3)
+        val preferenceMatches = preferredTags.intersect(candidateTags).take(2)
+
+        return when {
+            sharedTags.isNotEmpty() -> "Shared tags: ${sharedTags.joinToString(", ")}"
+            preferenceMatches.isNotEmpty() -> "Matches your interests: ${preferenceMatches.joinToString(", ")}"
+            else -> "Similar room details and activity context."
+        }
+    }
+
+    private fun tokenizeRoom(room: RoomDto?): Set<String> {
+        if (room == null) return emptySet()
+        return "${room.name} ${room.description.orEmpty()} ${room.generatedDescription.orEmpty()} ${room.tags.orEmpty().joinToString(" ")}"
+            .lowercase()
+            .split(Regex("[^a-z0-9]+"))
+            .filter { it.length >= 3 }
+            .toSet()
+    }
+
+    private fun String.normalizedToken(): String = trim().lowercase()
 
     suspend fun scoreRoomPair(
         sourceRoom: RoomDto,

@@ -51,6 +51,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.Image
 import com.dmb.bestbefore.ui.components.VideoPlayer
 import com.dmb.bestbefore.ui.components.MusicPlayer
+import com.dmb.bestbefore.ui.components.SoundCloudController
+import com.dmb.bestbefore.ui.components.SoundCloudPlayerView
+import com.dmb.bestbefore.notifications.MusicPlayerManager
+import com.dmb.bestbefore.utils.RoomMusicCatalog
 
 
 import androidx.compose.foundation.Image
@@ -181,11 +185,41 @@ fun RoomDetailScreen(
         authToken = viewModel.getAuthToken(context)
     }
 
+    val roomMusic = room?.music.orEmpty()
+    val soundCloudController = remember(room?.id, roomMusic) { SoundCloudController() }
+    val roomSoundCloudUrl = if (RoomMusicCatalog.isSoundCloudUrl(roomMusic)) {
+        RoomMusicCatalog.customUrl(roomMusic) ?: roomMusic
+    } else {
+        null
+    }
+
+    LaunchedEffect(room?.id, roomMusic) {
+        val track = RoomMusicCatalog.trackForValue(roomMusic)
+        if (track != null) {
+            MusicPlayerManager.playTrack(context, track)
+        } else if (RoomMusicCatalog.isNone(roomMusic) || roomSoundCloudUrl != null) {
+            MusicPlayerManager.stop(context)
+        }
+    }
+
+    DisposableEffect(room?.id) {
+        onDispose { MusicPlayerManager.stop(context) }
+    }
+
     if (showMusicSelector && authToken != null) {
         com.dmb.bestbefore.ui.components.MusicSelectorBottomSheet(
             viewModel = musicViewModel,
             token = authToken!!,
             onDismissRequest = { showMusicSelector = false }
+        )
+    }
+
+    if (roomSoundCloudUrl != null) {
+        SoundCloudPlayerView(
+            soundCloudUrl = roomSoundCloudUrl,
+            autoPlay = true,
+            isController = true,
+            controller = soundCloudController
         )
     }
     
@@ -214,7 +248,8 @@ fun RoomDetailScreen(
             ) {
                 val canContribute = room!!.isOwnedByMe || room!!.isCollaborator
                 val currentTime = System.currentTimeMillis()
-                val isLocked = room!!.unlockTime > currentTime
+                val isLocked = room!!.isCollaboration && room!!.unlockTime > currentTime
+                val hasFutureUnlock = room!!.unlockTime > currentTime
                 val isRoomClosed = room!!.scheduledClosureTime > 0L && currentTime >= room!!.scheduledClosureTime
                 val isViewer = !canContribute
                 val isArtistRoom = room!!.ownerUserType?.equals("artist", ignoreCase = true) == true
@@ -483,7 +518,7 @@ fun RoomDetailScreen(
                             }
                         }
                         item {
-                            val isLockedLocal = System.currentTimeMillis() < room!!.unlockTime
+                            val isLockedLocal = room!!.isCollaboration && System.currentTimeMillis() < room!!.unlockTime
                             if (!isLockedLocal) {
                                 MemoryActionCard(Icons.Default.FolderOpen, "View All", Color(0xFF34C759)) {
                                     showAllMediaGrid = true
@@ -507,6 +542,10 @@ fun RoomDetailScreen(
                                 android.widget.Toast.makeText(context, "Removed from Rooming", android.widget.Toast.LENGTH_SHORT).show()
                             }
                         )
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                    if (hasFutureUnlock) {
+                        UnlockCountdownHero(targetTimeMillis = room!!.unlockTime)
                         Spacer(modifier = Modifier.height(16.dp))
                     }
                     if (isArtistRoom) {
@@ -557,6 +596,11 @@ fun RoomDetailScreen(
                     Spacer(modifier = Modifier.height(24.dp))
                 }
 
+                if (canContribute && hasFutureUnlock) {
+                    UnlockCountdownHero(targetTimeMillis = room!!.unlockTime)
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+
                 // Recent Drops Section
                 Text("Recent Drops", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 Spacer(modifier = Modifier.height(16.dp))
@@ -566,7 +610,7 @@ fun RoomDetailScreen(
                               System.currentTimeMillis() >= room!!.scheduledClosureTime
                 val showViewAll = !isTimeCapsule && !isClosed
 
-                if (isLocked) {
+                if (false && isLocked) {
                     val sdf = java.text.SimpleDateFormat("MMM dd, yyyy 'at' hh:mm a", java.util.Locale.getDefault())
                     val unlockDateString = sdf.format(java.util.Date(room!!.unlockTime))
                     Box(
@@ -1210,6 +1254,39 @@ fun RoomDetailScreen(
                     Text("Uploading memory...", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun UnlockCountdownHero(targetTimeMillis: Long) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF00D5FF).copy(alpha = 0.32f),
+                        Color(0xFF00D972).copy(alpha = 0.18f),
+                        Color.White.copy(alpha = 0.06f)
+                    )
+                )
+            )
+            .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(24.dp))
+            .padding(horizontal = 20.dp, vertical = 24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "UNLOCKS IN",
+                color = Color.White.copy(alpha = 0.9f),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 2.sp
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            CountdownTimer(targetTimeMillis = targetTimeMillis)
         }
     }
 }
@@ -1889,7 +1966,7 @@ fun RoomDetailsBottomSheet(
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 // Status
-                val isUnlocked = System.currentTimeMillis() >= room.unlockTime
+                val isUnlocked = !room.isCollaboration || System.currentTimeMillis() >= room.unlockTime
                 DetailRow("Status", if (isUnlocked) "Unlocked" else "Locked")
                 
                 Spacer(modifier = Modifier.height(16.dp))

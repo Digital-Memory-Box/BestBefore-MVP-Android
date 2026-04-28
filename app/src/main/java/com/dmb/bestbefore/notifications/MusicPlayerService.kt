@@ -52,16 +52,19 @@ class MusicPlayerService : Service(), MediaPlayer.OnPreparedListener, MediaPlaye
                 val trackId = intent.getLongExtra(EXTRA_TRACK_ID, 0L)
                 val title = intent.getStringExtra(EXTRA_TRACK_TITLE) ?: "Unknown"
                 val artist = intent.getStringExtra(EXTRA_TRACK_ARTIST) ?: "Unknown"
-                val streamUrlPath = intent.getStringExtra(EXTRA_TRACK_STREAM_URL) // This is /api/soundcloud/stream/123
+                val streamUrlPath = intent.getStringExtra(EXTRA_TRACK_STREAM_URL)
 
                 if (trackId != 0L && streamUrlPath != null) {
                     currentTrackId = trackId
                     currentTitle = title
                     currentArtist = artist
 
-                    // Construct full url
-                    val baseUrl = RetrofitClient.BASE_URL.dropLastWhile { it == '/' }
-                    val fullUrl = "$baseUrl$streamUrlPath"
+                    val fullUrl = if (streamUrlPath.startsWith("http", ignoreCase = true)) {
+                        streamUrlPath
+                    } else {
+                        val baseUrl = RetrofitClient.BASE_URL.dropLastWhile { it == '/' }
+                        "$baseUrl$streamUrlPath"
+                    }
 
                     startPlayback(fullUrl)
                 }

@@ -30,6 +30,7 @@ class SessionManager(context: Context) {
         private const val KEY_PROFILE_IMAGE_URL = "profile_image_url" // from backend
         private const val KEY_CACHED_USER = "cached_user_dto"
         private const val KEY_CACHED_HALLWAY = "cached_hallway_cards"
+        private const val KEY_MANUAL_PROFILE_TAGS = "manual_profile_tags"
     }
 
     fun saveAuthToken(token: String) {
@@ -67,6 +68,20 @@ class SessionManager(context: Context) {
             gson.fromJson(json, UserDto::class.java)
         } catch (_: Exception) {
             null
+        }
+    }
+
+    fun saveManualProfileTags(tags: List<String>) {
+        prefs.edit { putString(KEY_MANUAL_PROFILE_TAGS, gson.toJson(tags)) }
+    }
+
+    fun getManualProfileTags(): List<String>? {
+        val json = prefs.getString(KEY_MANUAL_PROFILE_TAGS, null) ?: return null
+        val type = object : TypeToken<List<String>>() {}.type
+        return try {
+            gson.fromJson(json, type) ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
         }
     }
 

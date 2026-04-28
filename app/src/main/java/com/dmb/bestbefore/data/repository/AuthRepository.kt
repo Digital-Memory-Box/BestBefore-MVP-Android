@@ -10,6 +10,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
+import java.io.IOException
 
 class AuthRepository(context: Context) {
     private val sessionManager = SessionManager(context)
@@ -107,6 +108,9 @@ class AuthRepository(context: Context) {
                 android.util.Log.e("AuthRepository", "Sync failed: ${response.code()} - $errorBody")
                 Result.failure(Exception("Backend sync failed: ${response.code()} ${response.message()}"))
             }
+        } catch (e: IOException) {
+            android.util.Log.w("AuthRepository", "Sync network issue: ${e.message}")
+            Result.failure(e)
         } catch (e: Exception) {
             android.util.Log.e("AuthRepository", "Sync exception", e)
             Result.failure(e)
@@ -124,9 +128,16 @@ class AuthRepository(context: Context) {
                 Result.success(user)
             } else {
                 val errorBody = response.errorBody()?.string()
-                android.util.Log.e("AuthRepository", "Update failed: ${response.code()} - $errorBody")
+                if (response.code() in 500..599) {
+                    android.util.Log.w("AuthRepository", "Update failed: ${response.code()} - $errorBody")
+                } else {
+                    android.util.Log.e("AuthRepository", "Update failed: ${response.code()} - $errorBody")
+                }
                 Result.failure(Exception("Update failed: ${response.code()}"))
             }
+        } catch (e: IOException) {
+            android.util.Log.w("AuthRepository", "Update network issue: ${e.message}")
+            Result.failure(e)
         } catch (e: Exception) {
             android.util.Log.e("AuthRepository", "Update exception", e)
             Result.failure(e)
@@ -149,6 +160,9 @@ class AuthRepository(context: Context) {
                 android.util.Log.e("AuthRepository", "getMe failed: ${response.code()} - $errorBody")
                 Result.failure(Exception("Failed to fetch user data: ${response.code()}"))
             }
+        } catch (e: IOException) {
+            android.util.Log.w("AuthRepository", "getMe network issue: ${e.message}")
+            Result.failure(e)
         } catch (e: Exception) {
             android.util.Log.e("AuthRepository", "getMe exception", e)
             Result.failure(e)

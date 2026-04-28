@@ -216,21 +216,42 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
             )
             // Aranacak tüm aday odalar
             val allAvailable = (myRoomsList + discoverRoomsList).distinctBy { it.id }
+            val fallbackScores = buildLocalSimilarityScores(card, allAvailable)
 
             // Eski sorunlu kod: val result = roomRepository.getRoomSuggestions(card.id)
             // YENİ KOD: Doğrudan kendi bağladığımız AI servisine soruyoruz:
-            val result = aiRepository.getPersonalisedSuggestions(
-                user = userDto,
-                candidateRooms = allAvailable,
-                sourceRoomId = card.id
-            )
+            val result = withTimeoutOrNull(8_000L) {
+                aiRepository.getPersonalisedSuggestions(
+                    user = userDto,
+                    candidateRooms = allAvailable,
+                    sourceRoomId = card.id,
+                    sourceRoom = com.dmb.bestbefore.data.api.models.RoomDto(
+                        id = card.id,
+                        name = card.title,
+                        tags = card.tags,
+                        isPrivate = false,
+                        isTimeCapsule = false,
+                        description = card.description,
+                        ownerEmail = card.ownerEmail,
+                        createdAt = null
+                    )
+                )
+            } ?: Result.failure(Exception("Suggestions timed out"))
 
             result.onSuccess { response ->
                 // Skoru 0'dan büyük olan, AI'ın "benzer" bulduğu odaları filtrele
-                _similarityScores.value = response.suggestions.associate { it.targetRoomId to it.score }
+                val aiScores = response.suggestions
+                    .associate { it.targetRoomId to it.score }
+                    .filterValues { it > 0 }
+                _similarityScores.value = aiScores.ifEmpty { fallbackScores }
                 filterCards(_currentTab.value)
+                if (aiScores.isEmpty()) {
+                    Log.w("HallwayViewModel", "Similar rooms using local fallback: empty AI response")
+                }
             }.onFailure {
-                Log.e("HallwayViewModel", "Similar rooms failed: ${it.message}")
+                _similarityScores.value = fallbackScores
+                filterCards(_currentTab.value)
+                Log.w("HallwayViewModel", "Similar rooms using local fallback: ${it.message}")
             }
         }
     }
@@ -239,6 +260,43 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
         _similarModeSource.value = null
         _similarityScores.value = emptyMap()
         filterCards(_currentTab.value)
+    }
+
+    private fun buildLocalSimilarityScores(
+        source: HallwayCard,
+        rooms: List<com.dmb.bestbefore.data.api.models.RoomDto>
+    ): Map<String, Int> {
+        val sourceTags = source.tags.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+        val sourceWords = tokenize("${source.title} ${source.description} ${source.tags.joinToString(" ")}")
+        val sourceTheme = source.themeColorHex?.trim()?.lowercase()
+        val sourceMusic = source.backgroundMusic?.trim()?.lowercase()
+
+        return rooms
+            .asSequence()
+            .filter { it.id != source.id && !_ignoredRoomIds.value.contains(it.id) }
+            .map { room ->
+                val roomTags = room.tags.orEmpty().map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+                val roomWords = tokenize("${room.name} ${room.description.orEmpty()} ${room.generatedDescription.orEmpty()} ${roomTags.joinToString(" ")}")
+                val sharedTags = sourceTags.intersect(roomTags).size
+                val sharedWords = sourceWords.intersect(roomWords).size
+                val themeScore = if (!sourceTheme.isNullOrBlank() && sourceTheme == room.theme?.trim()?.lowercase()) 12 else 0
+                val musicScore = if (!sourceMusic.isNullOrBlank() && sourceMusic == room.backgroundMusic?.trim()?.lowercase()) 6 else 0
+                val textScore = (sharedWords * 4).coerceAtMost(28)
+                val tagScore = (sharedTags * 18).coerceAtMost(54)
+                val score = (18 + tagScore + textScore + themeScore + musicScore).coerceIn(1, 100)
+                room.id to score
+            }
+            .sortedByDescending { it.second }
+            .take(24)
+            .toMap()
+    }
+
+    private fun tokenize(text: String): Set<String> {
+        return text
+            .lowercase()
+            .split(Regex("[^a-z0-9]+"))
+            .filter { it.length >= 3 }
+            .toSet()
     }
 
     fun connectRoom(targetCard: HallwayCard) {
@@ -481,7 +539,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG_PERF, "tags fetch FAILED: ${e.message}")
+                Log.w(TAG_PERF, "tags fetch unavailable: ${e.message}")
             }
         }
     }
@@ -721,9 +779,11 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
 
     fun setSelectedFilterTag(tag: String?) {
         _selectedFilterTag.value = tag
+        _searchQuery.value = tag.orEmpty()
         _selectedCardIndex.value = 0
         _activePagerPage.value = 0
         _areCollaboratorsExpanded.value = false
+        if (tag.isNullOrBlank()) _semanticSearchCards.value = emptyList()
     }
 
     fun setSearchQuery(query: String) {
@@ -779,6 +839,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
         }
         _cards.value = patch(_cards.value)
         _savedRoomCards.value = patch(_savedRoomCards.value)
+        com.dmb.bestbefore.data.local.SessionManager(getApplication()).saveHallwayCards(_cards.value)
     }
 
     // Pull-to-refresh support

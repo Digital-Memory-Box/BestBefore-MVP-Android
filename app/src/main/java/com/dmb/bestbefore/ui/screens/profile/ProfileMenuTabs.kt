@@ -526,7 +526,7 @@ fun CustomizationTab(
                             modifier = Modifier
                                 .size(16.dp)
                                 .background(Color.White.copy(alpha = 0.15f), CircleShape)
-                                .clickable { viewModel.removeProfileTag(tag) },
+                                .clickable { viewModel.removeProfileTag(tag, context) },
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -580,7 +580,7 @@ fun CustomizationTab(
                     .background(accentColorTags, RoundedCornerShape(12.dp))
                     .clickable {
                         if (tagInput.isNotBlank()) {
-                            viewModel.addProfileTag(tagInput)
+                            viewModel.addProfileTag(tagInput, context)
                             tagInput = ""
                         }
                     }

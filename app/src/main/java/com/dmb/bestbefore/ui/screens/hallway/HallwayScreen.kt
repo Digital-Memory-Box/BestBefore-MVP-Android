@@ -821,7 +821,7 @@ private fun RoomingCard(
             )
 
             // Locked badge
-            if (isLocked) {
+            if (false && isLocked) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1431,7 +1431,7 @@ fun ActiveCardDetails(
             )
 
             val isLocked = com.dmb.bestbefore.utils.DateUtils.isLocked(card.unlockDate)
-            if (isLocked) {
+            if (false && isLocked) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1618,6 +1618,7 @@ fun SearchBarAndTags(
     onExitSimilarMode: () -> Unit = {}
 ) {
     val colors = LocalBestBeforeColors.current
+    val filterTags = listOf("trip", "music", "science", "party", "family")
     Column {
         Row(
             modifier = Modifier
@@ -1699,7 +1700,7 @@ fun SearchBarAndTags(
                     )
                 }
             }
-            items(tags) { tag ->
+            items(filterTags) { tag ->
                 Box(
                     modifier = Modifier
                         .background(

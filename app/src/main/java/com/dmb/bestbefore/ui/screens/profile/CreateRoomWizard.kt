@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.Image
 import com.dmb.bestbefore.data.api.models.UserDto
+import com.dmb.bestbefore.utils.RoomMusicCatalog
 
 private val AccentBlue = Color(0xFF1A7AF8)
 private val CardDarkBg = Color(0xFF1C1C1E)
@@ -107,7 +108,9 @@ private fun CreateRoomChrome(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                    .padding(bottom = 8.dp),
                 content = content
             )
 
@@ -179,7 +182,7 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
                 }
             }
 
-            // â”€â”€â”€ Room Name â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // â"€â"€â"€ Room Name â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
             Text("Room Name", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Spacer(modifier = Modifier.height(8.dp))
             BasicTextField(
@@ -192,7 +195,7 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // â”€â”€â”€ Privacy â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // â"€â"€â"€ Privacy â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
             Text("Privacy", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -215,7 +218,7 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // â”€â”€â”€ Time Capsule â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // â"€â"€â"€ Time Capsule â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
             Row(
                 modifier = Modifier.fillMaxWidth().background(Color(0xFF1C1C1E), RoundedCornerShape(12.dp)).padding(16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -248,7 +251,7 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // â”€â”€â”€ Music â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // â"€â"€â"€ Music â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
             Text("Music", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Spacer(modifier = Modifier.height(8.dp))
             Row(
@@ -273,7 +276,7 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // â”€â”€â”€ Rolling Expiration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // â"€â"€â"€ Rolling Expiration â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
             Text("Rolling Expiration", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Spacer(modifier = Modifier.height(8.dp))
             Row(
@@ -297,7 +300,7 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // â”€â”€â”€ Scheduled Closure â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // â"€â"€â"€ Scheduled Closure â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
             Column(
                 modifier = Modifier.fillMaxWidth().background(Color(0xFF1C1C1E), RoundedCornerShape(12.dp)).padding(16.dp)
             ) {
@@ -331,7 +334,7 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // â”€â”€â”€ Description â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // â"€â"€â"€ Description â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
             Text("Description", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Spacer(modifier = Modifier.height(8.dp))
             BasicTextField(
@@ -349,7 +352,7 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // â”€â”€â”€ Tags â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // â"€â"€â"€ Tags â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
             Text("Tags", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Spacer(modifier = Modifier.height(8.dp))
             Row(
@@ -396,7 +399,7 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // â”€â”€â”€ Save Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // â"€â"€â"€ Save Button â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
             Button(
                 onClick = { viewModel.saveRoomEdits(context) },
                 colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
@@ -487,7 +490,7 @@ fun BottomNavigation(
              fontSize = if(currentTab == BottomTab.ARTISTS) 20.sp else 18.sp,
              fontWeight = if(currentTab == BottomTab.ARTISTS) FontWeight.Bold else FontWeight.Normal,
              color = if(currentTab == BottomTab.ARTISTS) Color.White else Color.Gray,
-             modifier = Modifier.clickable { /* Artist screen coming soon â€“ no-op */ }
+             modifier = Modifier.clickable { /* Artist screen coming soon â€" no-op */ }
          )
     }
 }
@@ -512,7 +515,7 @@ fun getRoomThemeColor(themeName: String): Color {
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CreateRoomStep1(viewModel: ProfileViewModel) {
@@ -737,7 +740,7 @@ fun PrivacyCard(
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CreateRoomStep2(viewModel: ProfileViewModel) {
@@ -784,10 +787,9 @@ fun CreateRoomStep2(viewModel: ProfileViewModel) {
         onNext = { viewModel.goToStep(ProfileStep.ROOM_ATMOSPHERE) },
         themeName = themeName
     ) {
-        androidx.compose.foundation.rememberScrollState().let { scroll ->
+        androidx.compose.foundation.rememberScrollState().let { _ ->
             Column(modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(scroll)) {
+                .fillMaxWidth()) {
 
                 Text("Time Capsule?", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(4.dp))
@@ -853,7 +855,7 @@ fun CreateRoomStep2(viewModel: ProfileViewModel) {
                     Spacer(modifier = Modifier.height(14.dp))
 
                     if (method == UnlockMethod.DURATION) {
-                        // â”€â”€ Duration picker â”€â”€
+                        // â"€â"€ Duration picker â"€â"€
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1143,7 +1145,7 @@ fun InlineCalendar(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // â”€â”€ Time picker â€” premium drum style â”€â”€
+            // â"€â"€ Time picker â€" premium drum style â"€â"€
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1303,23 +1305,61 @@ fun CreateRoomStep3Atmosphere(viewModel: ProfileViewModel) {
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        // ── Background Music ──
-        Text("SoundCloud URL", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Text("Background Music", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(12.dp))
 
-        // URL Paste Field
-        var currentInput by remember { mutableStateOf(if (selectedMusic != "None") selectedMusic else "") }
-        val isInvalidUrl = currentInput.isNotEmpty() && !currentInput.startsWith("https://soundcloud.com/")
+        val customUrl = RoomMusicCatalog.customUrl(selectedMusic)
+            ?: selectedMusic.takeIf { it.startsWith("https://soundcloud.com/", ignoreCase = true) }
+            ?: ""
+        var currentInput by remember(selectedMusic) { mutableStateOf(customUrl) }
+        val musicOptions = listOf(
+            Triple("None", RoomMusicCatalog.NONE, Icons.AutoMirrored.Filled.VolumeOff),
+            Triple("Dreamy Synth", RoomMusicCatalog.presetValue("dreamy_synth"), Icons.Default.AutoAwesome),
+            Triple("Chill Cafe", RoomMusicCatalog.presetValue("chill_cafe"), Icons.Default.Coffee),
+            Triple("Minimal Piano", RoomMusicCatalog.presetValue("minimal_piano"), Icons.Default.Piano),
+            Triple("Vaporwave", RoomMusicCatalog.presetValue("vaporwave"), Icons.Default.AutoAwesome)
+        )
 
+        musicOptions.forEach { (label, value, icon) ->
+            val isSelected = selectedMusic == value ||
+                selectedMusic.equals(label, ignoreCase = true) ||
+                (value == RoomMusicCatalog.NONE && RoomMusicCatalog.isNone(selectedMusic))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        if (isSelected) Color(0xFF0D2B5E) else CardDarkBg,
+                        RoundedCornerShape(14.dp)
+                    )
+                    .then(
+                        if (isSelected) Modifier.border(1.5.dp, AccentBlue, RoundedCornerShape(14.dp))
+                        else Modifier
+                    )
+                    .clickable {
+                        currentInput = ""
+                        viewModel.updateSelectedMusic(value)
+                    }
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(icon, label, tint = if (isSelected) Color.White else Color(0xFF8E8E93), modifier = Modifier.size(24.dp))
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(label, color = if (isSelected) Color.White else Color(0xFF8E8E93), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.weight(1f))
+                if (isSelected) Icon(Icons.Default.CheckCircle, null, tint = AccentBlue, modifier = Modifier.size(20.dp))
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        Text("Custom SoundCloud Link", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(10.dp))
+
+        val isInvalidUrl = currentInput.isNotEmpty() && !currentInput.startsWith("https://soundcloud.com/")
         BasicTextField(
             value = currentInput,
-            onValueChange = { 
+            onValueChange = {
                 currentInput = it
-                if (it.isEmpty()) {
-                    viewModel.updateSelectedMusic("None")
-                } else {
-                    viewModel.updateSelectedMusic(it)
-                }
+                viewModel.updateSelectedMusic(RoomMusicCatalog.customValue(it))
             },
             textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
             cursorBrush = SolidColor(Color.White),
@@ -1327,70 +1367,45 @@ fun CreateRoomStep3Atmosphere(viewModel: ProfileViewModel) {
             modifier = Modifier
                 .fillMaxWidth()
                 .background(CardDarkBg, RoundedCornerShape(14.dp))
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .padding(horizontal = 16.dp, vertical = 16.dp),
             decorationBox = { inner ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Link, null, tint = Color(0xFF636366), modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
                     Box(modifier = Modifier.weight(1f)) {
-                        if (currentInput.isEmpty()) Text("Paste SoundCloud URL...", color = Color(0xFF636366), fontSize = 16.sp)
+                        if (currentInput.isEmpty()) Text("Paste SoundCloud URL", color = Color(0xFF636366), fontSize = 16.sp)
                         inner()
                     }
                 }
             }
         )
-        
+
         if (isInvalidUrl) {
             Text(
-                "Must be a valid https://soundcloud.com/ URL.",
+                "Use a https://soundcloud.com/ link.",
                 color = AccentBlue,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 8.dp, start = 8.dp)
             )
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // "None" option
-        val isNoneSelected = selectedMusic == "None"
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    if (isNoneSelected) Color(0xFF0D2B5E) else CardDarkBg,
-                    RoundedCornerShape(14.dp)
-                )
-                .then(
-                    if (isNoneSelected) Modifier.border(1.5.dp, AccentBlue, RoundedCornerShape(14.dp))
-                    else Modifier
-                )
-                .clickable {
-                    currentInput = ""
-                    viewModel.updateSelectedMusic("None")
-                }
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.AutoMirrored.Filled.VolumeOff, "None", tint = if (isNoneSelected) AccentBlue else Color(0xFF8E8E93), modifier = Modifier.size(20.dp))
-            Spacer(modifier = Modifier.width(14.dp))
-            Text("None", color = if (isNoneSelected) Color.White else Color(0xFF8E8E93), fontSize = 15.sp, fontWeight = if (isNoneSelected) FontWeight.Bold else FontWeight.Normal)
-            Spacer(modifier = Modifier.weight(1f))
-            if (isNoneSelected) Icon(Icons.Default.CheckCircle, null, tint = AccentBlue, modifier = Modifier.size(20.dp))
-        }
-
         Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 @Composable
 fun CreateRoomStep4(viewModel: ProfileViewModel) {
-    val rolling  by viewModel.rollingExpiration.collectAsState()
-    val closure  by viewModel.scheduledClosureEnabled.collectAsState()
-    val closureTime  by viewModel.scheduledClosureTime.collectAsState()
-    val closureHour  by viewModel.scheduledClosureHour.collectAsState()
-    val closureMin   by viewModel.scheduledClosureMinute.collectAsState()
-    val themeName by viewModel.roomAtmosphereTheme.collectAsState()
+    val rolling       by viewModel.rollingExpiration.collectAsState()
+    val uploadEnabled by viewModel.uploadStartDateEnabled.collectAsState()
+    val uploadDate    by viewModel.uploadStartDate.collectAsState()
+    val uploadHour    by viewModel.uploadStartHour.collectAsState()
+    val uploadMin     by viewModel.uploadStartMinute.collectAsState()
+    val closure       by viewModel.scheduledClosureEnabled.collectAsState()
+    val closureTime   by viewModel.scheduledClosureTime.collectAsState()
+    val closureHour   by viewModel.scheduledClosureHour.collectAsState()
+    val closureMin    by viewModel.scheduledClosureMinute.collectAsState()
+    val themeName     by viewModel.roomAtmosphereTheme.collectAsState()
 
     CreateRoomChrome(
         step = 4,
@@ -1399,8 +1414,8 @@ fun CreateRoomStep4(viewModel: ProfileViewModel) {
         onNext = { viewModel.goToStep(ProfileStep.ROOM_INVITE) },
         themeName = themeName
     ) {
-        androidx.compose.foundation.rememberScrollState().let { scroll ->
-            Column(modifier = Modifier.fillMaxWidth().verticalScroll(scroll)) {
+        androidx.compose.foundation.rememberScrollState().let { _ ->
+            Column(modifier = Modifier.fillMaxWidth()) {
 
                 Text("Memory Dump Rules", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(4.dp))
@@ -1458,7 +1473,54 @@ fun CreateRoomStep4(viewModel: ProfileViewModel) {
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Scheduled Room Closure card  â€” expands to show date picker when toggled ON
+                // Upload Start Date card
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(CardDarkBg, RoundedCornerShape(14.dp))
+                        .padding(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Upload Start Date", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Text(
+                                "Block uploads until a specific date. Useful for future events.",
+                                color = Color(0xFF8E8E93), fontSize = 12.sp, lineHeight = 16.sp
+                            )
+                        }
+                        Switch(
+                            checked = uploadEnabled,
+                            onCheckedChange = { viewModel.updateUploadStartDateEnabled(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = AccentBlue
+                            )
+                        )
+                    }
+
+                    if (uploadEnabled) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Uploads open from:", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        InlineCalendar(
+                            selectedMillis = uploadDate,
+                            hour = uploadHour,
+                            minute = uploadMin,
+                            onDateSelected = { viewModel.updateUploadStartDate(it) },
+                            onTimeChanged = { h, m ->
+                                viewModel.updateUploadStartHour(h)
+                                viewModel.updateUploadStartMinute(m)
+                            }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Scheduled Room Closure card
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1472,7 +1534,7 @@ fun CreateRoomStep4(viewModel: ProfileViewModel) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Scheduled Room Closure", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                             Text(
-                                "Lock the entire room into a read-only archive after a specific date.",
+                                "Lock the entire room into a read-only archive state after a specific date.",
                                 color = Color(0xFF8E8E93), fontSize = 12.sp, lineHeight = 16.sp
                             )
                         }
@@ -1559,18 +1621,18 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
         // Search Results
         if (searchInput.isNotBlank() && searchResults.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 160.dp)
                     .background(CardDarkBg, RoundedCornerShape(12.dp)),
-                contentPadding = PaddingValues(8.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(items = searchResults) { user: ProfileViewModel.InvitedUser ->
+                searchResults.forEach { user: ProfileViewModel.InvitedUser ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(12.dp),
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(Icons.Default.Person, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
@@ -1758,7 +1820,7 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 @Composable
 fun RoomNameStep(viewModel: ProfileViewModel) {
     CreateRoomStep1(viewModel)

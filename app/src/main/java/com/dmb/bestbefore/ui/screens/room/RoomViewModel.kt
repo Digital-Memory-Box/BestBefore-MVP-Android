@@ -105,7 +105,7 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 val errorMsg = result.exceptionOrNull()?.message ?: "Unknown error"
                 _errorMessage.value = errorMsg
-                android.util.Log.e("RoomViewModel", "Failed to fetch memories: $errorMsg")
+                android.util.Log.w("RoomViewModel", "Failed to fetch memories: $errorMsg")
             }
             _isLoading.value = false
         }

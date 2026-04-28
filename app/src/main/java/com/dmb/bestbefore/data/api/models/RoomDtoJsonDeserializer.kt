@@ -32,6 +32,7 @@ class RoomDtoJsonDeserializer : JsonDeserializer<RoomDto> {
             theme = readFlexibleString(obj, "theme"),
             unlockDate = readFlexibleString(obj, "unlockDate"),
             expirationDate = readFlexibleString(obj, "expirationDate"),
+            uploadStartDate = readFlexibleString(obj, "uploadStartDate"),
             collaborators = readJsonElementList(obj, "collaborators"),
             pendingCollaborators = readStringList(obj, "pendingCollaborators"),
             viewers = readJsonElementList(obj, "viewers"),
