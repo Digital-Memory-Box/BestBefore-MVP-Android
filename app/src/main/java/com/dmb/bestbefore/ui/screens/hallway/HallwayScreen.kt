@@ -1480,18 +1480,6 @@ fun ActiveCardDetails(
                         Text("✨", fontSize = 12.sp)
                         Text("Show Similar Rooms", color = Color(0xFF007AFF), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .background(accentColor, RoundedCornerShape(100.dp))
-                            .clickable { onConnectRoom() }
-                            .padding(horizontal = 14.dp, vertical = 6.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Icon(Icons.Default.Link, null, tint = Color.Black, modifier = Modifier.size(14.dp))
-                            Text("Connection", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
                 }
             }
         }
