@@ -1,6 +1,7 @@
 package com.dmb.bestbefore.ui.components
 
 import android.net.Uri
+import android.util.Base64
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -34,6 +35,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.platform.LocalContext
 import com.dmb.bestbefore.utils.Base64BitmapCache
 import com.dmb.bestbefore.ui.theme.LocalBestBeforeColors
 import kotlinx.coroutines.Dispatchers
@@ -274,6 +277,7 @@ fun ProfileAvatar(
     onClick: (() -> Unit)? = null
 ) {
     val clickableModifier = if (onClick != null) Modifier.clickable { onClick() } else Modifier
+    val context = LocalContext.current
     
     Box(
         modifier = modifier
@@ -285,18 +289,31 @@ fun ProfileAvatar(
         contentAlignment = Alignment.Center
     ) {
         val modelStr = imageUri?.toString()
-        if (!modelStr.isNullOrBlank()) {
-            // Normalize the model: ensure base64 strings have the data: URI prefix
-            val model = when {
-                modelStr.startsWith("http") -> modelStr
-                modelStr.startsWith("data:") -> modelStr
-                // Heuristic: if it's long and doesn't look like a URL/Path, it's probably raw base64
-                modelStr.length > 50 && !modelStr.contains("/") -> "data:image/jpeg;base64,$modelStr"
-                else -> imageUri // Pass Uri or other types as-is to Coil
+        val isBase64 = modelStr != null && (modelStr.startsWith("data:") || (modelStr.length > 50 && !modelStr.contains("/")))
+        
+        val imageBytes = remember(modelStr) {
+            if (isBase64 && modelStr != null) {
+                try {
+                    val cleanBase64 = modelStr.substringAfter(",")
+                    Base64.decode(cleanBase64, Base64.DEFAULT)
+                } catch (e: IllegalArgumentException) {
+                    null
+                }
+            } else {
+                null
             }
+        }
 
+        val finalModel = when {
+            imageBytes != null -> ImageRequest.Builder(context).data(imageBytes).build()
+            isBase64 -> null // Failed to decode base64
+            !modelStr.isNullOrBlank() -> imageUri
+            else -> null
+        }
+
+        if (finalModel != null) {
             AsyncImage(
-                model = model,
+                model = finalModel,
                 contentDescription = "Avatar",
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
