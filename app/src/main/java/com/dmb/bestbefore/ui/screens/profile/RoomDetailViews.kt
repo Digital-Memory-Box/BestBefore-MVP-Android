@@ -704,8 +704,8 @@ fun RoomDetailScreen(
                                         .background(Color.DarkGray)
                                         .combinedClickable(
                                             onClick = { viewModel.openGalleryViewer(displayMedia, i) },
-                                            onLongClick = {
-                                                if (canContribute) {
+                                            onDoubleClick = {
+                                                if (room!!.isOwnedByMe && viewModel.isMyMemory(room!!.id, item1)) {
                                                     memoryToDelete = item1
                                                     showDeleteMemoryConfirm = true
                                                 }
@@ -765,8 +765,8 @@ fun RoomDetailScreen(
                                             .background(Color.DarkGray)
                                             .combinedClickable(
                                                 onClick = { viewModel.openGalleryViewer(displayMedia, i + 1) },
-                                                onLongClick = {
-                                                    if (canContribute) {
+                                                onDoubleClick = {
+                                                    if (room!!.isOwnedByMe && viewModel.isMyMemory(room!!.id, item2)) {
                                                         memoryToDelete = item2
                                                         showDeleteMemoryConfirm = true
                                                     }
@@ -930,11 +930,9 @@ fun RoomDetailScreen(
                                 .background(Color.DarkGray)
                                 .combinedClickable(
                                     onClick = { viewModel.openGalleryViewer(currentRoomMedia, index) },
-                                    onLongClick = {
-                                        // canContribute is out of scope here (defined inside the Column)
-                                        // so derive it directly from room which IS accessible at Box level
-                                        val isContrib = room?.isOwnedByMe == true || room?.isCollaborator == true
-                                        if (isContrib) {
+                                    onDoubleClick = {
+                                        val currentRoom = room
+                                        if (currentRoom?.isOwnedByMe == true && viewModel.isMyMemory(currentRoom.id, item)) {
                                             memoryToDelete = item
                                             showDeleteMemoryConfirm = true
                                         }
@@ -983,7 +981,17 @@ fun RoomDetailScreen(
         // Image Viewer Overlay
         val isGalleryOpen by viewModel.isGalleryViewerOpen.collectAsState()
         if (isGalleryOpen) {
-             ProfileGalleryViewer(viewModel)
+             ProfileGalleryViewer(
+                 viewModel = viewModel,
+                 canDeleteMemory = { uri ->
+                     val currentRoom = room
+                     currentRoom?.isOwnedByMe == true && viewModel.isMyMemory(currentRoom.id, uri)
+                 },
+                 onRequestDelete = { uri ->
+                     memoryToDelete = uri
+                     showDeleteMemoryConfirm = true
+                 }
+             )
         }
         
         // QR Code Dialog with forwarding join link
@@ -1462,7 +1470,11 @@ fun MemoryActionCard(
 
 // Simple Gallery Viewer Overlay
 @Composable
-fun ProfileGalleryViewer(viewModel: ProfileViewModel) {
+fun ProfileGalleryViewer(
+    viewModel: ProfileViewModel,
+    canDeleteMemory: (Uri) -> Boolean = { false },
+    onRequestDelete: (Uri) -> Unit = {}
+) {
     val media by viewModel.galleryViewerMedia.collectAsState()
     val startIndex by viewModel.galleryViewerIndex.collectAsState()
     
@@ -1493,17 +1505,29 @@ fun ProfileGalleryViewer(viewModel: ProfileViewModel) {
                  }
              }
              
-             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                 val isAudio = isAudioMemoryUri(media[page])
-                 val isNote = isNoteMemoryUri(media[page])
-                 val isVideo = isVideoMemoryUri(media[page])
+             val currentItem = media[page]
+             Box(
+                 modifier = Modifier
+                     .fillMaxSize()
+                     .pointerInput(currentItem) {
+                         detectTapGestures(onDoubleTap = {
+                             if (canDeleteMemory(currentItem)) {
+                                 onRequestDelete(currentItem)
+                             }
+                         })
+                     },
+                 contentAlignment = Alignment.Center
+             ) {
+                 val isAudio = isAudioMemoryUri(currentItem)
+                 val isNote = isNoteMemoryUri(currentItem)
+                 val isVideo = isVideoMemoryUri(currentItem)
                  if (isAudio) {
                       MusicPlayer(
-                          audioUrl = media[page].toString(),
+                          audioUrl = currentItem.toString(),
                           modifier = Modifier.align(Alignment.Center)
                       )
                  } else if (isNote) {
-                     val parts = media[page].toString().removePrefix("NOTE:").split(":", limit = 2)
+                     val parts = currentItem.toString().removePrefix("NOTE:").split(":", limit = 2)
                      val noteTitle = parts.getOrElse(0) { "Note" }
                      val noteBody = parts.getOrElse(1) { "" }
                      Column(
@@ -1526,13 +1550,13 @@ fun ProfileGalleryViewer(viewModel: ProfileViewModel) {
                           contentAlignment = Alignment.Center
                       ) {
                           VideoPlayer(
-                              videoUrl = media[page].toString(),
+                              videoUrl = currentItem.toString(),
                               modifier = Modifier.fillMaxSize()
                           )
                       }
                  } else {
                      AsyncBase64Image(
-                         itemData = media[page],
+                         itemData = currentItem,
                          contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                          modifier = Modifier
                              .fillMaxSize()
@@ -1551,8 +1575,12 @@ fun ProfileGalleryViewer(viewModel: ProfileViewModel) {
                              )
                              .pointerInput(page) {
                                  detectTapGestures(onDoubleTap = {
-                                     scale = if (scale > 1f) 1f else 2.5f
-                                     offset = androidx.compose.ui.geometry.Offset.Zero
+                                     if (canDeleteMemory(currentItem)) {
+                                         onRequestDelete(currentItem)
+                                     } else {
+                                         scale = if (scale > 1f) 1f else 2.5f
+                                         offset = androidx.compose.ui.geometry.Offset.Zero
+                                     }
                                  })
                              }
                      )

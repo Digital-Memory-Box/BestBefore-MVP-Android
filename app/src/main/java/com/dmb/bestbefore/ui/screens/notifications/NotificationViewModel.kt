@@ -21,16 +21,22 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun removeNotification(id: String) {
-        notificationRepository.removeNotification(id)
+        viewModelScope.launch {
+            notificationRepository.deleteNotification(id)
+        }
     }
 
     fun clearAll() {
+        val ids = notifications.value.map { it.id }
         notificationRepository.clearAll()
+        viewModelScope.launch {
+            ids.forEach { id -> notificationRepository.deleteNotification(id) }
+        }
     }
 
     fun acceptInvite(roomId: String, notificationId: String) {
         viewModelScope.launch {
-            val result = roomRepository.acceptInvite(roomId)
+            val result = notificationRepository.respondToInvitation(notificationId, accept = true)
             if (result.isSuccess) {
                 removeNotification(notificationId)
             }
@@ -39,7 +45,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
 
     fun declineInvite(roomId: String, notificationId: String) {
         viewModelScope.launch {
-            val result = roomRepository.declineInvite(roomId)
+            val result = notificationRepository.respondToInvitation(notificationId, accept = false)
             if (result.isSuccess) {
                 removeNotification(notificationId)
             }

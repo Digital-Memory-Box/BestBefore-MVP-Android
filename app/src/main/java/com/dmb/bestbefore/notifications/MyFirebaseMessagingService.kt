@@ -40,11 +40,13 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             val notifType = when (typeStr) {
                 "INVITATION" -> NotificationType.INVITATION
                 "QR_JOIN_REQUESTED", "INVITE_REQUESTED", "JOIN_REQUEST" -> NotificationType.JOIN_REQUEST
+                "MEMORY_ADDED", "MEMORY_UPLOADED" -> NotificationType.MEMORY_ADDED
                 else -> NotificationType.GENERAL
             }
 
             NotificationRepository(applicationContext).addNotification(
                 AppNotification(
+                    id = remoteMessage.data["notificationId"] ?: remoteMessage.messageId ?: java.util.UUID.randomUUID().toString(),
                     title = title,
                     message = body,
                     type = notifType,

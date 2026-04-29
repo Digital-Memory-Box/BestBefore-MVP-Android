@@ -17,5 +17,6 @@ enum class NotificationType {
     ROOM_UNLOCKED,
     GENERAL,
     INVITATION,
-    JOIN_REQUEST  // Owner receives this when someone requests to join via QR/link
+    JOIN_REQUEST,  // Owner receives this when someone requests to join via QR/link
+    MEMORY_ADDED
 }

@@ -54,6 +54,8 @@ fun RoomScreen(
     val countdownText by viewModel.countdownText.collectAsState()
     val calendarEvents by viewModel.calendarEvents.collectAsState()
     val memories by viewModel.memories.collectAsState()
+    val roomState by viewModel.roomState.collectAsState()
+    val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
 
     var showDeleteConfirm by remember { mutableStateOf<String?>(null) }
 
@@ -157,11 +159,10 @@ fun RoomScreen(
                 items(memories) { memory ->
                     MemoryItem(
                         memory = memory,
-                        onLongClick = {
-                            // Check if current user is owner or collaborator. 
-                            // For MVP, we'll allow long-press to show dialog, 
-                            // and backend will enforce security.
-                            showDeleteConfirm = memory["_id"] as? String
+                        onDoubleClick = {
+                            if (roomState?.ownerId == currentUserId) {
+                                showDeleteConfirm = extractMemoryId(memory["_id"])
+                            }
                         }
                     )
                 }
@@ -415,7 +416,7 @@ fun CalendarEventsDialog(events: List<CalendarEvent>, onDismiss: () -> Unit, onE
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun MemoryItem(memory: Map<String, Any>, onLongClick: () -> Unit) {
+fun MemoryItem(memory: Map<String, Any>, onDoubleClick: () -> Unit) {
     val type = memory["type"] as? String ?: "photo"
     val title = memory["title"] as? String ?: ""
     val content = memory["content"] as? String ?: ""
@@ -428,7 +429,7 @@ fun MemoryItem(memory: Map<String, Any>, onLongClick: () -> Unit) {
             .padding(horizontal = 16.dp)
             .combinedClickable(
                 onClick = { /* Open detailed view if needed */ },
-                onLongClick = onLongClick
+                onDoubleClick = onDoubleClick
             ),
         colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.05f)),
         shape = RoundedCornerShape(16.dp)
@@ -480,6 +481,12 @@ fun MemoryItem(memory: Map<String, Any>, onLongClick: () -> Unit) {
             }
         }
     }
+}
+
+private fun extractMemoryId(value: Any?): String? = when (value) {
+    is String -> value
+    is Map<*, *> -> (value["\$oid"] ?: value["oid"])?.toString()
+    else -> null
 }
 
 @Composable

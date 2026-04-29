@@ -201,6 +201,12 @@ interface ApiService {
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<Unit>
 
+    @DELETE("notifications/{notificationId}")
+    suspend fun deleteNotification(
+        @Header("Authorization") token: String,
+        @Path("notificationId") notificationId: String
+    ): Response<Unit>
+
     // ── Dynamic Recommendation & Analytics ───────────────────────────────────
     @POST("analytics/interaction")
     suspend fun trackInteraction(

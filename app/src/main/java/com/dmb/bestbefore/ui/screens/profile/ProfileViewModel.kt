@@ -1018,8 +1018,16 @@ class ProfileViewModel : ViewModel() {
                 newRoom.isPublic,
                 newRoom.isCollaboration,
                 newRoom.theme,
-                collaborators = _invitedUsers.value.filter { it.role == "collaborator" }.map { it.email },
-                viewers = _invitedUsers.value.filter { it.role == "viewer" }.map { it.email },
+                collaborators = if (newRoom.isPublic) {
+                    _invitedUsers.value.map { it.email }
+                } else {
+                    _invitedUsers.value.filter { it.role == "collaborator" }.map { it.email }
+                },
+                viewers = if (newRoom.isPublic) {
+                    emptyList()
+                } else {
+                    _invitedUsers.value.filter { it.role == "viewer" }.map { it.email }
+                },
                 scheduledClosureIso = closureIso,
                 uploadStartDateIso = uploadStartIso,
                 unlockDateIso = unlockIso,
@@ -1040,6 +1048,15 @@ class ProfileViewModel : ViewModel() {
             } else {
                 Log.e("ProfileViewModel", "createRoom failed: ${result.exceptionOrNull()?.message}")
                 newRoom
+            }
+
+            if (result.isSuccess && !newRoom.isPublic) {
+                _invitedUsers.value.forEach { invited ->
+                    roomRepository.createHandshakeInvite(finalRoom.id, invited.email, invited.role)
+                        .onFailure { e ->
+                            Log.w("ProfileViewModel", "Failed to send invite to ${invited.email}: ${e.message}")
+                        }
+                }
             }
 
             // Add to local list
@@ -1277,6 +1294,7 @@ class ProfileViewModel : ViewModel() {
                     )
                     _recentActivities.value = listOf(newActivity) + _recentActivities.value
 
+                    refreshRoomMemories(showRefreshIndicator = false)
                     Toast.makeText(context, "Note saved!", Toast.LENGTH_SHORT).show()
                 }.onFailure {
                     Toast.makeText(context, "Failed to save note", Toast.LENGTH_SHORT).show()
@@ -1405,6 +1423,7 @@ class ProfileViewModel : ViewModel() {
                     )
                     _recentActivities.value = listOf(newActivity) + _recentActivities.value
 
+                    refreshRoomMemories(showRefreshIndicator = false)
                     Toast.makeText(context, "Uploaded ${uploadedDataUris.size} media file(s)!", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(context, "Upload failed – check connection", Toast.LENGTH_SHORT).show()
@@ -1600,11 +1619,11 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
-    fun sendHandshakeInvite(context: Context, email: String) {
+    fun sendHandshakeInvite(context: Context, email: String, role: String = "collaborator") {
         val roomId = _selectedRoom.value?.id ?: return
         viewModelScope.launch {
             try {
-                val result = roomRepository.createHandshakeInvite(roomId, email)
+                val result = roomRepository.createHandshakeInvite(roomId, email, role)
                 result.onSuccess {
                     Toast.makeText(context, "Invite sent to $email!", Toast.LENGTH_SHORT).show()
                 }
@@ -1662,6 +1681,7 @@ class ProfileViewModel : ViewModel() {
                         )
                         _recentActivities.value = listOf(newActivity) + _recentActivities.value
 
+                        refreshRoomMemories(showRefreshIndicator = false)
                         Toast.makeText(context, "Voice memory uploaded!", Toast.LENGTH_SHORT).show()
                     }.onFailure {
                         Toast.makeText(context, "Failed to upload voice memory", Toast.LENGTH_SHORT).show()

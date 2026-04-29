@@ -73,6 +73,7 @@ class NotificationRepository(private val context: Context? = null) {
                         "ROOM_UNLOCKED" -> NotificationType.ROOM_UNLOCKED
                         "QR_JOIN_REQUESTED", "INVITE_REQUESTED" -> NotificationType.JOIN_REQUEST
                         "JOIN_REQUEST" -> NotificationType.JOIN_REQUEST
+                        "MEMORY_ADDED", "MEMORY_UPLOADED" -> NotificationType.MEMORY_ADDED
                         else -> NotificationType.GENERAL
                     }
 
@@ -84,16 +85,19 @@ class NotificationRepository(private val context: Context? = null) {
                         ?: ""
 
                     AppNotification(
-                        id = extractStringId(map["_id"]),
+                        id = extractStringId(map["_id"] ?: map["id"])
+                            .ifEmpty { java.util.UUID.randomUUID().toString() },
                         title = title,
                         message = message,
                         timestamp = parseTimestamp(map),
                         type = type,
-                        relatedRoomId = extractStringId(map["roomId"] ?: map["relatedRoomId"])
+                        relatedRoomId = extractStringId(map["roomId"] ?: map["relatedRoomId"] ?: map["room"])
                             .takeIf { it.isNotEmpty() },
-                        relatedRoomName = map["roomName"] as? String,
+                        relatedRoomName = (map["roomName"] as? String)
+                            ?: (map["relatedRoomName"] as? String),
                         requesterEmail = (map["requesterEmail"] as? String)
                             ?: (map["fromEmail"] as? String)
+                            ?: (map["actorEmail"] as? String)
                     )
                 }
                 mergeNotifications(notifications)
@@ -119,6 +123,23 @@ class NotificationRepository(private val context: Context? = null) {
                 Result.success(Unit)
             } else {
                 Result.failure(Exception("Failed to respond to notification"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteNotification(notificationId: String): Result<Unit> {
+        removeNotification(notificationId)
+        return try {
+            val token = FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token
+                ?: return Result.failure(Exception("Not authenticated"))
+
+            val response = api.deleteNotification("Bearer $token", notificationId)
+            if (response.isSuccessful || response.code() == 404) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Failed to delete notification: ${response.code()}"))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -209,6 +230,7 @@ class NotificationRepository(private val context: Context? = null) {
             NotificationType.ROOM_UNLOCKED.name -> NotificationType.ROOM_UNLOCKED
             NotificationType.INVITATION.name -> NotificationType.INVITATION
             NotificationType.JOIN_REQUEST.name -> NotificationType.JOIN_REQUEST
+            NotificationType.MEMORY_ADDED.name -> NotificationType.MEMORY_ADDED
             else -> NotificationType.GENERAL
         }
     }

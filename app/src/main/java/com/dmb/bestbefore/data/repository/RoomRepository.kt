@@ -188,9 +188,12 @@ class RoomRepository {
         }
     }
 
-    suspend fun approveJoinRequest(roomId: String, requesterEmail: String): Result<Unit> {
+    suspend fun approveJoinRequest(roomId: String, requesterEmail: String, role: String = "collaborator"): Result<Unit> {
         return try {
-            val body = mapOf<String, Any>("requesterEmail" to requesterEmail)
+            val body = mapOf<String, Any>(
+                "requesterEmail" to requesterEmail,
+                "role" to role
+            )
             val response = api.approveJoinRequest(freshBearer(), roomId, body)
             if (response.isSuccessful) Result.success(Unit)
             else Result.failure(Exception("Failed to approve join request: ${response.code()}"))
@@ -387,9 +390,17 @@ class RoomRepository {
     }
 
     // ── Handshake (Email) Invites ─────────────────────────────────────────────
-    suspend fun createHandshakeInvite(roomId: String, inviteeEmail: String): Result<Map<String, Any>> {
+    suspend fun createHandshakeInvite(
+        roomId: String,
+        inviteeIdentifier: String,
+        role: String = "collaborator"
+    ): Result<Map<String, Any>> {
         return try {
-            val body = mapOf<String, Any>("inviteeEmail" to inviteeEmail)
+            val body = mapOf<String, Any>(
+                "inviteeEmail" to inviteeIdentifier,
+                "inviteeIdentifier" to inviteeIdentifier,
+                "role" to role
+            )
             val response = api.createHandshakeInvite(freshBearer(), roomId, body)
             if (response.isSuccessful && response.body() != null) Result.success(response.body()!!)
             else Result.failure(Exception("Failed to create handshake invite: ${response.code()}"))
