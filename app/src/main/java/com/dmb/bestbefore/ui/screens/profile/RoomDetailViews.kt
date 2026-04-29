@@ -281,6 +281,20 @@ fun RoomDetailScreen(
                                     .clickable { showMusicSelector = true }
                             )
                             Spacer(modifier = Modifier.width(16.dp))
+                            if (room!!.isPublic && !isLocked) {
+                                Icon(
+                                    imageVector = Icons.Filled.Apps,
+                                    contentDescription = "View all memories",
+                                    tint = Color(0xFF007AFF),
+                                    modifier = Modifier
+                                        .size(26.dp)
+                                        .clickable {
+                                            viewModel.refreshRoomMemories(showRefreshIndicator = false, limit = null)
+                                            showAllMediaGrid = true
+                                        }
+                                )
+                                Spacer(modifier = Modifier.width(16.dp))
+                            }
                             Icon(
                                 Icons.Default.QrCode2,
                                 "QR Code",
@@ -372,25 +386,20 @@ fun RoomDetailScreen(
                             Text("Back", color = Color.White, fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp))
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Filled.Apps,
-                                contentDescription = "View all memories",
-                                tint = Color(0xFF007AFF),
-                                modifier = Modifier
-                                    .size(26.dp)
-                                    .clickable {
-                                        if (currentRoomMedia.isNotEmpty()) {
+                            if (room!!.isPublic && !isLocked) {
+                                Icon(
+                                    imageVector = Icons.Filled.Apps,
+                                    contentDescription = "View all memories",
+                                    tint = Color(0xFF007AFF),
+                                    modifier = Modifier
+                                        .size(26.dp)
+                                        .clickable {
+                                            viewModel.refreshRoomMemories(showRefreshIndicator = false, limit = null)
                                             showAllMediaGrid = true
-                                        } else {
-                                            android.widget.Toast.makeText(
-                                                context,
-                                                "No memories to show yet",
-                                                android.widget.Toast.LENGTH_SHORT
-                                            ).show()
                                         }
-                                    }
-                            )
-                            Spacer(modifier = Modifier.width(20.dp))
+                                )
+                                Spacer(modifier = Modifier.width(20.dp))
+                            }
                             Box {
                                 Box(
                                     modifier = Modifier

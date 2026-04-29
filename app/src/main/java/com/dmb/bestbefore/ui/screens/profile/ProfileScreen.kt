@@ -274,7 +274,7 @@ fun ProfileScreen(
 
     // Sync room cover photo back to HallwayViewModel whenever memories finish loading
     // and a first photo is found (e.g. after refreshRoomMemories updates _selectedRoom).
-    LaunchedEffect(selectedRoom?.photos?.firstOrNull()?.url) {
+    LaunchedEffect(selectedRoom?.id, selectedRoom?.photos?.firstOrNull()?.url) {
         val coverUrl = selectedRoom?.photos?.firstOrNull()?.url ?: return@LaunchedEffect
         val roomId  = selectedRoom?.id                          ?: return@LaunchedEffect
         if (coverUrl.isNotBlank()) {

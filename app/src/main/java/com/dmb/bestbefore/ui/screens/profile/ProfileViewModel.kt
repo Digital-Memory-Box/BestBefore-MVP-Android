@@ -195,7 +195,7 @@ class ProfileViewModel : ViewModel() {
     val preferredTags: StateFlow<List<String>> = _preferredTags.asStateFlow()
 
     fun addProfileTag(tag: String, context: Context? = null) {
-        val trimmed = tag.trim().lowercase()
+        val trimmed = tag.trim().trimStart('#').lowercase(Locale.US)
         if (trimmed.isNotEmpty() && _preferredTags.value.none { it.equals(trimmed, ignoreCase = true) }) {
             val updated = _preferredTags.value + trimmed
             _preferredTags.value = updated
@@ -204,7 +204,8 @@ class ProfileViewModel : ViewModel() {
     }
 
     fun removeProfileTag(tag: String, context: Context? = null) {
-        val updated = _preferredTags.value.filter { !it.equals(tag, ignoreCase = true) }
+        val normalized = tag.trim().trimStart('#')
+        val updated = _preferredTags.value.filter { !it.equals(normalized, ignoreCase = true) }
         _preferredTags.value = updated
         context?.let { SessionManager(it).saveManualProfileTags(updated) }
     }
@@ -261,11 +262,13 @@ class ProfileViewModel : ViewModel() {
                     capsuleMinutes = dto.capsuleDurationMinutes,
                     notificationDays = 0,
                     notificationHours = 0,
-                    isPublic = !dto.isPrivate,
+                    isPublic = dto.isPublic ?: !dto.isPrivate,
                     isCollaboration = dto.isTimeCapsule,
+                    photos = dto.photos ?: emptyList(),
                     unlockTime = dto.unlockDate?.let { parseISO8601(it) } ?: 0L,
                     scheduledClosureTime = dto.expirationDate?.let { parseISO8601(it) } ?: 0L,
                     theme = dto.theme ?: "Default",
+                    tags = dto.tags ?: emptyList(),
                     description = dto.description,
                     music = dto.backgroundMusic ?: "None",
                     connectedRooms = dto.connectedRooms ?: emptyList(),
@@ -677,10 +680,10 @@ class ProfileViewModel : ViewModel() {
         val sessionManager = SessionManager(context)
         val manualProfileTags = sessionManager.getManualProfileTags()
         val backendTags = userDto.preferredTags.orEmpty()
+        val hasLearnedPreferenceTags = !userDto.preferenceTagWeights.isNullOrEmpty()
         val visibleProfileTags = when {
-            !manualProfileTags.isNullOrEmpty() -> manualProfileTags
-            backendTags.isNotEmpty() -> backendTags
             manualProfileTags != null -> manualProfileTags
+            backendTags.isNotEmpty() && !hasLearnedPreferenceTags -> backendTags
             else -> emptyList()
         }
 
@@ -806,7 +809,7 @@ class ProfileViewModel : ViewModel() {
                 notificationDays = dto.capsuleDurationDays,
                 notificationHours = dto.capsuleDurationHours,
                 notificationMinutes = dto.capsuleDurationMinutes,
-                isPublic = !dto.isPrivate,
+                isPublic = dto.isPublic ?: !dto.isPrivate,
                 isCollaboration = dto.isTimeCapsule,
                 photos = dto.photos ?: emptyList(),
                 unlockTime = if (dto.unlockDate != null) parseCreatedAt(dto.unlockDate) else unlock,
@@ -1438,7 +1441,7 @@ class ProfileViewModel : ViewModel() {
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
-    fun refreshRoomMemories(showRefreshIndicator: Boolean = true) {
+    fun refreshRoomMemories(showRefreshIndicator: Boolean = true, limit: Int? = 12) {
         val currentRoomId = _selectedRoom.value?.id ?: return
         viewModelScope.launch {
             if (showRefreshIndicator) _isRefreshing.value = true
@@ -1458,9 +1461,12 @@ class ProfileViewModel : ViewModel() {
 
                 val memoriesUrls = mutableListOf<String>()
                 val memoryItemMap = mutableMapOf<String, MemoryItem>()
-                val memoriesResult = roomRepository.getMemoriesByRoom(currentRoomId, limit = 50)
+                val memoriesResult = roomRepository.getMemoriesByRoom(currentRoomId, limit = limit)
                 memoriesResult.onSuccess { memories ->
                     memories.forEach { memory ->
+                        val memoryRoomId = extractMemoryRoomId(memory)
+                        if (memoryRoomId.isNotEmpty() && memoryRoomId != currentRoomId) return@forEach
+
                         val content = memory["content"] as? String
                         val type = memory["type"] as? String
                         val title = memory["title"] as? String
@@ -1497,10 +1503,11 @@ class ProfileViewModel : ViewModel() {
                         }
                     }
                 }
-                // Only replace media if the API returned results; if empty, the pre-populated
-                // photos (from room.photos DTO) already set above remain as the fallback.
-                if (memoriesUrls.isNotEmpty()) {
-                    _roomMedia.value = _roomMedia.value + (currentRoomId to memoriesUrls.map { Uri.parse(it) })
+                memoriesResult.onSuccess {
+                    val fallbackUris = currentRoom?.photos.orEmpty()
+                        .mapNotNull { preview -> preview.url.takeIf { it.isNotBlank() }?.let { Uri.parse(it) } }
+                    val loadedUris = memoriesUrls.map { Uri.parse(it) }
+                    _roomMedia.value = _roomMedia.value + (currentRoomId to loadedUris.ifEmpty { fallbackUris })
                     _roomMemoryItems.value = _roomMemoryItems.value + (currentRoomId to memoryItemMap)
                 }
 
@@ -1511,11 +1518,12 @@ class ProfileViewModel : ViewModel() {
                 }
                 if (latestPhotoUrl != null) {
                     val coverPreview = MemoryPreview("latest", latestPhotoUrl)
-                    _selectedRoom.value = _selectedRoom.value?.takeIf { it.id == currentRoomId }
-                        ?.let { r ->
-                            val existing = r.photos.filter { it.id != "latest" }
-                            r.copy(photos = listOf(coverPreview) + existing)
-                        } ?: _selectedRoom.value
+                    _selectedRoom.value = _selectedRoom.value?.let { selected ->
+                        if (selected.id != currentRoomId) selected else {
+                            val existing = selected.photos.filter { it.id != "latest" }
+                            selected.copy(photos = listOf(coverPreview) + existing)
+                        }
+                    }
                     _createdRooms.value = _createdRooms.value.map { r ->
                         if (r.id == currentRoomId) {
                             val existing = r.photos.filter { it.id != "latest" }
@@ -1537,6 +1545,13 @@ class ProfileViewModel : ViewModel() {
             is Map<*, *> -> (value["\$oid"] ?: value["oid"])?.toString() ?: ""
             else -> ""
         }
+    }
+
+    private fun extractMemoryRoomId(memory: Map<String, Any>): String {
+        return extractMongoId(memory["roomId"])
+            .ifEmpty { extractMongoId(memory["room"]) }
+            .ifEmpty { extractMongoId(memory["room_id"]) }
+            .ifEmpty { extractMongoId(memory["timeCapsuleRoomId"]) }
     }
 
     // ── Invite Token Management ─────────────────────────────────────────────
@@ -1872,35 +1887,28 @@ class ProfileViewModel : ViewModel() {
 
         // check for unlock
         checkRoomUnlockStatus(room)
-
-        // AI: track VIEW interaction for preference learning (fire-and-forget)
-        viewModelScope.launch {
-            val userDto = _cachedUserDto ?: return@launch
-            // Find matching RoomDto from rooms if available for tag/type context
-            val candidateDto = RoomDto(
-                id = room.id,
-                name = room.roomName,
-                ownerEmail = null,
-                createdAt = null,
-                isPrivate = !room.isPublic,
-                isTimeCapsule = room.isCollaboration,
-                tags = room.tags
-            )
-            aiRepository.trackRoomInteraction(
-                user = userDto,
-                room = candidateDto,
-                interactionType = "VIEW"
-            ).onSuccess { updatedPrefs ->
-                Log.d("ProfileViewModel", "AI VIEW tracked. Top tags: ${updatedPrefs.preferredTags.take(5)}")
-            }
-        }
     }
 
     /** Opens a room from the Hallway card stack. Finds the matching TimeCapsuleRoom from createdRooms
      *  or creates a lightweight placeholder so the detail screen can load memories from the backend. */
     fun selectRoomFromHallway(card: HallwayCard) {
         val existing = _createdRooms.value.find { it.id == card.id }
-        val room = existing ?: TimeCapsuleRoom(
+        val cardPhotos = card.photos.ifEmpty {
+            card.imageUrl
+                ?.takeIf { it.isNotBlank() }
+                ?.let { listOf(MemoryPreview("cover:${card.id}", it)) }
+                .orEmpty()
+        }
+        val room = existing?.copy(
+            photos = existing.photos.ifEmpty { cardPhotos },
+            description = card.description.ifBlank { existing.description },
+            tags = card.tags.ifEmpty { existing.tags },
+            music = card.backgroundMusic ?: existing.music,
+            isViewerOnly = card.isViewerOnly,
+            isOwnedByMe = card.isOwnedByMe,
+            isCollaborator = card.isCollaborator,
+            ownerUserType = card.ownerUserType ?: existing.ownerUserType
+        ) ?: TimeCapsuleRoom(
             id = card.id,
             roomName = card.title,
             capsuleDays = card.timeCapsuleDays,
@@ -1910,7 +1918,7 @@ class ProfileViewModel : ViewModel() {
             notificationHours = 0,
             isPublic = true,
             description = card.description,
-            photos = card.photos,
+            photos = cardPhotos,
             theme = "Default",
             tags = card.tags,
             music = card.backgroundMusic ?: "None",

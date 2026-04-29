@@ -284,6 +284,7 @@ fun HallwayScreen(
                     card = currentCard,
                     themeColor = themeColor,
                     onShowSoundCloud = { viewModel.setSoundCloudModalVisible(true) },
+                    onNavigateToCreatorProfile = onNavigateToCreatorProfile,
                     onDismiss = { viewModel.setDescriptionExpanded(false) }
                 )
             }
@@ -1733,6 +1734,7 @@ private fun ExpandedDescriptionOverlay(
     card: HallwayCard,
     themeColor: Color,
     onShowSoundCloud: () -> Unit,
+    onNavigateToCreatorProfile: (String) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val colors = LocalBestBeforeColors.current
@@ -1862,20 +1864,12 @@ private fun ExpandedDescriptionOverlay(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(themeColor.copy(alpha = 0.85f), CircleShape)
-                        .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = null,
-                        tint = Color.Black,
-                        modifier = Modifier.size(26.dp)
-                    )
-                }
+                ProfileAvatar(
+                    imageUri = card.ownerProfilePic,
+                    size = 48.dp,
+                    accentColor = themeColor,
+                    onClick = { card.ownerId?.let { onNavigateToCreatorProfile(it) } }
+                )
                 Text(
                     text = "@${card.ownerEmail?.substringBefore("@") ?: "artist"}",
                     color = colors.textPrimary,

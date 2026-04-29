@@ -516,7 +516,7 @@ fun CustomizationTab(
                             modifier = Modifier.size(11.dp)
                         )
                         Text(
-                            text = tag,
+                            text = "#$tag",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = accentColorTags
@@ -564,7 +564,10 @@ fun CustomizationTab(
                 Spacer(modifier = Modifier.width(8.dp))
                 BasicTextField(
                     value = tagInput,
-                    onValueChange = { if (it.length <= 20) tagInput = it },
+                    onValueChange = { input ->
+                        val cleaned = input.trimStart('#').filter { it.isLetterOrDigit() || it == '_' || it == '-' }
+                        if (cleaned.length <= 20) tagInput = cleaned
+                    },
                     textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
                     singleLine = true,
                     modifier = Modifier.weight(1f),
