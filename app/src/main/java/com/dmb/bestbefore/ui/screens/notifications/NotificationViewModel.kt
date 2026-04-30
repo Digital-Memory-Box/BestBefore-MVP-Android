@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.dmb.bestbefore.data.models.AppNotification
 import com.dmb.bestbefore.data.repository.NotificationRepository
 import com.dmb.bestbefore.data.repository.RoomRepository
+import com.dmb.bestbefore.utils.AppErrorUtils
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
@@ -22,7 +23,14 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
 
     fun removeNotification(id: String) {
         viewModelScope.launch {
-            notificationRepository.deleteNotification(id)
+            val result = notificationRepository.deleteNotification(id)
+            result.onFailure { e ->
+                android.widget.Toast.makeText(
+                    getApplication(),
+                    AppErrorUtils.userMessage(e),
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 
@@ -39,6 +47,8 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
             val result = notificationRepository.respondToInvitation(notificationId, accept = true)
             if (result.isSuccess) {
                 removeNotification(notificationId)
+            } else {
+                android.widget.Toast.makeText(getApplication(), AppErrorUtils.userMessage(result.exceptionOrNull()), android.widget.Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -48,6 +58,8 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
             val result = notificationRepository.respondToInvitation(notificationId, accept = false)
             if (result.isSuccess) {
                 removeNotification(notificationId)
+            } else {
+                android.widget.Toast.makeText(getApplication(), AppErrorUtils.userMessage(result.exceptionOrNull()), android.widget.Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -66,7 +78,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
                     removeNotification(notificationId)
                 }
                 else -> {
-                    android.widget.Toast.makeText(getApplication(), "Failed to approve: ${result.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(getApplication(), AppErrorUtils.userMessage(result.exceptionOrNull(), "Failed to approve request"), android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -85,7 +97,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
                     removeNotification(notificationId)
                 }
                 else -> {
-                    android.widget.Toast.makeText(getApplication(), "Failed to deny: ${result.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(getApplication(), AppErrorUtils.userMessage(result.exceptionOrNull(), "Failed to deny request"), android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -96,6 +108,8 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
             val result = notificationRepository.getNotifications()
             result.onSuccess { remote ->
                 notificationRepository.mergeNotifications(remote)
+            }.onFailure { e ->
+                android.widget.Toast.makeText(getApplication(), AppErrorUtils.userMessage(e), android.widget.Toast.LENGTH_SHORT).show()
             }
         }
     }

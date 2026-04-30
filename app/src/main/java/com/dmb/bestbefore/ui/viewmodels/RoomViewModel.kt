@@ -8,6 +8,7 @@ import com.dmb.bestbefore.ui.components.RoomObject
 import com.dmb.bestbefore.data.api.models.CreateRoomRequest
 import com.dmb.bestbefore.data.api.models.RoomDto
 import com.dmb.bestbefore.data.repository.RoomRepository
+import com.dmb.bestbefore.utils.AppErrorUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,7 +33,7 @@ class RoomViewModel(private val repository: RoomRepository) : ViewModel() {
                 val dtos = result.getOrDefault(emptyList())
                 _rooms.value = dtos.map { dtoToObj(it) }
             } else {
-                _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to fetch rooms"
+                _errorMessage.value = AppErrorUtils.userMessage(result.exceptionOrNull(), "Failed to fetch rooms")
             }
             _isLoading.value = false
         }
@@ -82,10 +83,10 @@ class RoomViewModel(private val repository: RoomRepository) : ViewModel() {
                     fetchRooms() // Refresh the list
                     onSuccess(result.getOrNull() ?: "")
                 } else {
-                    _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to create room"
+                    _errorMessage.value = AppErrorUtils.userMessage(result.exceptionOrNull(), "Failed to create room")
                 }
             } catch (e: Exception) {
-                _errorMessage.value = e.message ?: "Failed to create room"
+                _errorMessage.value = AppErrorUtils.userMessage(e, "Failed to create room")
             }
             _isLoading.value = false
         }

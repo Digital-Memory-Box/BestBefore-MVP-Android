@@ -157,7 +157,10 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
     val closureMin    by viewModel.scheduledClosureMinute.collectAsState()
     val tags          by viewModel.roomTags.collectAsState()
     val description   by viewModel.roomDescription.collectAsState()
+    val invitedUsers  by viewModel.invitedUsers.collectAsState()
+    val searchResults by viewModel.userSearchResults.collectAsState(initial = emptyList())
     var tagInput      by remember { mutableStateOf("") }
+    var inviteInput   by remember { mutableStateOf("") }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         Column(
@@ -252,27 +255,10 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
             Spacer(modifier = Modifier.height(20.dp))
 
             // â"€â"€â"€ Music â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-            Text("Music", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFF1C1C1E), RoundedCornerShape(12.dp))
-                    .clickable { viewModel.goToStep(ProfileStep.ROOM_ATMOSPHERE) }
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Default.MusicNote, null, tint = AccentBlue, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = if (music.isBlank() || music == "None") "No music selected" else music,
-                    color = if (music.isBlank() || music == "None") Color.Gray else Color.White,
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 15.sp
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                Icon(Icons.Default.ChevronRight, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
-            }
+            EditRoomMusicPicker(
+                selectedMusic = music,
+                onMusicSelected = { viewModel.updateSelectedMusic(it) }
+            )
 
             Spacer(modifier = Modifier.height(20.dp))
 
@@ -397,6 +383,101 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
                 }
             }
 
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text("Invite Friends", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "Add new people to this room. They will receive an invite when you save.",
+                color = Color.Gray,
+                fontSize = 12.sp
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            BasicTextField(
+                value = inviteInput,
+                onValueChange = {
+                    inviteInput = it
+                    viewModel.searchUsers(it)
+                },
+                textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+                cursorBrush = SolidColor(Color.White),
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF1C1C1E), RoundedCornerShape(10.dp))
+                    .padding(12.dp),
+                decorationBox = { inner ->
+                    if (inviteInput.isEmpty()) {
+                        Text("Search by name or email...", color = Color.Gray, fontSize = 14.sp)
+                    }
+                    inner()
+                }
+            )
+
+            if (inviteInput.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(CardDarkBg, RoundedCornerShape(12.dp))
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val shownResults = searchResults.ifEmpty {
+                        listOf(ProfileViewModel.InvitedUser(email = inviteInput.trim()))
+                    }
+                    shownResults.forEach { user ->
+                        EditInviteCandidateRow(
+                            user = user,
+                            isPublic = isPublic,
+                            onAdd = { role ->
+                                viewModel.addInvitedUser(user.copy(role = role))
+                                inviteInput = ""
+                                viewModel.searchUsers("")
+                            }
+                        )
+                    }
+                }
+            }
+
+            if (invitedUsers.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    invitedUsers.forEach { user ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(CardDarkBg, RoundedCornerShape(12.dp))
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Person, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                user.name?.let {
+                                    Text(it, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                }
+                                Text(user.email, color = Color.Gray, fontSize = 13.sp)
+                            }
+                            Text(
+                                if (user.role == "viewer") "Viewer" else "Collaborator",
+                                color = if (user.role == "viewer") AccentBlue else Color(0xFF00D972),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Icon(
+                                Icons.Default.Close,
+                                null,
+                                tint = Color.Gray,
+                                modifier = Modifier.size(20.dp).clickable { viewModel.removeInvitedUser(user.email) }
+                            )
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
 
             // â"€â"€â"€ Save Button â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -415,6 +496,140 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
 }
 
 // --- EXISTING HELPERS ---
+
+@Composable
+private fun EditRoomMusicPicker(
+    selectedMusic: String,
+    onMusicSelected: (String) -> Unit
+) {
+    Text("Music", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+    Spacer(modifier = Modifier.height(8.dp))
+
+    val customUrl = RoomMusicCatalog.customUrl(selectedMusic)
+        ?: selectedMusic.takeIf { it.startsWith("https://soundcloud.com/", ignoreCase = true) }
+        ?: ""
+    var currentInput by remember(selectedMusic) { mutableStateOf(customUrl) }
+    val musicOptions = listOf(
+        Triple("None", RoomMusicCatalog.NONE, Icons.AutoMirrored.Filled.VolumeOff),
+        Triple("Dreamy Synth", RoomMusicCatalog.presetValue("dreamy_synth"), Icons.Default.AutoAwesome),
+        Triple("Chill Cafe", RoomMusicCatalog.presetValue("chill_cafe"), Icons.Default.Coffee),
+        Triple("Minimal Piano", RoomMusicCatalog.presetValue("minimal_piano"), Icons.Default.Piano),
+        Triple("Vaporwave", RoomMusicCatalog.presetValue("vaporwave"), Icons.Default.AutoAwesome)
+    )
+
+    musicOptions.forEach { (label, value, icon) ->
+        val isSelected = selectedMusic == value ||
+            selectedMusic.equals(label, ignoreCase = true) ||
+            (value == RoomMusicCatalog.NONE && RoomMusicCatalog.isNone(selectedMusic))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    if (isSelected) Color(0xFF0D2B5E) else CardDarkBg,
+                    RoundedCornerShape(12.dp)
+                )
+                .then(
+                    if (isSelected) Modifier.border(1.5.dp, AccentBlue, RoundedCornerShape(12.dp))
+                    else Modifier
+                )
+                .clickable {
+                    currentInput = ""
+                    onMusicSelected(value)
+                }
+                .padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, label, tint = if (isSelected) Color.White else Color.Gray, modifier = Modifier.size(22.dp))
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(label, color = if (isSelected) Color.White else Color.Gray, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.weight(1f))
+            if (isSelected) Icon(Icons.Default.CheckCircle, null, tint = AccentBlue, modifier = Modifier.size(18.dp))
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+    }
+
+    Text("Custom SoundCloud Link", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+    Spacer(modifier = Modifier.height(8.dp))
+    val isInvalidUrl = currentInput.isNotEmpty() && !currentInput.startsWith("https://soundcloud.com/")
+    BasicTextField(
+        value = currentInput,
+        onValueChange = {
+            currentInput = it
+            onMusicSelected(RoomMusicCatalog.customValue(it))
+        },
+        textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+        cursorBrush = SolidColor(Color.White),
+        singleLine = true,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(CardDarkBg, RoundedCornerShape(12.dp))
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+        decorationBox = { inner ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Link, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(10.dp))
+                Box(modifier = Modifier.weight(1f)) {
+                    if (currentInput.isEmpty()) Text("Paste SoundCloud URL", color = Color.Gray, fontSize = 14.sp)
+                    inner()
+                }
+            }
+        }
+    )
+    if (isInvalidUrl) {
+        Text(
+            "Use a https://soundcloud.com/ link.",
+            color = AccentBlue,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 6.dp, start = 6.dp)
+        )
+    }
+}
+
+@Composable
+private fun EditInviteCandidateRow(
+    user: ProfileViewModel.InvitedUser,
+    isPublic: Boolean,
+    onAdd: (String) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Default.Person, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            user.name?.let {
+                Text(it, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+            Text(user.email, color = Color.Gray, fontSize = 13.sp)
+        }
+        if (!isPublic) {
+            Text(
+                "Viewer",
+                color = AccentBlue,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .background(AccentBlue.copy(alpha = 0.18f), RoundedCornerShape(8.dp))
+                    .border(1.dp, AccentBlue, RoundedCornerShape(8.dp))
+                    .clickable { onAdd("viewer") }
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        Text(
+            "Collab",
+            color = Color(0xFF00D972),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .background(Color(0xFF00D972).copy(alpha = 0.18f), RoundedCornerShape(8.dp))
+                .border(1.dp, Color(0xFF00D972), RoundedCornerShape(8.dp))
+                .clickable { onAdd("collaborator") }
+                .padding(horizontal = 8.dp, vertical = 6.dp)
+        )
+    }
+}
 
 @Composable
 fun CardStack(

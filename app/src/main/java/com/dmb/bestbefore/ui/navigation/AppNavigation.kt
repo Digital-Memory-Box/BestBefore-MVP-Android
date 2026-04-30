@@ -1,5 +1,6 @@
 package com.dmb.bestbefore.ui.navigation
 
+import android.app.Activity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -22,6 +23,7 @@ import com.dmb.bestbefore.ui.screens.profile.RoomDetailScreen
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 
 object Routes {
     const val OPENING = "opening"
@@ -36,6 +38,22 @@ object Routes {
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
+    val context = LocalContext.current
+
+    fun popBackOrFinish() {
+        if (!navController.popBackStack()) {
+            (context as? Activity)?.finish()
+        }
+    }
+
+    fun popBackOrProfile() {
+        if (!navController.popBackStack()) {
+            navController.navigate(Routes.PROFILE) {
+                popUpTo(Routes.NOTIFICATIONS) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
 
     NavHost(
         navController = navController,
@@ -126,9 +144,17 @@ fun AppNavigation() {
         composable(Routes.PROFILE) {
             val profileViewModel: com.dmb.bestbefore.ui.screens.profile.ProfileViewModel = viewModel()
             val hallwayViewModel: com.dmb.bestbefore.ui.screens.hallway.HallwayViewModel = viewModel()
+            LaunchedEffect(Unit) {
+                if (com.dmb.bestbefore.MainActivity.pendingNavigateToNotifications) {
+                    com.dmb.bestbefore.MainActivity.clearPending()
+                    navController.navigate(Routes.NOTIFICATIONS) {
+                        launchSingleTop = true
+                    }
+                }
+            }
             ProfileScreen(
                 onNavigateBack = {
-                    navController.popBackStack()
+                    popBackOrFinish()
                 },
                 onLogout = {
                     navController.navigate(Routes.LOGIN) {
@@ -136,7 +162,9 @@ fun AppNavigation() {
                     }
                 },
                 onNavigateToNotifications = {
-                    navController.navigate(Routes.NOTIFICATIONS)
+                    navController.navigate(Routes.NOTIFICATIONS) {
+                        launchSingleTop = true
+                    }
                 },
                 onNavigateToCreatorProfile = { userId ->
                     navController.navigate("creator_profile/$userId")
@@ -150,7 +178,7 @@ fun AppNavigation() {
             val userId = backStackEntry.arguments?.getString("userId") ?: ""
             com.dmb.bestbefore.ui.screens.profile.CreatorProfileScreen(
                 userId = userId,
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = { popBackOrProfile() },
                 onNavigateToRoom = { roomId, _ -> 
                     navController.navigate("room_detail/$roomId") 
                 }
@@ -160,7 +188,7 @@ fun AppNavigation() {
         composable(Routes.NOTIFICATIONS) {
             com.dmb.bestbefore.ui.screens.notifications.NotificationScreen(
                 onNavigateBack = {
-                    navController.popBackStack()
+                    popBackOrProfile()
                 },
                 onNavigateToRoom = { roomId ->
                     navController.navigate("room_detail/$roomId")
@@ -196,18 +224,25 @@ fun AppNavigation() {
             }
             
             Box(Modifier.fillMaxSize()) {
+                val room by profileViewModel.selectedRoom.collectAsState()
+                val isGalleryOpen by profileViewModel.isGalleryViewerOpen.collectAsState()
+                val showConnectRooms by profileViewModel.showConnectRooms.collectAsState()
+
+                // Keep this before RoomDetailScreen so child overlays get first chance at back.
+                androidx.activity.compose.BackHandler(enabled = true) {
+                    when {
+                        isGalleryOpen -> profileViewModel.closeGalleryViewer()
+                        showConnectRooms -> profileViewModel.closeConnectRooms()
+                        else -> popBackOrProfile()
+                    }
+                }
+
                 RoomDetailScreen(
                     viewModel = profileViewModel,
                     multiplePhotoPickerLauncher = multiplePhotoPickerLauncher,
                     filePickerLauncher = filePickerLauncher,
                     isRoomInRooming = false
                 )
-                
-                // Override the internal goBack from ProfileViewModel to pop back stack directly
-                val room by profileViewModel.selectedRoom.collectAsState()
-                androidx.activity.compose.BackHandler(enabled = true) {
-                    navController.popBackStack()
-                }
                 
                 val isLoading by profileViewModel.isLoading.collectAsState()
                 
@@ -230,7 +265,7 @@ fun AppNavigation() {
                 
                 LaunchedEffect(room, isLoading, hasStartedLoading) {
                     if (hasStartedLoading && room == null && !isLoading) {
-                        navController.popBackStack()
+                        popBackOrProfile()
                     }
                 }
             }

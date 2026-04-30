@@ -547,8 +547,11 @@ fun CameraActionSheet(viewModel: ProfileViewModel, context: android.content.Cont
                 .fillMaxWidth(0.85f)
                 .background(Color(0xFF1A7AF8), RoundedCornerShape(16.dp))
                 .clickable {
-                    viewModel.goToStep(ProfileStep.ROOM_NAME)
-                    // The image is already staged in the viewModel
+                    viewModel.acceptCapturedImage()
+                    viewModel.startCreateRoom(
+                        source = RoomCreationSource.HALLWAY,
+                        preserveStagedMedia = true
+                    )
                 }
                 .padding(vertical = 16.dp),
             horizontalArrangement = Arrangement.Center,
@@ -567,7 +570,7 @@ fun CameraActionSheet(viewModel: ProfileViewModel, context: android.content.Cont
                 .fillMaxWidth(0.85f)
                 .background(Color(0xFF2C2C2E), RoundedCornerShape(16.dp))
                 .clickable {
-                    // Quick add to the current room if available, otherwise just dismiss or tell them to select one
+                    viewModel.acceptCapturedImage()
                     viewModel.uploadMedia(context)
                     viewModel.closeOverlay()
                 }
@@ -587,7 +590,10 @@ fun CameraActionSheet(viewModel: ProfileViewModel, context: android.content.Cont
             color = Color(0xFF8E8E93),
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.clickable { viewModel.closeOverlay() }
+            modifier = Modifier.clickable {
+                viewModel.clearCapturedImage()
+                viewModel.closeOverlay()
+            }
         )
     }
 }

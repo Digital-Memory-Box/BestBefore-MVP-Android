@@ -11,6 +11,7 @@ import com.dmb.bestbefore.data.api.models.PublicProfileDto
 import com.dmb.bestbefore.data.api.models.PublicRoomDto
 import com.dmb.bestbefore.data.models.HallwayCard
 import com.dmb.bestbefore.data.local.SessionManager
+import com.dmb.bestbefore.utils.AppErrorUtils
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.CancellationException
 import java.io.IOException
@@ -71,7 +72,7 @@ class CreatorProfileViewModel(application: Application) : AndroidViewModel(appli
                     }
 
                     val errBody = response.errorBody()?.string()
-                    lastError = "Error ${response.code()}: ${errBody ?: "Failed to load profile"}"
+                    lastError = if (response.code() in 500..599) AppErrorUtils.LOADING_ERROR else "Failed to load profile"
                     if (response.code() in 500..599 && attempt == 0) {
                         Log.w("CreatorProfileVM", "HTTP ${response.code()} for $userId, retrying")
                         delay(900)
@@ -86,7 +87,7 @@ class CreatorProfileViewModel(application: Application) : AndroidViewModel(appli
             } catch (e: IOException) {
                 Log.w("CreatorProfileVM", "Network issue loading profile for $userId: ${e.message}")
                 if (_profileState.value == null) {
-                    _error.value = "Network timeout. Please try again."
+                    _error.value = AppErrorUtils.userMessage(e)
                 }
             } catch (e: CancellationException) {
                 Log.d("CreatorProfileVM", "Profile load cancelled for $userId")
@@ -94,7 +95,7 @@ class CreatorProfileViewModel(application: Application) : AndroidViewModel(appli
             } catch (e: Exception) {
                 Log.e("CreatorProfileVM", "Exception loading profile", e)
                 if (_profileState.value == null) {
-                    _error.value = e.localizedMessage ?: "Unknown error"
+                    _error.value = AppErrorUtils.userMessage(e)
                 }
             } finally {
                 _isLoading.value = false

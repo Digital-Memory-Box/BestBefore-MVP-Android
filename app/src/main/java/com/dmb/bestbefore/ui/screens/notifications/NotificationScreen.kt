@@ -51,6 +51,10 @@ fun NotificationScreen(
         viewModel.refresh()
     }
 
+    androidx.activity.compose.BackHandler {
+        onNavigateBack()
+    }
+
     Scaffold(
         containerColor = Color.Black,
         topBar = {

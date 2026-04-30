@@ -5,7 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dmb.bestbefore.data.local.SessionManager
 import com.dmb.bestbefore.data.repository.AuthRepository
-import com.dmb.bestbefore.data.api.models.UserDto
+import com.dmb.bestbefore.utils.AppErrorUtils
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
@@ -125,7 +125,7 @@ class SignupViewModel(application: Application) : AndroidViewModel(application) 
                             _errorMessage.value = when (e) {
                                 is FirebaseAuthWeakPasswordException -> "Password is too weak."
                                 is FirebaseAuthInvalidCredentialsException -> "Invalid email format."
-                                else -> e.message ?: "Signup failed. Please try again."
+                                else -> AppErrorUtils.userMessage(e, "Signup failed. Please try again.")
                             }
                             "error"
                         }
@@ -151,13 +151,13 @@ class SignupViewModel(application: Application) : AndroidViewModel(application) 
                 } else if (_isLoading.value) {
                     Log.e("SignupViewModel", "All signup attempts failed")
                     _isLoading.value = false
-                    _errorMessage.value = "Network is unstable. Please check your WiFi and try again."
+                    _errorMessage.value = AppErrorUtils.NO_INTERNET
                 }
 
             } catch (e: Exception) {
                 Log.e("SignupViewModel", "Unexpected error: ${e.message}")
                 _isLoading.value = false
-                _errorMessage.value = e.message ?: "Unexpected error. Please try again."
+                _errorMessage.value = AppErrorUtils.userMessage(e, "Unexpected error. Please try again.")
             }
         }
     }
@@ -214,7 +214,7 @@ class SignupViewModel(application: Application) : AndroidViewModel(application) 
                 }
             } catch (e: Exception) {
                 _isLoading.value = false
-                _errorMessage.value = "Failed to check status: ${e.message}"
+                _errorMessage.value = AppErrorUtils.userMessage(e, "Failed to check status. Please try again.")
             }
         }
     }
@@ -254,7 +254,7 @@ class SignupViewModel(application: Application) : AndroidViewModel(application) 
                 _signupSuccess.emit(updatedDto.email)
             }
         }.onFailure { e ->
-            _errorMessage.value = e.message ?: "Server sync failed. Please try again."
+            _errorMessage.value = AppErrorUtils.userMessage(e, "Server sync failed. Please try again.")
         }
     }
 

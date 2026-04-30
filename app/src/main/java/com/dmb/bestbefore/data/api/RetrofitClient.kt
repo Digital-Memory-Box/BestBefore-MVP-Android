@@ -26,8 +26,10 @@ object RetrofitClient {
     // any other interceptor transforms them.  It buffers + re-emits the body so
     // Retrofit can still parse it normally.
     private val perfInterceptor = PerfLoggingInterceptor()
+    private val appErrorInterceptor = AppErrorInterceptor()
 
     private val client = OkHttpClient.Builder()
+        .addInterceptor(appErrorInterceptor)
         .addInterceptor(perfInterceptor)
         .addInterceptor(loggingInterceptor)
         // Sensible timeouts: connect fast, allow time for large responses, no global call cap

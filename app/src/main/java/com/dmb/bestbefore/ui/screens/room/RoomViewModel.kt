@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.dmb.bestbefore.data.models.CalendarEvent
 import com.dmb.bestbefore.data.repository.RoomRepository
 import com.dmb.bestbefore.notifications.NotificationHelper
+import com.dmb.bestbefore.utils.AppErrorUtils
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -103,7 +104,7 @@ class RoomViewModel(application: Application) : AndroidViewModel(application) {
                 val data = result.getOrDefault(emptyList())
                 _memories.value = data
             } else {
-                val errorMsg = result.exceptionOrNull()?.message ?: "Unknown error"
+                val errorMsg = AppErrorUtils.userMessage(result.exceptionOrNull())
                 _errorMessage.value = errorMsg
                 android.util.Log.w("RoomViewModel", "Failed to fetch memories: $errorMsg")
             }

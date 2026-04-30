@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.dmb.bestbefore.data.api.RetrofitClient
 import com.dmb.bestbefore.data.api.models.SoundCloudTrack
 import com.dmb.bestbefore.notifications.MusicPlayerManager
+import com.dmb.bestbefore.utils.AppErrorUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,10 +36,10 @@ class MusicViewModel : ViewModel() {
                     _tracks.value = tracksList
                     MusicPlayerManager.setPlaylist(tracksList)
                 } else {
-                    _error.value = "Failed to load playlist: ${response.code()}"
+                    _error.value = if (response.code() in 500..599) AppErrorUtils.LOADING_ERROR else "Failed to load playlist"
                 }
             } catch (e: Exception) {
-                _error.value = "Error loading playlist: ${e.localizedMessage}"
+                _error.value = AppErrorUtils.userMessage(e, "Error loading playlist")
             } finally {
                 _isLoading.value = false
             }
@@ -80,10 +81,10 @@ class MusicViewModel : ViewModel() {
                     _tracks.value = mappedTracks
                     MusicPlayerManager.setPlaylist(mappedTracks)
                 } else {
-                    _error.value = "Failed to search tracks: ${response.code()}"
+                    _error.value = if (response.code() in 500..599) AppErrorUtils.LOADING_ERROR else "Failed to search tracks"
                 }
             } catch (e: Exception) {
-                _error.value = "Error searching tracks: ${e.localizedMessage}"
+                _error.value = AppErrorUtils.userMessage(e, "Error searching tracks")
             } finally {
                 _isLoading.value = false
             }

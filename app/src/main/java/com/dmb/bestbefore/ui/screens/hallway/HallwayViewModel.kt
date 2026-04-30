@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dmb.bestbefore.data.models.HallwayCard
 import com.dmb.bestbefore.data.repository.RoomRepository
+import com.dmb.bestbefore.utils.AppErrorUtils
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -110,6 +111,13 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
 
     private val _isInitialLoading = MutableStateFlow(true)
     val isInitialLoading: StateFlow<Boolean> = _isInitialLoading.asStateFlow()
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    fun clearErrorMessage() {
+        _errorMessage.value = null
+    }
 
     // ── Saved Rooms (Added to Rooming via "Add to Rooming" button) ─────────
     private val _savedRoomCards = MutableStateFlow<List<HallwayCard>>(emptyList())
@@ -362,6 +370,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 }
             } catch (e: Exception) {
                 Log.e(TAG_PERF, "[${ms()}ms] /health exception in ${System.currentTimeMillis() - pingT0}ms: ${e.message}")
+                _errorMessage.value = AppErrorUtils.userMessage(e)
             } finally {
                 warmupJob.cancel()
                 _serverStatus.value = ServerStatus.READY
@@ -398,6 +407,12 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                     discoverRoomsList = rooms
                 } else {
                     Log.e(TAG_PERF, "[${ms()}ms] /rooms/discover FAILED: ${discoverResult.exceptionOrNull()?.message}")
+                }
+
+                if (myResult.isFailure && discoverResult.isFailure) {
+                    _errorMessage.value = AppErrorUtils.userMessage(myResult.exceptionOrNull() ?: discoverResult.exceptionOrNull())
+                } else {
+                    _errorMessage.value = null
                 }
 
                 // Sync ignored/saved rooms from profile + kick off AI discovery
@@ -487,6 +502,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 Log.i(TAG_PERF, "[${ms()}ms] filterCards done → ${_cards.value.size} cards visible")
             } catch (e: Exception) {
                 Log.e(TAG_PERF, "[${ms()}ms] fetchRooms EXCEPTION: ${e.message}", e)
+                _errorMessage.value = AppErrorUtils.userMessage(e)
             } finally {
                 Log.i(TAG_PERF, "━━━ fetchRooms END  total=${ms()}ms ━━━")
                 _isInitialLoading.value = false
@@ -540,6 +556,9 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 }
             } catch (e: Exception) {
                 Log.w(TAG_PERF, "tags fetch unavailable: ${e.message}")
+                if (_availableTags.value.isEmpty()) {
+                    _errorMessage.value = AppErrorUtils.userMessage(e)
+                }
             }
         }
     }
@@ -737,6 +756,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                     }.onFailure { e ->
                         Log.w("HallwayViewModel", "Semantic search failed, keeping local filter: ${e.message}")
                         _semanticSearchCards.value = emptyList()
+                        _errorMessage.value = AppErrorUtils.userMessage(e)
                     }
                     _isSemanticSearching.value = false
                 } else {
@@ -854,6 +874,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 refreshRooms() // Trigger full refresh
             } else {
                 Log.e("HallwayViewModel", "Failed to delete memory: ${result.exceptionOrNull()?.message}")
+                android.widget.Toast.makeText(getApplication(), AppErrorUtils.userMessage(result.exceptionOrNull()), android.widget.Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -870,10 +891,16 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 
                 myResult.onSuccess { rooms -> myRoomsList = rooms }
                 discoverResult.onSuccess { rooms -> discoverRoomsList = rooms }
+                if (myResult.isFailure && discoverResult.isFailure) {
+                    _errorMessage.value = AppErrorUtils.userMessage(myResult.exceptionOrNull() ?: discoverResult.exceptionOrNull())
+                } else {
+                    _errorMessage.value = null
+                }
                 
                 filterCards(_currentTab.value)
             } catch (e: Exception) {
                 Log.e("HallwayViewModel", "Error refreshing rooms", e)
+                _errorMessage.value = AppErrorUtils.userMessage(e)
             } finally {
                 _isRefreshing.value = false
             }

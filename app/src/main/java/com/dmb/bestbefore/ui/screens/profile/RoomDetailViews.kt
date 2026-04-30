@@ -181,6 +181,19 @@ fun RoomDetailScreen(
     var authToken by remember { mutableStateOf<String?>(null) }
     val musicViewModel: com.dmb.bestbefore.ui.components.MusicViewModel = viewModel()
 
+    LaunchedEffect(room?.id) {
+        showQrCode = false
+        show3DotMenu = false
+        showRoomDetailsSheet = false
+        showWriteNoteDialog = false
+        showDeleteRoomConfirm = false
+        showDeleteMemoryConfirm = false
+        memoryToDelete = null
+        noteContent = ""
+        showAllMediaGrid = false
+        showMusicSelector = false
+    }
+
     LaunchedEffect(Unit) {
         authToken = viewModel.getAuthToken(context)
     }
@@ -223,8 +236,15 @@ fun RoomDetailScreen(
         )
     }
     
-    // Combine room-specific media
+    // Combine this room's media with connected rooms so linked rooms feel like one collection.
     val currentRoomMedia = roomMedia[room?.id] ?: emptyList()
+    val connectedRoomIds = room?.connectedRooms.orEmpty()
+    LaunchedEffect(room?.id, connectedRoomIds) {
+        viewModel.prefetchConnectedRoomMemories(connectedRoomIds)
+    }
+    val visibleRoomMedia = currentRoomMedia + connectedRoomIds.flatMap { roomId ->
+        roomMedia[roomId].orEmpty()
+    }
     
     Box(modifier = Modifier.fillMaxSize()) {
         com.dmb.bestbefore.ui.components.AnimatedBackgroundView(
@@ -272,15 +292,6 @@ fun RoomDetailScreen(
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.MusicNote,
-                                "Music",
-                                tint = Color.White,
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .clickable { showMusicSelector = true }
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
                             if (room!!.isPublic && !isLocked) {
                                 Icon(
                                     imageVector = Icons.Filled.Apps,
@@ -664,11 +675,11 @@ fun RoomDetailScreen(
                 // If it's closed/locked, default was previously takeLast(2) but now updated to 5.
                 // If room is OPEN, viewers get see all. 
                 val displayMedia = if (isLocked) {
-                    currentRoomMedia.takeLast(5)
+                    visibleRoomMedia.takeLast(5)
                 } else if (isClosed) {
-                    currentRoomMedia.takeLast(5)
+                    visibleRoomMedia.takeLast(5)
                 } else {
-                    currentRoomMedia
+                    visibleRoomMedia
                 }
                 
                 if (displayMedia.isEmpty()) {
@@ -931,14 +942,14 @@ fun RoomDetailScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(currentRoomMedia.size) { index ->
-                        val item = currentRoomMedia[index]
+                    items(visibleRoomMedia.size) { index ->
+                        val item = visibleRoomMedia[index]
                         Box(
                             modifier = Modifier
                                 .aspectRatio(1f)
                                 .background(Color.DarkGray)
                                 .combinedClickable(
-                                    onClick = { viewModel.openGalleryViewer(currentRoomMedia, index) },
+                                    onClick = { viewModel.openGalleryViewer(visibleRoomMedia, index) },
                                     onDoubleClick = {
                                         val currentRoom = room
                                         if (currentRoom?.isOwnedByMe == true && viewModel.isMyMemory(currentRoom.id, item)) {
@@ -990,6 +1001,9 @@ fun RoomDetailScreen(
         // Image Viewer Overlay
         val isGalleryOpen by viewModel.isGalleryViewerOpen.collectAsState()
         if (isGalleryOpen) {
+             androidx.activity.compose.BackHandler(enabled = true) {
+                 viewModel.closeGalleryViewer()
+             }
              ProfileGalleryViewer(
                  viewModel = viewModel,
                  canDeleteMemory = { uri ->
@@ -1486,6 +1500,13 @@ fun ProfileGalleryViewer(
 ) {
     val media by viewModel.galleryViewerMedia.collectAsState()
     val startIndex by viewModel.galleryViewerIndex.collectAsState()
+
+    if (media.isEmpty()) {
+        LaunchedEffect(Unit) {
+            viewModel.closeGalleryViewer()
+        }
+        return
+    }
     
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = startIndex) { media.size }
     

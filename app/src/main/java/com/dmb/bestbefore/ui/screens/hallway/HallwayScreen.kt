@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -97,6 +98,7 @@ fun HallwayScreen(
     val roomingFilter by viewModel.roomingFilter.collectAsState()
     val isInitialLoading by viewModel.isInitialLoading.collectAsState()
     val serverStatus by viewModel.serverStatus.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
     val notificationViewModel: NotificationViewModel = viewModel()
     val notificationCount by notificationViewModel.notifications.collectAsState()
     val isSemanticSearching by viewModel.isSemanticSearching.collectAsState()
@@ -104,6 +106,14 @@ fun HallwayScreen(
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val orbWidth = (screenWidthDp * 0.82f).dp.coerceIn(300.dp, 420.dp)
     val contentEndInset = 0.dp
+    val context = LocalContext.current
+
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let { message ->
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+            viewModel.clearErrorMessage()
+        }
+    }
 
     // Refresh rooms data every time screen enters composition
     LaunchedEffect(Unit) {

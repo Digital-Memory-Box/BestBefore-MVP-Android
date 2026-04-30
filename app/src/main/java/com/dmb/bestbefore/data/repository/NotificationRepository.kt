@@ -20,7 +20,9 @@ class NotificationRepository(private val context: Context? = null) {
     companion object {
         private const val PREFS_NAME = "bestbefore_notifications"
         private const val KEY_NOTIFICATIONS = "notifications_json"
+        private const val KEY_DISMISSED_NOTIFICATION_IDS = "dismissed_notification_ids_json"
         private const val MAX_LOCAL_NOTIFICATIONS = 200
+        private const val MAX_DISMISSED_NOTIFICATION_IDS = 500
     }
 
     private val api = RetrofitClient.apiService
@@ -28,6 +30,7 @@ class NotificationRepository(private val context: Context? = null) {
     val notifications: StateFlow<List<AppNotification>> = _notifications.asStateFlow()
 
     fun addNotification(notification: AppNotification) {
+        if (isDismissed(notification.id)) return
         val updated = (_notifications.value.filterNot { it.id == notification.id } + notification)
             .sortedByDescending { it.timestamp }
             .take(MAX_LOCAL_NOTIFICATIONS)
@@ -36,21 +39,26 @@ class NotificationRepository(private val context: Context? = null) {
     }
 
     fun removeNotification(id: String) {
+        rememberDismissed(id)
         val updated = _notifications.value.filterNot { it.id == id }
         _notifications.value = updated
         persistLocalNotifications(updated)
     }
 
     fun clearAll() {
+        rememberDismissed(_notifications.value.map { it.id })
         _notifications.value = emptyList()
         persistLocalNotifications(emptyList())
     }
 
     fun mergeNotifications(remote: List<AppNotification>) {
         val mergedById = linkedMapOf<String, AppNotification>()
-        (_notifications.value + remote).forEach { notif ->
-            mergedById[notif.id] = notif
-        }
+        val dismissedIds = loadDismissedNotificationIds()
+        (_notifications.value + remote)
+            .filterNot { it.id in dismissedIds }
+            .forEach { notif ->
+                mergedById[notif.id] = notif
+            }
         val merged = mergedById.values
             .sortedByDescending { it.timestamp }
             .take(MAX_LOCAL_NOTIFICATIONS)
@@ -83,10 +91,17 @@ class NotificationRepository(private val context: Context? = null) {
                     val message = (map["body"] as? String)
                         ?: (map["message"] as? String)
                         ?: ""
+                    val notificationId = extractStringId(
+                        map["_id"]
+                            ?: map["id"]
+                            ?: map["notificationId"]
+                            ?: map["notification_id"]
+                    ).ifEmpty {
+                        buildStableNotificationId(map, typeStr, title, message)
+                    }
 
                     AppNotification(
-                        id = extractStringId(map["_id"] ?: map["id"])
-                            .ifEmpty { java.util.UUID.randomUUID().toString() },
+                        id = notificationId,
                         title = title,
                         message = message,
                         timestamp = parseTimestamp(map),
@@ -217,11 +232,78 @@ class NotificationRepository(private val context: Context? = null) {
         prefs.edit().putString(KEY_NOTIFICATIONS, jsonArray.toString()).apply()
     }
 
+    private fun isDismissed(id: String): Boolean {
+        if (id.isBlank()) return false
+        return id in loadDismissedNotificationIds()
+    }
+
+    private fun rememberDismissed(id: String) {
+        if (id.isBlank()) return
+        rememberDismissed(listOf(id))
+    }
+
+    private fun rememberDismissed(ids: List<String>) {
+        val cleanedIds = ids.filter { it.isNotBlank() }
+        if (cleanedIds.isEmpty()) return
+
+        val updated = (cleanedIds + loadDismissedNotificationIds())
+            .distinct()
+            .take(MAX_DISMISSED_NOTIFICATION_IDS)
+        persistDismissedNotificationIds(updated)
+    }
+
+    private fun loadDismissedNotificationIds(): List<String> {
+        val prefs = context?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) ?: return emptyList()
+        val raw = prefs.getString(KEY_DISMISSED_NOTIFICATION_IDS, null) ?: return emptyList()
+
+        return runCatching {
+            val jsonArray = JSONArray(raw)
+            buildList {
+                for (i in 0 until jsonArray.length()) {
+                    jsonArray.optString(i).takeIf { it.isNotBlank() }?.let(::add)
+                }
+            }
+        }.getOrElse {
+            Log.e("NotificationRepository", "Failed to parse dismissed notification IDs", it)
+            emptyList()
+        }
+    }
+
+    private fun persistDismissedNotificationIds(ids: List<String>) {
+        val prefs = context?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) ?: return
+        val jsonArray = JSONArray()
+        ids.forEach { jsonArray.put(it) }
+        prefs.edit().putString(KEY_DISMISSED_NOTIFICATION_IDS, jsonArray.toString()).apply()
+    }
+
     /** Safely extracts a String ID from either a plain String or a MongoDB ObjectId map. */
     private fun extractStringId(value: Any?): String = when (value) {
         is String -> value
         is Map<*, *> -> (value["\$oid"] ?: value["oid"])?.toString() ?: ""
         else -> ""
+    }
+
+    private fun buildStableNotificationId(
+        map: Map<String, Any>,
+        type: String?,
+        title: String,
+        message: String
+    ): String {
+        val fingerprint = listOfNotNull(
+            type,
+            title,
+            message,
+            extractStringId(map["roomId"] ?: map["relatedRoomId"] ?: map["room"]).takeIf { it.isNotBlank() },
+            map["roomName"]?.toString(),
+            map["relatedRoomName"]?.toString(),
+            map["requesterEmail"]?.toString(),
+            map["fromEmail"]?.toString(),
+            map["actorEmail"]?.toString(),
+            map["createdAt"]?.toString(),
+            map["timestamp"]?.toString()
+        ).joinToString("|")
+
+        return "remote:${fingerprint.hashCode()}"
     }
 
     private fun parseType(value: String): NotificationType {

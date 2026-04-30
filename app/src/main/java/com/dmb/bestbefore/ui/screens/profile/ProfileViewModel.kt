@@ -53,6 +53,7 @@ import com.dmb.bestbefore.data.repository.NotificationRepository
 import com.dmb.bestbefore.data.repository.RoomRepository
 import com.dmb.bestbefore.notifications.NotificationScheduler
 import com.dmb.bestbefore.ui.theme.ThemeState
+import com.dmb.bestbefore.utils.AppErrorUtils
 import com.dmb.bestbefore.utils.AudioRecorderHelper
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
@@ -67,6 +68,10 @@ import java.util.UUID
 class ProfileViewModel : ViewModel() {
     companion object {
         val ARTIST_ROOM_EMOTIONS = listOf("warmed", "moved", "soothed", "struck", "stayed")
+    }
+
+    private fun userErrorMessage(error: Throwable?, fallback: String = AppErrorUtils.LOADING_ERROR): String {
+        return AppErrorUtils.userMessage(error, fallback)
     }
 
     private val _currentStep = MutableStateFlow(ProfileStep.NONE)
@@ -450,6 +455,15 @@ class ProfileViewModel : ViewModel() {
     
     private val _galleryViewerIndex = MutableStateFlow(0)
     val galleryViewerIndex: StateFlow<Int> = _galleryViewerIndex.asStateFlow()
+
+    private fun clearRoomTransientUiState() {
+        _isGalleryViewerOpen.value = false
+        _galleryViewerMedia.value = emptyList()
+        _galleryViewerIndex.value = 0
+        _showConnectRooms.value = false
+        _connectionSuggestions.value = emptyList()
+        _isLoadingConnectionSuggestions.value = false
+    }
     
     // Profile Music state
     private val _profileMusic = MutableStateFlow<String?>("None")
@@ -470,7 +484,7 @@ class ProfileViewModel : ViewModel() {
                 sessionManager.saveProfileMusic(updateMusic)
                 Toast.makeText(context, "Profile music updated", Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(context, "Failed to update profile music", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, userErrorMessage(result.exceptionOrNull(), "Failed to update profile music"), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -513,8 +527,8 @@ class ProfileViewModel : ViewModel() {
                     Toast.makeText(context, "Invitation accepted!", Toast.LENGTH_SHORT).show()
                     initDatabase(context) // Refresh room list
                 }
-                result.onFailure {
-                    Toast.makeText(context, "Failed to accept invite", Toast.LENGTH_SHORT).show()
+                result.onFailure { e ->
+                    Toast.makeText(context, userErrorMessage(e, "Failed to accept invite"), Toast.LENGTH_SHORT).show()
                 }
             } finally {
                 _isLoading.value = false
@@ -531,8 +545,8 @@ class ProfileViewModel : ViewModel() {
                     hideInviteDialog()
                     Toast.makeText(context, "Invitation declined", Toast.LENGTH_SHORT).show()
                 }
-                result.onFailure {
-                    Toast.makeText(context, "Failed to decline invite", Toast.LENGTH_SHORT).show()
+                result.onFailure { e ->
+                    Toast.makeText(context, userErrorMessage(e, "Failed to decline invite"), Toast.LENGTH_SHORT).show()
                 }
             } finally {
                 _isLoading.value = false
@@ -545,6 +559,8 @@ class ProfileViewModel : ViewModel() {
             val result = notificationRepository.getNotifications()
             result.onSuccess { list ->
                 _notifications.value = list
+            }.onFailure { e ->
+                Log.w("ProfileViewModel", "Failed to fetch notifications: ${e.message}")
             }
         }
     }
@@ -559,8 +575,8 @@ class ProfileViewModel : ViewModel() {
                     fetchNotifications()
                     if (accept) initDatabase(context) // Refresh rooms if accepted
                 }
-                result.onFailure {
-                    Toast.makeText(context, "Failed to respond to invitation", Toast.LENGTH_SHORT).show()
+                result.onFailure { e ->
+                    Toast.makeText(context, userErrorMessage(e, "Failed to respond to invitation"), Toast.LENGTH_SHORT).show()
                 }
             } finally {
                 _isLoading.value = false
@@ -617,6 +633,8 @@ class ProfileViewModel : ViewModel() {
                     if (meResult.isSuccess) {
                         val userDto: UserDto = meResult.getOrThrow()
                         applyUserDtoToState(userDto, context)
+                    } else {
+                        Log.w("ProfileViewModel", "getMe failed: ${meResult.exceptionOrNull()?.message}")
                     }
 
 
@@ -658,6 +676,14 @@ class ProfileViewModel : ViewModel() {
                         Log.e("ProfileViewModel", "getRooms failed: ${e?.message}")
                     }
 
+                    if (meResult.isFailure && roomsResult.isFailure) {
+                        Toast.makeText(
+                            context,
+                            userErrorMessage(meResult.exceptionOrNull() ?: roomsResult.exceptionOrNull()),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+
                     // Memories: Count from all rooms (owned + collaborated)
                     _totalRooms.value = allRooms.size
                     _totalMemories.value = allRooms.sumOf { it.photos.size }
@@ -672,6 +698,7 @@ class ProfileViewModel : ViewModel() {
                 }
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "initDatabase failed", e)
+                Toast.makeText(context, userErrorMessage(e), Toast.LENGTH_SHORT).show()
             }
         }}
 
@@ -1040,16 +1067,19 @@ class ProfileViewModel : ViewModel() {
                 music = newRoom.music
             )
 
-            val finalRoom = if (result.isSuccess) {
-                val realId = result.getOrNull()
-                Log.d("ProfileViewModel", "Room created with id=$realId")
-                if (realId != null) {
-                    newRoom.copy(id = realId, isOwnedByMe = true, isCollaborator = false)
-                } else {
-                    newRoom
-                }
-            } else {
+            if (result.isFailure) {
                 Log.e("ProfileViewModel", "createRoom failed: ${result.exceptionOrNull()?.message}")
+                context?.let {
+                    Toast.makeText(it, userErrorMessage(result.exceptionOrNull(), "Failed to create room"), Toast.LENGTH_SHORT).show()
+                }
+                return@launch
+            }
+
+            val realId = result.getOrNull()
+            Log.d("ProfileViewModel", "Room created with id=$realId")
+            val finalRoom = if (realId != null) {
+                newRoom.copy(id = realId, isOwnedByMe = true, isCollaborator = false)
+            } else {
                 newRoom
             }
 
@@ -1068,6 +1098,10 @@ class ProfileViewModel : ViewModel() {
 
             // Keep user in flow by navigating to the new room detail
             selectRoom(finalRoom)
+
+            if (result.isSuccess && context != null && _selectedMediaUris.value.isNotEmpty()) {
+                uploadMedia(context)
+            }
 
             context?.let { ctx ->
                 NotificationRepository(ctx).addNotification(
@@ -1299,12 +1333,12 @@ class ProfileViewModel : ViewModel() {
 
                     refreshRoomMemories(showRefreshIndicator = false)
                     Toast.makeText(context, "Note saved!", Toast.LENGTH_SHORT).show()
-                }.onFailure {
-                    Toast.makeText(context, "Failed to save note", Toast.LENGTH_SHORT).show()
+                }.onFailure { e ->
+                    Toast.makeText(context, userErrorMessage(e, "Failed to save note"), Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "Failed to upload note", e)
-                Toast.makeText(context, "Error saving note", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, userErrorMessage(e, "Error saving note"), Toast.LENGTH_SHORT).show()
             } finally {
                 _isUploading.value = false
             }
@@ -1328,6 +1362,7 @@ class ProfileViewModel : ViewModel() {
             if (currentSelection.isNotEmpty() && currentRoomId != null) {
                 _isUploading.value = true
                 val uploadedDataUris = mutableListOf<String>()
+                var lastUploadError: Throwable? = null
 
                 currentSelection.forEach { uri ->
                     try {
@@ -1361,6 +1396,8 @@ class ProfileViewModel : ViewModel() {
                             val result = roomRepository.addMemoryToRoom(currentRoomId, memoryData)
                             result.onSuccess {
                                 uploadedDataUris.add("data:$mimeType;base64,$base64")
+                            }.onFailure { e ->
+                                lastUploadError = e
                             }
                         } else if (mimeType.startsWith("video/")) {
                             val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
@@ -1373,6 +1410,8 @@ class ProfileViewModel : ViewModel() {
                             val result = roomRepository.addMemoryToRoom(currentRoomId, memoryData)
                             result.onSuccess {
                                 uploadedDataUris.add("data:$mimeType;base64,$base64")
+                            }.onFailure { e ->
+                                lastUploadError = e
                             }
                         } else {
                             // Downsample image payloads for safer upload and render.
@@ -1403,10 +1442,13 @@ class ProfileViewModel : ViewModel() {
                             val result = roomRepository.addMemoryToRoom(currentRoomId, memoryData)
                             result.onSuccess {
                                 uploadedDataUris.add("data:image/jpeg;base64,$base64")
+                            }.onFailure { e ->
+                                lastUploadError = e
                             }
                         }
                     } catch (e: Exception) {
                         Log.e("ProfileViewModel", "Upload failed for uri=$uri", e)
+                        lastUploadError = e
                     }
                 }
 
@@ -1429,7 +1471,7 @@ class ProfileViewModel : ViewModel() {
                     refreshRoomMemories(showRefreshIndicator = false)
                     Toast.makeText(context, "Uploaded ${uploadedDataUris.size} media file(s)!", Toast.LENGTH_SHORT).show()
                 } else {
-                    Toast.makeText(context, "Upload failed – check connection", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, userErrorMessage(lastUploadError, "Upload failed"), Toast.LENGTH_SHORT).show()
                 }
                 
                 _isUploading.value = false
@@ -1539,6 +1581,77 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
+    fun prefetchConnectedRoomMemories(roomIds: List<String>, limit: Int? = 12) {
+        val ids = roomIds.filter { it.isNotBlank() }.distinct()
+        if (ids.isEmpty()) return
+
+        viewModelScope.launch {
+            ids.forEach { roomId ->
+                try {
+                    val fallbackPhotos = _createdRooms.value.find { it.id == roomId }?.photos
+                        ?: getRoomByIdFromRemote(roomId)?.photos
+                        ?: emptyList()
+                    if (fallbackPhotos.isNotEmpty() && _roomMedia.value[roomId].isNullOrEmpty()) {
+                        val previewUris = fallbackPhotos.mapNotNull { preview ->
+                            preview.url.takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
+                        }
+                        if (previewUris.isNotEmpty()) {
+                            _roomMedia.value = _roomMedia.value + (roomId to previewUris)
+                        }
+                    }
+
+                    val memoriesUrls = mutableListOf<String>()
+                    val memoryItemMap = mutableMapOf<String, MemoryItem>()
+                    roomRepository.getMemoriesByRoom(roomId, limit = limit).onSuccess { memories ->
+                        memories.forEach { memory ->
+                            val memoryRoomId = extractMemoryRoomId(memory)
+                            if (memoryRoomId.isNotEmpty() && memoryRoomId != roomId) return@forEach
+
+                            val content = memory["content"] as? String
+                            val type = memory["type"] as? String
+                            val title = memory["title"] as? String
+                            @Suppress("UNCHECKED_CAST")
+                            val metadata = memory["metadata"] as? Map<String, Any?>
+                            val mimeType = metadata?.get("mimeType") as? String
+                            val memoryId = extractMongoId(memory["_id"])
+                            val authorId = extractMongoId(memory["authorId"])
+
+                            if (content != null) {
+                                val uriStr = when {
+                                    type == "audio" -> "data:${mimeType ?: "audio/mp4"};base64,$content"
+                                    type == "video" -> "data:${mimeType ?: "video/mp4"};base64,$content"
+                                    type == "note" -> "NOTE:${title ?: ""}:$content"
+                                    content.startsWith("http") -> content
+                                    content.startsWith("data:image") -> content
+                                    content.startsWith("data:") && content.contains("base64,") ->
+                                        "data:image/jpeg;base64," + content.substringAfter("base64,")
+                                    type == "photo" || content.length > 100 ->
+                                        "data:image/${mimeType?.substringAfter("/") ?: "jpeg"};base64,$content"
+                                    else -> null
+                                }
+                                if (uriStr != null) {
+                                    memoriesUrls.add(uriStr)
+                                    if (memoryId.isNotEmpty() && authorId.isNotEmpty()) {
+                                        memoryItemMap[uriStr] = MemoryItem(id = memoryId, authorId = authorId)
+                                    }
+                                }
+                            }
+                        }
+
+                        val fallbackUris = fallbackPhotos.mapNotNull { preview ->
+                            preview.url.takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
+                        }
+                        val loadedUris = memoriesUrls.map { Uri.parse(it) }
+                        _roomMedia.value = _roomMedia.value + (roomId to loadedUris.ifEmpty { fallbackUris })
+                        _roomMemoryItems.value = _roomMemoryItems.value + (roomId to memoryItemMap)
+                    }
+                } catch (e: Exception) {
+                    Log.w("ProfileViewModel", "Failed to prefetch connected room memories for $roomId", e)
+                }
+            }
+        }
+    }
+
     private fun extractMongoId(value: Any?): String {
         return when (value) {
             is String -> value
@@ -1600,11 +1713,11 @@ class ProfileViewModel : ViewModel() {
                     initDatabase(context)
                 }
                 result?.onFailure { e ->
-                    Toast.makeText(context, "Failed to join: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, userErrorMessage(e, "Failed to join room"), Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "joinRoomViaToken exception", e)
-                Toast.makeText(context, "Failed to join room", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, userErrorMessage(e, "Failed to join room"), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -1625,11 +1738,11 @@ class ProfileViewModel : ViewModel() {
                     initDatabase(context)
                 }
                 result.onFailure { e ->
-                    Toast.makeText(context, "Failed to join room: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, userErrorMessage(e, "Failed to join room"), Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "joinRoomViaQR exception", e)
-                Toast.makeText(context, "Failed to join room", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, userErrorMessage(e, "Failed to join room"), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -1643,11 +1756,11 @@ class ProfileViewModel : ViewModel() {
                     Toast.makeText(context, "Invite sent to $email!", Toast.LENGTH_SHORT).show()
                 }
                 result.onFailure { e ->
-                    Toast.makeText(context, "Failed to send invite: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, userErrorMessage(e, "Failed to send invite"), Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "sendHandshakeInvite exception", e)
-                Toast.makeText(context, "Failed to send invite", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, userErrorMessage(e, "Failed to send invite"), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -1698,12 +1811,12 @@ class ProfileViewModel : ViewModel() {
 
                         refreshRoomMemories(showRefreshIndicator = false)
                         Toast.makeText(context, "Voice memory uploaded!", Toast.LENGTH_SHORT).show()
-                    }.onFailure {
-                        Toast.makeText(context, "Failed to upload voice memory", Toast.LENGTH_SHORT).show()
+                    }.onFailure { e ->
+                        Toast.makeText(context, userErrorMessage(e, "Failed to upload voice memory"), Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
                     Log.e("ProfileViewModel", "Audio upload failed", e)
-                    Toast.makeText(context, "Error processing audio", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, userErrorMessage(e, "Error processing audio"), Toast.LENGTH_SHORT).show()
                 } finally {
                     file.delete()
                 }
@@ -1809,6 +1922,7 @@ class ProfileViewModel : ViewModel() {
             ProfileStep.ROOM_DETAIL -> {
                 val returnTo = previousStepBeforeRoomDetail
                 previousStepBeforeRoomDetail = ProfileStep.NONE
+                clearRoomTransientUiState()
                 _selectedRoom.value = null
                 if (returnTo == ProfileStep.NONE) {
                     _currentStep.value = ProfileStep.NONE
@@ -1825,14 +1939,22 @@ class ProfileViewModel : ViewModel() {
     }
 
     fun closeOverlay() {
+        clearRoomTransientUiState()
         _currentStep.value = ProfileStep.NONE
         _selectedRoom.value = null
     }
 
-    fun startCreateRoom(source: RoomCreationSource = RoomCreationSource.HALLWAY) {
+    fun startCreateRoom(
+        source: RoomCreationSource = RoomCreationSource.HALLWAY,
+        preserveStagedMedia: Boolean = false
+    ) {
         creationSource = source
         _currentStep.value = ProfileStep.ROOM_NAME
         // Reset state
+        if (!preserveStagedMedia) {
+            _selectedMediaUris.value = emptyList()
+            _capturedImageUri.value = null
+        }
         _roomName.value = ""
         _roomDescription.value = ""
         _roomTags.value = emptyList()
@@ -1872,6 +1994,7 @@ class ProfileViewModel : ViewModel() {
     }
 
     fun selectRoom(room: TimeCapsuleRoom) {
+        clearRoomTransientUiState()
         previousStepBeforeRoomDetail = _currentStep.value
         _selectedRoom.value = room
         _currentStep.value = ProfileStep.ROOM_DETAIL
@@ -2084,6 +2207,8 @@ class ProfileViewModel : ViewModel() {
             else System.currentTimeMillis() + 86400000L
         _roomTags.value = room.tags
         _roomDescription.value = room.description ?: ""
+        _invitedUsers.value = emptyList()
+        _userSearchResults.value = emptyList()
         // Time capsule duration restored from local model
         _capsuleDays.value = room.capsuleDays
         _capsuleHours.value = room.capsuleHours
@@ -2166,13 +2291,16 @@ class ProfileViewModel : ViewModel() {
     
     // Gallery viewer functions
     fun openGalleryViewer(mediaList: List<Uri>, startIndex: Int = 0) {
+        if (mediaList.isEmpty()) return
         _galleryViewerMedia.value = mediaList
-        _galleryViewerIndex.value = startIndex
+        _galleryViewerIndex.value = startIndex.coerceIn(0, mediaList.lastIndex)
         _isGalleryViewerOpen.value = true
     }
 
     fun closeGalleryViewer() {
         _isGalleryViewerOpen.value = false
+        _galleryViewerMedia.value = emptyList()
+        _galleryViewerIndex.value = 0
     }
 
     // ── Connect Rooms Actions ─────────────────────────────────────────────────
@@ -2395,7 +2523,11 @@ class ProfileViewModel : ViewModel() {
     fun deleteRoom(context: Context, room: TimeCapsuleRoom, fromInsideRoom: Boolean = true) {
         viewModelScope.launch {
             try {
-                roomRepository?.deleteRoom(room.id)
+                val deleteResult = roomRepository?.deleteRoom(room.id)
+                if (deleteResult?.isFailure == true) {
+                    Toast.makeText(context, userErrorMessage(deleteResult.exceptionOrNull(), "Failed to delete room"), Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
                 _createdRooms.value = _createdRooms.value.filter { it.id != room.id }
                 _roomMedia.value = _roomMedia.value.filterKeys { it != room.id }
                 
@@ -2414,7 +2546,7 @@ class ProfileViewModel : ViewModel() {
                 Toast.makeText(context, "Room \"${room.roomName}\" deleted", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "Error deleting room", e)
-                Toast.makeText(context, "Failed to delete room", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, userErrorMessage(e, "Failed to delete room"), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -2448,6 +2580,12 @@ class ProfileViewModel : ViewModel() {
         viewModelScope.launch {
             val result = roomRepository?.updateRoom(room.id, fields as Map<String, Any>)
             if (result?.isSuccess == true) {
+                _invitedUsers.value.forEach { invited ->
+                    roomRepository.createHandshakeInvite(room.id, invited.email, invited.role)
+                        .onFailure { e ->
+                            Log.w("ProfileViewModel", "Failed to send edit invite to ${invited.email}: ${e.message}")
+                        }
+                }
                 // Update local list
                 val updatedRoom = room.copy(
                     roomName = _roomName.value,
@@ -2466,10 +2604,12 @@ class ProfileViewModel : ViewModel() {
                 )
                 _createdRooms.value = _createdRooms.value.map { if (it.id == room.id) updatedRoom else it }
                 _selectedRoom.value = updatedRoom
+                _invitedUsers.value = emptyList()
+                _userSearchResults.value = emptyList()
                 Toast.makeText(context, "Room saved!", Toast.LENGTH_SHORT).show()
                 goBack()
             } else {
-                Toast.makeText(context, "Failed to save room", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, userErrorMessage(result?.exceptionOrNull(), "Failed to save room"), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -2560,12 +2700,12 @@ class ProfileViewModel : ViewModel() {
                     } else {
                         val errorMsg = updateResult.exceptionOrNull()?.message ?: "Unknown error"
                         Log.w("ProfileViewModel", "Update failed: $errorMsg")
-                        Toast.makeText(context, "Failed to update profile", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, userErrorMessage(updateResult.exceptionOrNull(), "Failed to update profile"), Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
                 Log.e("ProfileViewModel", "Error saving profile", e)
-                Toast.makeText(context, "Error updating profile", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, userErrorMessage(e, "Error updating profile"), Toast.LENGTH_SHORT).show()
             } finally {
                 _isUpdatingCredential.value = false
             }
