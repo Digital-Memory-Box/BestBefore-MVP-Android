@@ -39,3 +39,6 @@ split_profile.ps1
 
 # Markdown and documentation
 *.md
+
+# GitHub Workflows & Actions
+.github/
