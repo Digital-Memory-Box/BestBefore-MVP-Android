@@ -13,14 +13,9 @@ import java.util.concurrent.TimeUnit
  */
 object AiServiceClient {
 
-    private const val AI_BASE_URL = "https://bestbefore-ai.up.railway.app/"
+    private val AI_BASE_URL = com.dmb.bestbefore.BuildConfig.AI_BASE_URL
 
-    private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BASIC
-    }
-
-    private val httpClient = OkHttpClient.Builder()
-        .addInterceptor(loggingInterceptor)
+    private val httpClient = com.dmb.bestbefore.data.api.RetrofitClient.okHttpClient.newBuilder()
         .connectTimeout(120, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
         .writeTimeout(120, TimeUnit.SECONDS)

@@ -207,12 +207,12 @@ fun AnimatedBackgroundView(theme: String = "default") {
         // ── LAYER 5: Artist-specific galaxy (only for artist theme) ──────────
         // Fewer objects + graphicsLayer hardware layer promotion.
         if (isArtistTheme) {
-            val twinkle = globalTwinkle
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer()  // promotes to hardware layer
             ) {
+                val twinkle = globalTwinkle
                 // Stars with pre-computed positions
                 galaxyStars.forEach { star ->
                     val phase = (twinkle + star.phaseOffset) % 1.0f
@@ -224,12 +224,12 @@ fun AnimatedBackgroundView(theme: String = "default") {
                     )
                 }
                 // Galaxy orbs driven by orbAngle
-                galaxyOrbs.forEach { orb ->
+                galaxyOrbs.forEachIndexed { index, orb ->
                     val angle = (orb.initialAngle + orbAngle * orb.speed) * Math.PI / 180.0
                     val ox = size.width / 2f + orb.radius * cos(angle).toFloat()
                     val oy = size.height / 2f + orb.radius * sin(angle).toFloat()
                     if (orb.size > 0f) {
-                        val c = when ((galaxyOrbs.indexOf(orb)) % 3) {
+                        val c = when (index % 3) {
                             0 -> listOf(Color(0.4f, 0.2f, 0.8f).copy(orb.opacity), Color.Transparent)
                             1 -> listOf(Color(0.6f, 0.1f, 0.9f).copy(orb.opacity), Color.Transparent)
                             else -> listOf(Color(0.1f, 0.4f, 1.0f).copy(orb.opacity), Color.Transparent)

@@ -3,11 +3,14 @@ package com.dmb.bestbefore.data.ai
 import android.util.Log
 import com.dmb.bestbefore.data.api.models.RoomDto
 import com.dmb.bestbefore.data.api.models.UserDto
+import com.google.gson.JsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 private const val TAG = "AiRepository"
 
@@ -22,10 +25,14 @@ private const val TAG = "AiRepository"
  * 4. [semanticSearch]           — Full-text semantic search over a list of rooms.
  * 5. [generateRoomDescription]  — GPT-generated description for a room being created.
  * 6. [updateUserPreference]     — Explicitly update the stored preference model after an interaction.
+ * 7. [parseTagsJson]            — Response extraction and JSON tree navigation for tags.
  */
-class AiRepository {
+class AiRepository(
+    private val api: AiServiceApi = AiServiceClient.api
+) {
 
-    private val api = AiServiceClient.api
+    private val embedSemaphore = Semaphore(4) // Max 4 concurrent embed requests
+    private val embeddingCache = java.util.concurrent.ConcurrentHashMap<String, List<Float>>()
 
     private companion object {
         const val MAX_SUGGESTION_CANDIDATES = 40
@@ -87,72 +94,73 @@ class AiRepository {
     ): Result<GenerateSuggestionsResponse> {
         return withContext(Dispatchers.IO) {
             try {
-            if (candidateRooms.isEmpty()) {
-                return@withContext Result.success(GenerateSuggestionsResponse("discovery", emptyList(), 0))
-            }
-
-            val resolvedSourceRoom = sourceRoom ?: sourceRoomId?.let { id ->
-                candidateRooms.firstOrNull { it.id == id }
-            }
-            val rankedCandidateRooms = rankSuggestionCandidates(
-                sourceRoom = resolvedSourceRoom,
-                user = user,
-                rooms = candidateRooms
-                    .filter { it.id != sourceRoomId }
-                    .distinctBy { it.id }
-            ).take(MAX_SUGGESTION_CANDIDATES)
-
-            if (rankedCandidateRooms.isEmpty()) {
-                return@withContext Result.success(
-                    GenerateSuggestionsResponse(sourceRoomId ?: "discovery", emptyList(), 0)
-                )
-            }
-
-            // Tıpkı Arama (Semantic Search) fonksiyonunda yaptığımız gibi odaları hazırla
-            coroutineScope {
-                val aiSourceRoom = resolvedSourceRoom?.let { room ->
-                    async { room.toAiRoomDtoWithEmbedding() }
+                if (candidateRooms.isEmpty()) {
+                    return@withContext Result.success(GenerateSuggestionsResponse("discovery", emptyList(), 0))
                 }
-                val aiCandidates = rankedCandidateRooms.map { room ->
-                    async { room.toAiRoomDtoWithEmbedding() }
-                }.awaitAll()
 
-                val userProfile = UserPreferenceSchema(
-                    preferredTags = user.preferredTags ?: emptyList(),
-                    lastLat = userLat ?: user.lastLat,
-                    lastLon = userLon ?: user.lastLon,
-                    interactionRoomTypes = user.preferenceRoomTypes ?: emptyList(),
-                    preferenceEmbedding = emptyList()
-                )
+                val resolvedSourceRoom = sourceRoom ?: sourceRoomId?.let { id ->
+                    candidateRooms.firstOrNull { it.id == id }
+                }
+                val rankedCandidateRooms = rankSuggestionCandidates(
+                    sourceRoom = resolvedSourceRoom,
+                    user = user,
+                    rooms = candidateRooms
+                        .filter { it.id != sourceRoomId }
+                        .distinctBy { it.id }
+                ).take(MAX_SUGGESTION_CANDIDATES)
 
-                val request = GenerateSuggestionsRequest(
-                    sourceRoomId = sourceRoomId,
-                    sourceRoom = aiSourceRoom?.await(),
-                    userProfile = userProfile,
-                    candidateRooms = aiCandidates,
-                    userLat = userLat ?: user.lastLat,
-                    userLon = userLon ?: user.lastLon
-                )
+                if (rankedCandidateRooms.isEmpty()) {
+                    return@withContext Result.success(
+                        GenerateSuggestionsResponse(sourceRoomId ?: "discovery", emptyList(), 0)
+                    )
+                }
 
-                val response = api.getSuggestions(request)
-                if (response.isSuccessful && response.body() != null) {
-                    val body = response.body()!!
-                    if (body.suggestions.isNotEmpty()) {
-                        Result.success(body)
+                // Tıpkı Arama (Semantic Search) fonksiyonunda yaptığımız gibi odaları hazırla
+                coroutineScope {
+                    val aiSourceRoom = resolvedSourceRoom?.let { room ->
+                        async { room.toAiRoomDtoWithEmbedding() }
+                    }
+                    val aiCandidates = rankedCandidateRooms.map { room ->
+                        async { room.toAiRoomDtoWithEmbedding() }
+                    }.awaitAll()
+
+                    val userProfile = UserPreferenceSchema(
+                        preferredTags = user.preferredTags ?: emptyList(),
+                        lastLat = userLat ?: user.lastLat,
+                        lastLon = userLon ?: user.lastLon,
+                        interactionRoomTypes = user.preferenceRoomTypes ?: emptyList(),
+                        preferenceEmbedding = emptyList()
+                    )
+
+                    val request = GenerateSuggestionsRequest(
+                        sourceRoomId = sourceRoomId,
+                        sourceRoom = aiSourceRoom?.await(),
+                        userProfile = userProfile,
+                        candidateRooms = aiCandidates,
+                        userLat = userLat ?: user.lastLat,
+                        userLon = userLon ?: user.lastLon
+                    )
+
+                    val response = api.getSuggestions(request)
+                    if (response.isSuccessful && response.body() != null) {
+                        val body = response.body()!!
+                        if (body.suggestions.isNotEmpty()) {
+                            Result.success(body)
+                        } else {
+                            Result.success(
+                                buildLocalSuggestionResponse(sourceRoomId, resolvedSourceRoom, rankedCandidateRooms, user)
+                            )
+                        }
                     } else {
+                        val err = response.errorBody()?.string() ?: "HTTP ${response.code()}"
+                        Log.w(TAG, "getPersonalisedSuggestions failed: $err")
                         Result.success(
                             buildLocalSuggestionResponse(sourceRoomId, resolvedSourceRoom, rankedCandidateRooms, user)
                         )
                     }
-                } else {
-                    val err = response.errorBody()?.string() ?: "HTTP ${response.code()}"
-                    Log.w(TAG, "getPersonalisedSuggestions failed: $err")
-                    Result.success(
-                        buildLocalSuggestionResponse(sourceRoomId, resolvedSourceRoom, rankedCandidateRooms, user)
-                    )
                 }
-            }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 Log.e(TAG, "getPersonalisedSuggestions exception", e)
                 Result.success(buildLocalSuggestionResponse(sourceRoomId, sourceRoom, candidateRooms, user))
             }
@@ -164,12 +172,20 @@ class AiRepository {
     // ─────────────────────────────────────────────────────────────────────────
 
     private suspend fun RoomDto.toAiRoomDtoWithEmbedding(): AiRoomDto {
-        val embeddingList = try {
-            val embedResponse = api.embed(EmbeddingRequest(buildRoomEmbeddingText(this)))
-            if (embedResponse.isSuccessful) {
-                embedResponse.body()?.embedding.orEmpty()
-            } else {
-                emptyList()
+        val embedText = buildRoomEmbeddingText(this)
+        val cacheKey = "$id:${embedText.hashCode()}"
+        val embeddingList = embeddingCache[cacheKey] ?: try {
+            embedSemaphore.withPermit {
+                val embedResponse = api.embed(EmbeddingRequest(embedText))
+                val emb = if (embedResponse.isSuccessful) {
+                    embedResponse.body()?.embedding.orEmpty()
+                } else {
+                    emptyList()
+                }
+                if (emb.isNotEmpty()) {
+                    embeddingCache[cacheKey] = emb
+                }
+                emb
             }
         } catch (e: Exception) {
             Log.w(TAG, "Embedding skipped for room $id: ${e.message}")
@@ -327,12 +343,18 @@ class AiRepository {
                         val descText = room.description?.trim() ?: ""
                         val combinedText = "Room name: ${room.name}. Description: $descText. Core tags: $weightedTags."
 
-                        // Embedding'i (1536'lık sayıyı) Python'dan istiyoruz
-                        val embedResponse = api.embed(EmbeddingRequest(combinedText))
-                        val embeddingList = if (embedResponse.isSuccessful) {
-                            embedResponse.body()?.embedding ?: emptyList()
-                        } else {
-                            emptyList()
+                        val cacheKey = "${room.id}:${combinedText.hashCode()}"
+                        val embeddingList = embeddingCache[cacheKey] ?: embedSemaphore.withPermit {
+                            val embedResponse = api.embed(EmbeddingRequest(combinedText))
+                            val emb = if (embedResponse.isSuccessful) {
+                                embedResponse.body()?.embedding ?: emptyList()
+                            } else {
+                                emptyList()
+                            }
+                            if (emb.isNotEmpty()) {
+                                embeddingCache[cacheKey] = emb
+                            }
+                            emb
                         }
 
                         // Sunucuya göndereceğimiz tam ve eksiksiz sözlük (dictionary)
@@ -429,6 +451,52 @@ class AiRepository {
             Log.e(TAG, "updateUserPreference exception", e)
             Result.failure(e)
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 7. Response & Tag Parsing Helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    fun parseTagsJson(bodyElement: JsonElement?): List<String> {
+        val parsedTags = mutableListOf<String>()
+        if (bodyElement == null || bodyElement.isJsonNull) return emptyList()
+
+        try {
+            if (bodyElement.isJsonArray) {
+                bodyElement.asJsonArray.forEach {
+                    if (it.isJsonObject) {
+                        val obj = it.asJsonObject
+                        val tag = obj.get("name")?.asString ?: obj.get("tag")?.asString
+                        if (tag != null) parsedTags.add(tag)
+                    } else if (it.isJsonPrimitive) {
+                        parsedTags.add(it.asString)
+                    }
+                }
+            } else if (bodyElement.isJsonObject) {
+                val obj = bodyElement.asJsonObject
+                if (obj.has("tags") && obj.get("tags").isJsonArray) {
+                    obj.get("tags").asJsonArray.forEach {
+                        if (it.isJsonPrimitive) parsedTags.add(it.asString)
+                        else if (it.isJsonObject) {
+                            val t = it.asJsonObject.get("name")?.asString ?: it.asJsonObject.get("tag")?.asString
+                            if (t != null) parsedTags.add(t)
+                        }
+                    }
+                } else {
+                    // Handle category object { "category": ["tag1", "tag2"] }
+                    obj.entrySet().forEach { entry ->
+                        if (entry.value.isJsonArray) {
+                            entry.value.asJsonArray.forEach {
+                                if (it.isJsonPrimitive) parsedTags.add(it.asString)
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "parseTagsJson error", e)
+        }
+        return parsedTags
     }
 }
 

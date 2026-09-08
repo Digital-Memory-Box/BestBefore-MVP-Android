@@ -11,24 +11,45 @@ import java.net.UnknownHostException
 
 class AppErrorInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
-        val response = try {
-            chain.proceed(chain.request())
-        } catch (e: UnknownHostException) {
-            throw NoInternetException()
-        } catch (e: ConnectException) {
-            throw NoInternetException()
-        } catch (e: SocketTimeoutException) {
-            throw NoInternetException()
-        } catch (e: IOException) {
-            if (e.message?.contains("Canceled", ignoreCase = true) == true) throw e
-            throw NoInternetException()
+        var response: Response? = null
+        var tryCount = 0
+        val maxRetries = 1
+
+        while (tryCount <= maxRetries) {
+            try {
+                response = chain.proceed(chain.request())
+                if (response.code == 429 && tryCount < maxRetries) {
+                    response.close()
+                    tryCount++
+                    continue
+                }
+                break
+            } catch (e: Exception) {
+                if (e is UnknownHostException) {
+                    throw NoInternetException()
+                }
+                if (tryCount >= maxRetries) {
+                    when (e) {
+                        is ConnectException -> throw NoInternetException()
+                        is SocketTimeoutException -> throw NoInternetException()
+                        is IOException -> {
+                            if (e.message?.contains("Canceled", ignoreCase = true) == true) throw e
+                            throw NoInternetException()
+                        }
+                        else -> throw e
+                    }
+                }
+                tryCount++
+            }
         }
 
-        if (response.code in 500..599) {
-            response.close()
+        val finalResponse = response ?: throw NoInternetException()
+
+        if (finalResponse.code == 503 || finalResponse.code == 504) {
+            finalResponse.close()
             throw BackendLoadingException()
         }
 
-        return response
+        return finalResponse
     }
 }

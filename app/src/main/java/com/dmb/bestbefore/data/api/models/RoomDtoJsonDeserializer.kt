@@ -13,14 +13,28 @@ import java.lang.reflect.Type
 class RoomDtoJsonDeserializer : JsonDeserializer<RoomDto> {
     override fun deserialize(json: JsonElement, typeOfT: Type, context: JsonDeserializationContext): RoomDto {
         val obj = json.asJsonObject
+        val ownerObj = if (obj.has("owner") && obj.get("owner").isJsonObject) obj.getAsJsonObject("owner") else null
+
+        val ownerId = readFlexibleString(obj, "ownerId", "owner_id") 
+            ?: (if (ownerObj != null) readFlexibleString(ownerObj, "_id", "id") else null)
+            ?: ""
+        val ownerName = readFlexibleString(obj, "ownerName", "owner_name")
+            ?: (if (ownerObj != null) readFlexibleString(ownerObj, "name", "userName", "username") else null)
+        val ownerEmail = readFlexibleString(obj, "ownerEmail", "owner_email")
+            ?: (if (ownerObj != null) readFlexibleString(ownerObj, "email") else null)
+        val ownerUserType = readFlexibleString(obj, "ownerUserType", "owner_user_type")
+            ?: (if (ownerObj != null) readFlexibleString(ownerObj, "userType", "user_type") else null)
+        val ownerProfilePic = readFlexibleString(obj, "ownerProfilePic", "owner_profile_pic", "ownerProfileImageUrl", "owner_profile_image_url", "ownerAvatar", "owner_avatar")
+            ?: (if (ownerObj != null) readFlexibleString(ownerObj, "profileImageUrl", "profile_image_url", "profilePic", "profile_pic", "profileImageData", "avatar", "image") else null)
+
         return RoomDto(
             id = readFlexibleString(obj, "_id", "id").orEmpty(),
             name = readFlexibleString(obj, "name").orEmpty(),
-            ownerId = readFlexibleString(obj, "ownerId").orEmpty(),
-            ownerName = readFlexibleString(obj, "ownerName"),
-            ownerEmail = readFlexibleString(obj, "ownerEmail"),
-            ownerUserType = readFlexibleString(obj, "ownerUserType"),
-            ownerProfilePic = readFlexibleString(obj, "ownerProfilePic"),
+            ownerId = ownerId,
+            ownerName = ownerName,
+            ownerEmail = ownerEmail,
+            ownerUserType = ownerUserType,
+            ownerProfilePic = ownerProfilePic,
             createdAt = readFlexibleString(obj, "createdAt"),
             photos = readMemoryPreviewList(obj, "photos"),
             capsuleDurationDays = readInt(obj, "capsuleDurationDays"),

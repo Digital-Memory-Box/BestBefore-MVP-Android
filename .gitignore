@@ -16,6 +16,17 @@ local.properties
 .env
 service-account.json
 
+# Firebase config (provision via CI secrets)
+**/google-services.json
+
+# Signing keys & certificates
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+signing.properties
+
 # Exclude backend and iOS from Android repo
 backend/
 backend2/
@@ -24,3 +35,6 @@ BestBefore_Prototype_IOS/
 
 # Temp scripts
 split_profile.ps1
+
+# Markdown and documentation
+*.md

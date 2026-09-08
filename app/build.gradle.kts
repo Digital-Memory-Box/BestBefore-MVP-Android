@@ -3,6 +3,12 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("com.google.gms.google-services")
+
+    // Firebase Performance Monitoring
+    id("com.google.firebase.firebase-perf")
+
+    // Firebase Crashlytics
+    id("com.google.firebase.crashlytics")
 }
 
 android {
@@ -20,6 +26,13 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+        buildConfigField("String", "AI_BASE_URL", "\"https://bestbefore-ai.up.railway.app/\"")
+        buildConfigField("String", "APP_LINK_HOST", "\"bestbefore.up.railway.app\"")
+    }
+
+    androidResources {
+        localeFilters += setOf("en", "tr", "es")
+        generateLocaleConfig = true
     }
 
     buildTypes {
@@ -28,7 +41,8 @@ android {
             buildConfigField("String", "API_BASE_URL", "\"https://bestbefore.up.railway.app/\"")
         }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             buildConfigField("String", "API_BASE_URL", "\"https://bestbefore.up.railway.app/\"")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -38,14 +52,9 @@ android {
         }
     }
 
-    // FIX: Ensure consistent JVM target
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-
-    kotlinOptions {
-        jvmTarget = "11"  // Changed from "17" to match Java target
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     buildFeatures {
@@ -53,6 +62,13 @@ android {
         buildConfig = true
     }
 
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
+    }
 
     packaging {
         resources {
@@ -62,11 +78,17 @@ android {
 }
 
 dependencies {
+
+
     implementation("com.google.firebase:firebase-appcheck-playintegrity")
     implementation("com.google.firebase:firebase-analytics")
-    implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
+    implementation(platform("com.google.firebase:firebase-bom:34.18.0"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-messaging")
+    implementation("com.google.firebase:firebase-perf")
+    implementation("com.google.firebase:firebase-crashlytics")
+    implementation("com.google.android.gms:play-services-auth:21.3.0")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -92,20 +114,30 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
 
     implementation(libs.androidx.core.ktx)
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation(libs.androidx.appcompat)
-    implementation(libs.material)
-    implementation(libs.androidx.activity)
-    implementation(libs.androidx.constraintlayout)
-    implementation(libs.firebase.appcheck.debug)
     testImplementation(libs.junit)
+    testImplementation(libs.mockk)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.turbine)
+    testImplementation(libs.mockwebserver)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.arch.core.testing)
+
+    androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.androidx.test.uiautomator)
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(platform(libs.androidx.compose.bom))
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+    debugImplementation(libs.firebase.appcheck.debug)
 
     // Networking (Retrofit + Gson)
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    implementation(libs.retrofit)
+    implementation(libs.converter.gson)
+    implementation(libs.okhttp)
+    implementation(libs.logging.interceptor)
     
     // QR Code generation + scanning
     implementation("com.google.zxing:core:3.5.3")
@@ -115,10 +147,16 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.0")
     
     // Play Services Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
 
     // ExoPlayer (Media3)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.common)
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
 }

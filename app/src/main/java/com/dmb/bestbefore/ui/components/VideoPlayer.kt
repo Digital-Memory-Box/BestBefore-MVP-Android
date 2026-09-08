@@ -17,7 +17,7 @@ import androidx.media3.ui.PlayerView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -72,6 +72,11 @@ fun VideoPlayer(
                 } catch (e: Exception) {
                     android.util.Log.w("VideoPlayer", "Could not set surface type via reflection, falling back to default: ${e.message}")
                 }
+            }
+        },
+        update = { playerView ->
+            if (playerView.player != exoPlayer) {
+                playerView.player = exoPlayer
             }
         },
         modifier = modifier

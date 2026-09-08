@@ -90,7 +90,6 @@ fun BestBeforeTheme(
         SideEffect {
             val window = view.context.findActivity()?.window
             if (window != null) {
-                window.statusBarColor = appTheme.backgroundColor.toArgb()
                 WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
             }
         }

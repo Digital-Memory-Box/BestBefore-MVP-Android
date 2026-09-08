@@ -29,9 +29,7 @@ import com.dmb.bestbefore.data.models.CalendarEvent
 import com.dmb.bestbefore.data.models.MemoryItem
 import com.dmb.bestbefore.ui.theme.AppTheme
 import com.dmb.bestbefore.ui.theme.AppThemes
-import com.dmb.bestbefore.data.local.PreferencesManager
 import androidx.compose.ui.graphics.Color
-import com.dmb.bestbefore.CalendarHelper
 import com.dmb.bestbefore.data.ai.AiRepository
 import com.dmb.bestbefore.data.ai.AiRoomSuggestion
 import com.dmb.bestbefore.data.ai.UpdatePreferenceResponse
@@ -55,6 +53,7 @@ import com.dmb.bestbefore.notifications.NotificationScheduler
 import com.dmb.bestbefore.ui.theme.ThemeState
 import com.dmb.bestbefore.utils.AppErrorUtils
 import com.dmb.bestbefore.utils.AudioRecorderHelper
+import com.dmb.bestbefore.utils.AudioRecordingHelper
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -65,7 +64,11 @@ import java.util.Calendar
 import java.util.Date
 import java.util.UUID
 
-class ProfileViewModel : ViewModel() {
+class ProfileViewModel @JvmOverloads constructor(
+    private val roomRepository: RoomRepository = RoomRepository(),
+    private val notificationRepository: NotificationRepository = NotificationRepository(),
+    private val aiRepository: AiRepository = AiRepository()
+) : ViewModel() {
     companion object {
         val ARTIST_ROOM_EMOTIONS = listOf("warmed", "moved", "soothed", "struck", "stayed")
     }
@@ -81,14 +84,7 @@ class ProfileViewModel : ViewModel() {
     // The old SimpleDateFormat("...'Z'") treated Z as a literal character so "+00:00" dates
     // always failed to parse, causing every unlock/closure time to be wrong.
     private fun parseIso8601(dateString: String?): Long {
-        if (dateString == null) return 0L
-        return try {
-            OffsetDateTime.parse(dateString).toInstant().toEpochMilli()
-        } catch (_: Exception) {
-            try {
-                ZonedDateTime.parse(dateString).toInstant().toEpochMilli()
-            } catch (__: Exception) { 0L }
-        }
+        return com.dmb.bestbefore.utils.CalendarSyncHelper.parseIso8601(dateString)
     }
 
     private fun parseCreatedAt(dateString: String?): Long {
@@ -97,13 +93,10 @@ class ProfileViewModel : ViewModel() {
     }
 
     // RoomRepository — no token arg; fetches fresh Firebase token per request (matches iOS pattern)
-    private val roomRepository = RoomRepository()
-    private val notificationRepository = NotificationRepository()
     // Initialised in initDatabase(context) so we can persist preference updates from AI responses.
     private var authRepository: AuthRepository? = null
 
     // ── AI Service integration ────────────────────────────────────────────────
-    private val aiRepository = AiRepository()
 
     /** Last UserDto fetched from the backend – used to supply preference context to AI calls. */
     private var _cachedUserDto: UserDto? = null
@@ -158,7 +151,7 @@ class ProfileViewModel : ViewModel() {
     private val _isRecordingAudio = MutableStateFlow(false)
     val isRecordingAudio: StateFlow<Boolean> = _isRecordingAudio.asStateFlow()
 
-    private var audioRecorderHelper: AudioRecorderHelper? = null
+    private val audioRecordingHelper = AudioRecordingHelper()
     
     private var creationSource: RoomCreationSource = RoomCreationSource.HALLWAY
     // Remembers which step was active before navigating into ROOM_DETAIL so goBack()
@@ -204,7 +197,7 @@ class ProfileViewModel : ViewModel() {
         if (trimmed.isNotEmpty() && _preferredTags.value.none { it.equals(trimmed, ignoreCase = true) }) {
             val updated = _preferredTags.value + trimmed
             _preferredTags.value = updated
-            context?.let { SessionManager(it).saveManualProfileTags(updated) }
+            context?.let { SessionManager.getInstance(it).saveManualProfileTags(updated) }
         }
     }
 
@@ -212,7 +205,7 @@ class ProfileViewModel : ViewModel() {
         val normalized = tag.trim().trimStart('#')
         val updated = _preferredTags.value.filter { !it.equals(normalized, ignoreCase = true) }
         _preferredTags.value = updated
-        context?.let { SessionManager(it).saveManualProfileTags(updated) }
+        context?.let { SessionManager.getInstance(it).saveManualProfileTags(updated) }
     }
 
     private val _showOnlySaved = MutableStateFlow(false)
@@ -222,8 +215,6 @@ class ProfileViewModel : ViewModel() {
     val selectedRoom: StateFlow<TimeCapsuleRoom?> = _selectedRoom.asStateFlow()
 
     // Theme & Customization State
-    private var preferencesManager: PreferencesManager? = null
-    
     private val _selectedTheme = MutableStateFlow(AppThemes.Default)
     val selectedTheme: StateFlow<AppTheme> = _selectedTheme.asStateFlow()
     
@@ -338,18 +329,15 @@ class ProfileViewModel : ViewModel() {
     val calendarEvents: StateFlow<List<CalendarEvent>> = _calendarEvents.asStateFlow()
 
     fun loadCalendarEvents(context: Context) {
-        _calendarEvents.value = CalendarHelper.getUpcomingEvents(context)
+        _calendarEvents.value = com.dmb.bestbefore.utils.CalendarSyncHelper.getUpcomingEvents(context)
     }
 
     fun applyCalendarEvent(event: CalendarEvent) {
-        _roomName.value = event.title
         _unlockMethod.value = UnlockMethod.SPECIFIC_DATE
-        _targetTime.value = event.startTime.time
-        
-        val cal = Calendar.getInstance()
-        cal.timeInMillis = event.startTime.time
-        _targetHour.value = cal.get(Calendar.HOUR_OF_DAY)
-        _targetMinute.value = cal.get(Calendar.MINUTE)
+        val (targetMillis, hour, minute) = com.dmb.bestbefore.utils.CalendarSyncHelper.extractEventTargetTime(event)
+        _targetTime.value = targetMillis
+        _targetHour.value = hour
+        _targetMinute.value = minute
     }
 
     // Atmosphere room theme (string name, separate from AppTheme)
@@ -477,7 +465,7 @@ class ProfileViewModel : ViewModel() {
         viewModelScope.launch {
             val updateMusic = if (trackName == "None") null else trackName
             val authRepo = AuthRepository(context)
-            val sessionManager = SessionManager(context)
+            val sessionManager = SessionManager.getInstance(context)
             val result = authRepo.updateMe(UpdateMeRequest(profileMusic = updateMusic))
             if (result.isSuccess) {
                 _profileMusic.value = trackName ?: "None"
@@ -585,17 +573,17 @@ class ProfileViewModel : ViewModel() {
     }
 
     // Callbacks for permissions
-    var onRequestNotificationPermission: (() -> Unit)? = null
-    var onRequestCalendarPermission: (() -> Unit)? = null
-    var onRequestReadCalendarPermission: (() -> Unit)? = null
-    var onRequestCameraPermission: (() -> Unit)? = null
-    var onRequestGalleryPermission: (() -> Unit)? = null
-    var onRequestFilePermission: (() -> Unit)? = null
+    sealed class PermissionRequest { object Notification : PermissionRequest(); object Calendar : PermissionRequest(); object ReadCalendar : PermissionRequest(); object Camera : PermissionRequest(); object Gallery : PermissionRequest(); object File : PermissionRequest() }; private val _permissionRequests = kotlinx.coroutines.flow.MutableSharedFlow<PermissionRequest>(); val permissionRequests: kotlinx.coroutines.flow.SharedFlow<PermissionRequest> = _permissionRequests
+    
+    
+    
+    
+    
 
     // Helper context for DB init (Simple MVP approach)
     fun initDatabase(context: Context) {
         if (authRepository == null) authRepository = AuthRepository(context)
-        val sessionManager = SessionManager(context)
+        val sessionManager = SessionManager.getInstance(context)
         val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
         val savedName = sessionManager.getUserName()
         val savedMusic = sessionManager.getProfileMusic()
@@ -697,14 +685,16 @@ class ProfileViewModel : ViewModel() {
                     }
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 Log.e("ProfileViewModel", "initDatabase failed", e)
+                com.dmb.bestbefore.analytics.AnalyticsManager.recordException(e)
                 Toast.makeText(context, userErrorMessage(e), Toast.LENGTH_SHORT).show()
             }
         }}
 
 
     private fun applyUserDtoToState(userDto: UserDto, context: Context) {
-        val sessionManager = SessionManager(context)
+        val sessionManager = SessionManager.getInstance(context)
         val manualProfileTags = sessionManager.getManualProfileTags()
         val backendTags = userDto.preferredTags.orEmpty()
         val hasLearnedPreferenceTags = !userDto.preferenceTagWeights.isNullOrEmpty()
@@ -751,53 +741,17 @@ class ProfileViewModel : ViewModel() {
     }
 
     private suspend fun fetchTagsLocally(context: Context): List<String> {
-        val parsedTags = mutableListOf<String>()
-        try {
-            val authRepo = AuthRepository(context)
-            val token = authRepo.getFirebaseIdToken(false)
-            if (token != null) {
-                val tagsResponse = RetrofitClient.apiService.getTags("Bearer $token")
-                if (tagsResponse.isSuccessful) {
-                    val bodyElement = tagsResponse.body()
-                    if (bodyElement != null) {
-                        if (bodyElement.isJsonArray) {
-                            bodyElement.asJsonArray.forEach { 
-                                if (it.isJsonObject) {
-                                    val obj = it.asJsonObject
-                                    val tag = obj.get("name")?.asString ?: obj.get("tag")?.asString
-                                    if (tag != null) parsedTags.add(tag)
-                                } else if (it.isJsonPrimitive) {
-                                    parsedTags.add(it.asString)
-                                }
-                            }
-                        } else if (bodyElement.isJsonObject) {
-                            val obj = bodyElement.asJsonObject
-                            if (obj.has("tags") && obj.get("tags").isJsonArray) {
-                                obj.get("tags").asJsonArray.forEach { 
-                                    if (it.isJsonPrimitive) parsedTags.add(it.asString)
-                                    else if (it.isJsonObject) {
-                                        val t = it.asJsonObject.get("name")?.asString ?: it.asJsonObject.get("tag")?.asString
-                                        if (t != null) parsedTags.add(t)
-                                    }
-                                }
-                            } else {
-                                // Handle category object { "category": ["tag1", "tag2"] }
-                                obj.entrySet().forEach { entry ->
-                                    if (entry.value.isJsonArray) {
-                                        entry.value.asJsonArray.forEach { 
-                                            if (it.isJsonPrimitive) parsedTags.add(it.asString)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+        return try {
+            val tagsResult = roomRepository.getTags()
+            if (tagsResult.isSuccess) {
+                aiRepository.parseTagsJson(tagsResult.getOrNull())
+            } else {
+                emptyList()
             }
         } catch (e: Exception) {
             Log.e("ProfileViewModel", "Failed to fetch tags", e)
+            emptyList()
         }
-        return parsedTags
     }
 
 
@@ -927,7 +881,7 @@ class ProfileViewModel : ViewModel() {
 
     fun finalizeRoom(context: Context? = null) {
         // Request notification permission before creating room
-        onRequestNotificationPermission?.invoke()
+        viewModelScope.launch { _permissionRequests.emit(PermissionRequest.Notification) }
 
         // Calculate duration depending on the unlock method
         val now = System.currentTimeMillis()
@@ -1017,20 +971,14 @@ class ProfileViewModel : ViewModel() {
 
             // Convert scheduledClosureTime millis -> ISO-8601 string for backend
             val closureIso: String? = if (_scheduledClosureEnabled.value) {
-                SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-                    timeZone = TimeZone.getTimeZone("UTC")
-                }.format(Date(_scheduledClosureTime.value))
+                com.dmb.bestbefore.utils.CalendarSyncHelper.formatUtcIso8601(_scheduledClosureTime.value)
             } else null
 
             val uploadStartIso: String? = if (_uploadStartDateEnabled.value) {
-                SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-                    timeZone = TimeZone.getTimeZone("UTC")
-                }.format(Date(_uploadStartDate.value))
+                com.dmb.bestbefore.utils.CalendarSyncHelper.formatUtcIso8601(_uploadStartDate.value)
             } else null
 
-            val unlockIso: String = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-                timeZone = TimeZone.getTimeZone("UTC")
-            }.format(Date(newRoom.unlockTime))
+            val unlockIso: String = com.dmb.bestbefore.utils.CalendarSyncHelper.formatUtcIso8601(newRoom.unlockTime)
 
             val rollingDays = when (newRoom.rollingExpiration) {
                 "1 Day (24...)" -> 1
@@ -1077,6 +1025,11 @@ class ProfileViewModel : ViewModel() {
 
             val realId = result.getOrNull()
             Log.d("ProfileViewModel", "Room created with id=$realId")
+            com.dmb.bestbefore.analytics.AnalyticsManager.logCreateRoom(
+                roomName = newRoom.roomName,
+                isPrivate = !newRoom.isPublic,
+                capsuleDays = newRoom.capsuleDays
+            )
             val finalRoom = if (realId != null) {
                 newRoom.copy(id = realId, isOwnedByMe = true, isCollaborator = false)
             } else {
@@ -1119,7 +1072,7 @@ class ProfileViewModel : ViewModel() {
         // Schedule notification (Fixed: Added back)
         context?.let { ctx ->
             val unlockTimeMillis = _targetTime.value
-            NotificationScheduler.scheduleRoomUnlockNotification(
+            NotificationScheduler.scheduleRoomUnlock(
                 ctx,
                 _roomName.value.hashCode().toString(),
                 _roomName.value,
@@ -1415,23 +1368,11 @@ class ProfileViewModel : ViewModel() {
                             }
                         } else {
                             // Downsample image payloads for safer upload and render.
-                            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
-
-                            var inSampleSize = 1
-                            while (options.outWidth / inSampleSize > 1024 || options.outHeight / inSampleSize > 1024) {
-                                inSampleSize *= 2
-                            }
-
-                            options.inJustDecodeBounds = false
-                            options.inSampleSize = inSampleSize
-                            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
-                            if (bitmap == null) return@forEach
-
-                            val bos = ByteArrayOutputStream()
-                            bitmap.compress(Bitmap.CompressFormat.JPEG, 60, bos)
-                            val compressed = bos.toByteArray()
-                            val base64 = Base64.encodeToString(compressed, Base64.NO_WRAP)
+                            val base64 = com.dmb.bestbefore.utils.ImageProcessingHelper.downsampleAndEncodeImage(
+                                bytes = bytes,
+                                maxDimension = 1024,
+                                quality = 60
+                            ) ?: return@forEach
 
                             val memoryData: Map<String, Any> = mapOf(
                                 "type" to "photo",
@@ -1771,29 +1712,20 @@ class ProfileViewModel : ViewModel() {
     }
 
     fun startAudioRecording(context: Context) {
-        if (audioRecorderHelper == null) {
-            audioRecorderHelper = AudioRecorderHelper(context)
-        }
-        audioRecorderHelper?.startRecording()
+        audioRecordingHelper.startRecording(context)
         _isRecordingAudio.value = true
     }
 
     fun stopAudioRecordingAndUpload(context: Context) {
-        val file = audioRecorderHelper?.stopRecording()
+        val file = audioRecordingHelper.stopRecording()
         _isRecordingAudio.value = false
         
         if (file != null && file.exists()) {
             val currentRoomId = _selectedRoom.value?.id ?: return
             viewModelScope.launch {
                 try {
-                    val bytes = file.readBytes()
-                    val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
-                    val memoryData = mapOf(
-                        "type" to "audio",
-                        "title" to "Voice Memory",
-                        "content" to base64,
-                        "metadata" to emptyMap<String, Any>()
-                    )
+                    val base64 = audioRecordingHelper.encodeAudioFileToBase64(file)
+                    val memoryData = audioRecordingHelper.buildVoiceMemoryPayload(base64)
                     val result = roomRepository.addMemoryToRoom(currentRoomId, memoryData)
                     result.onSuccess {
                         // Use a custom scheme or parameters so the UI knows it's audio
@@ -1824,59 +1756,29 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
-    private var mediaPlayer: MediaPlayer? = null
-
     fun playBase64Audio(context: Context, dataUri: String) {
-        try {
-            mediaPlayer?.release()
-
-            val base64String = dataUri.substringAfter("base64,")
-            val decodedBytes = Base64.decode(base64String, Base64.DEFAULT)
-
-            val extension = when {
-                dataUri.startsWith("data:audio/mpeg") -> ".mp3"
-                dataUri.startsWith("data:audio/wav") -> ".wav"
-                dataUri.startsWith("data:audio/ogg") -> ".ogg"
-                else -> ".m4a"
+        audioRecordingHelper.playBase64Audio(
+            context = context,
+            dataUri = dataUri,
+            onError = {
+                Toast.makeText(context, "Error playing audio", Toast.LENGTH_SHORT).show()
             }
-            val tempFile = File.createTempFile("playing_audio", extension, context.cacheDir)
-            tempFile.writeBytes(decodedBytes)
-
-            mediaPlayer = MediaPlayer().apply {
-                setDataSource(tempFile.absolutePath)
-                setOnPreparedListener { it.start() }
-                setOnCompletionListener {
-                    it.release()
-                    mediaPlayer = null
-                }
-                prepareAsync()
-            }
-        } catch (e: Exception) {
-            Log.e("ProfileViewModel", "Failed to play audio", e)
-            Toast.makeText(context, "Error playing audio", Toast.LENGTH_SHORT).show()
-        }
+        )
     }
 
     fun playAudio(context: Context, source: String) {
-        if (source.startsWith("data:audio")) {
-            playBase64Audio(context, source)
-            return
-        }
-        try {
-            mediaPlayer?.release()
-            mediaPlayer = MediaPlayer().apply {
-                setDataSource(context, Uri.parse(source))
-                setOnPreparedListener { it.start() }
-                setOnCompletionListener {
-                    it.release()
-                    mediaPlayer = null
-                }
-                prepareAsync()
+        audioRecordingHelper.playAudio(
+            context = context,
+            source = source,
+            onError = {
+                Toast.makeText(context, "Error playing audio", Toast.LENGTH_SHORT).show()
             }
-        } catch (e: Exception) {
-            Log.e("ProfileViewModel", "Failed to play uri audio", e)
-            Toast.makeText(context, "Error playing audio", Toast.LENGTH_SHORT).show()
-        }
+        )
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        audioRecordingHelper.release()
     }
 
     // Navigation Helpers
@@ -2173,12 +2075,16 @@ class ProfileViewModel : ViewModel() {
     private val _userSearchResults = MutableStateFlow<List<InvitedUser>>(emptyList())
     val userSearchResults: StateFlow<List<InvitedUser>> = _userSearchResults.asStateFlow()
 
+    private var searchJob: kotlinx.coroutines.Job? = null
+
     fun searchUsers(query: String) {
         if (query.isBlank()) {
             _userSearchResults.value = emptyList()
             return
         }
-        viewModelScope.launch {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(300L)
             val result = roomRepository.searchUsers(query)
             if (result.isSuccess) {
                 _userSearchResults.value = result.getOrNull().orEmpty().map { dto ->
@@ -2224,7 +2130,7 @@ class ProfileViewModel : ViewModel() {
         val localUri = copyPickedImageToAppStorage(context, uri)
         if (localUri != null) {
             _profileImageUri.value = localUri
-            val sessionManager = SessionManager(context)
+            val sessionManager = SessionManager.getInstance(context)
             sessionManager.saveProfilePhotoUri(localUri.toString())
             
             // Upload to backend for global visibility
@@ -2273,15 +2179,15 @@ class ProfileViewModel : ViewModel() {
     
     // Permission request helpers
     fun requestCameraPermission() {
-        onRequestCameraPermission?.invoke()
+        viewModelScope.launch { _permissionRequests.emit(PermissionRequest.Camera) }
     }
     
     fun requestGalleryPermission() {
-        onRequestGalleryPermission?.invoke()
+        viewModelScope.launch { _permissionRequests.emit(PermissionRequest.Gallery) }
     }
     
     fun requestFilePermission() {
-        onRequestFilePermission?.invoke()
+        viewModelScope.launch { _permissionRequests.emit(PermissionRequest.File) }
     }
     
     // Helper to get media for a room
@@ -2554,11 +2460,8 @@ class ProfileViewModel : ViewModel() {
     /** Save current VM state back to the backend for an existing room (Edit Room). */
     fun saveRoomEdits(context: Context) {
         val room = _selectedRoom.value ?: return
-        val isoFmt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
-        val closureIso: String? = if (_scheduledClosureEnabled.value) isoFmt.format(Date(_scheduledClosureTime.value)) else null
-        val uploadStartIso: String? = if (_uploadStartDateEnabled.value) isoFmt.format(Date(_uploadStartDate.value)) else null
+        val closureIso: String? = if (_scheduledClosureEnabled.value) com.dmb.bestbefore.utils.CalendarSyncHelper.formatUtcIso8601(_scheduledClosureTime.value) else null
+        val uploadStartIso: String? = if (_uploadStartDateEnabled.value) com.dmb.bestbefore.utils.CalendarSyncHelper.formatUtcIso8601(_uploadStartDate.value) else null
 
         val fields: Map<String, Any?> = mapOf(
             "name" to _roomName.value,
@@ -2631,7 +2534,7 @@ class ProfileViewModel : ViewModel() {
                 val authRepo = AuthRepository(context)
                 val firebaseToken = authRepo.getFirebaseIdToken(false)
                 if (firebaseToken != null) {
-                    val sessionManager = SessionManager(context)
+                    val sessionManager = SessionManager.getInstance(context)
                     val manualProfileTags = _preferredTags.value
                         .map { it.trim() }
                         .filter { it.isNotEmpty() }
@@ -2712,24 +2615,8 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
-    private suspend fun encodeProfileImageBase64(context: Context, uri: Uri): String? = withContext(
-        Dispatchers.IO) {
-        runCatching {
-            val stream = context.contentResolver.openInputStream(uri) ?: return@runCatching null
-            val raw = stream.use { it.readBytes() }
-            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeByteArray(raw, 0, raw.size, options)
-            var inSampleSize = 1
-            while (options.outWidth / inSampleSize > 512 || options.outHeight / inSampleSize > 512) {
-                inSampleSize *= 2
-            }
-            options.inJustDecodeBounds = false
-            options.inSampleSize = inSampleSize
-            val bitmap = BitmapFactory.decodeByteArray(raw, 0, raw.size, options) ?: return@runCatching null
-            val bos = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 70, bos)
-            Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP)
-        }.getOrNull()
+    private suspend fun encodeProfileImageBase64(context: Context, uri: Uri): String? {
+        return com.dmb.bestbefore.utils.ImageProcessingHelper.encodeUriToBase64(context, uri, maxDimension = 512, quality = 70)
     }
 
     private fun colorToHex(color: Color): String {
@@ -2799,7 +2686,7 @@ class ProfileViewModel : ViewModel() {
                                             )
                                             if (updateResult.isSuccess) {
                                                 _credentialUpdateSuccess.value = "Verification email sent to $newEmail. Please verify to complete the change."
-                                                val sessionManager = SessionManager(context)
+                                                val sessionManager = SessionManager.getInstance(context)
                                                 sessionManager.saveUserEmail(newEmail)
                                             } else {
                                                 _credentialUpdateError.value = "Backend update failed"
@@ -2882,7 +2769,7 @@ class ProfileViewModel : ViewModel() {
 
     fun logout(context: Context) {
         // Clear session data
-        val sessionManager = SessionManager(context)
+        val sessionManager = SessionManager.getInstance(context)
         sessionManager.clearSession()
         
         // Clear auth repository prefs as well if they are separate (they seem to be inconsistent in the codebase)
@@ -2904,7 +2791,7 @@ class ProfileViewModel : ViewModel() {
         val current = _roomEmotions.value.toMutableMap()
         if (emotion == null) current.remove(roomId) else current[roomId] = emotion
         _roomEmotions.value = current
-        SessionManager(context).saveRoomEmotions(uid, current)
+        SessionManager.getInstance(context).saveRoomEmotions(uid, current)
 
         // Best-effort backend signal so artists can later aggregate emotional responses.
         if (emotion != null) {
@@ -2948,6 +2835,52 @@ class ProfileViewModel : ViewModel() {
                 false
             }
         } == true
+    }
+
+    fun deleteAccount(onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            val repo = authRepository
+            if (repo == null) {
+                onError("Not initialized")
+                return@launch
+            }
+            val result = repo.deleteAccount()
+            if (result.isSuccess) {
+                onSuccess()
+            } else {
+                onError(result.exceptionOrNull()?.message ?: "Account deletion failed")
+            }
+        }
+    }
+
+    fun reportContent(targetType: String, targetId: String, reason: String, description: String = "", onComplete: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val repo = authRepository
+            if (repo == null) {
+                onComplete(false)
+                return@launch
+            }
+            val result = repo.reportContent(targetType, targetId, reason, description)
+            if (result.isSuccess) {
+                com.dmb.bestbefore.analytics.AnalyticsManager.logReportContent(targetType, targetId, reason)
+            }
+            onComplete(result.isSuccess)
+        }
+    }
+
+    fun blockUser(blockedUserId: String, onComplete: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val repo = authRepository
+            if (repo == null) {
+                onComplete(false)
+                return@launch
+            }
+            val result = repo.blockUser(blockedUserId)
+            if (result.isSuccess) {
+                com.dmb.bestbefore.analytics.AnalyticsManager.logBlockUser(blockedUserId)
+            }
+            onComplete(result.isSuccess)
+        }
     }
 
     private fun parseISO8601(dateString: String?): Long = parseIso8601(dateString)

@@ -1,6 +1,7 @@
 package com.dmb.bestbefore.data.repository
 
 import android.util.Log
+import com.dmb.bestbefore.data.api.ApiService
 import com.dmb.bestbefore.data.api.RetrofitClient
 import com.dmb.bestbefore.data.api.models.*
 import com.google.firebase.auth.FirebaseAuth
@@ -8,58 +9,102 @@ import kotlinx.coroutines.tasks.await
 import java.io.IOException
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.dmb.bestbefore.data.auth.FirebaseTokenProvider
+import com.dmb.bestbefore.data.auth.TokenProvider
 
 /**
  * RoomRepository — handles Room data and dynamic analytics/recommendations.
  * Restored with all original functionality plus new recommendation features.
  */
-class RoomRepository {
-
-    private val api = RetrofitClient.apiService
+class RoomRepository(
+    private val api: ApiService = RetrofitClient.apiService,
+    private val tokenProvider: TokenProvider = FirebaseTokenProvider()
+) {
 
     /** Always returns "Bearer <fresh-firebase-id-token>" — throws if not signed in. */
     private suspend fun freshBearer(): String {
-        val user = FirebaseAuth.getInstance().currentUser
-            ?: throw IllegalStateException("User not signed in")
-        val token = user.getIdToken(false).await().token
+        val token = tokenProvider.getIdToken(false)
             ?: throw IllegalStateException("Could not obtain Firebase ID token")
         return "Bearer $token"
     }
 
-    // ── Rooms ─────────────────────────────────────────────────────────────────
+    companion object {
+        private var cachedRooms: List<RoomDto>? = null
+        private var cachedRoomsTimestamp: Long = 0L
+        private var cachedDiscoverRooms: List<RoomDto>? = null
+        private var cachedDiscoverTimestamp: Long = 0L
+        private var cachedTags: com.google.gson.JsonElement? = null
+        private var cachedTagsTimestamp: Long = 0L
+        private const val ROOMS_CACHE_TTL_MS = 30_000L // 30 seconds
+        private const val TAGS_CACHE_TTL_MS = 600_000L // 10 minutes
 
-    suspend fun getRooms(): Result<List<RoomDto>> {
+        fun invalidateRoomsCache() {
+            cachedRooms = null
+            cachedRoomsTimestamp = 0L
+            cachedDiscoverRooms = null
+            cachedDiscoverTimestamp = 0L
+        }
+    }
+
+    suspend fun getTags(forceRefresh: Boolean = false): Result<com.google.gson.JsonElement> {
+        if (!forceRefresh && cachedTags != null && (System.currentTimeMillis() - cachedTagsTimestamp < TAGS_CACHE_TTL_MS)) {
+            return Result.success(cachedTags!!)
+        }
         return try {
-            val response = api.getRooms(freshBearer())
+            val response = api.getTags(freshBearer())
             if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+                val tags = response.body()!!
+                cachedTags = tags
+                cachedTagsTimestamp = System.currentTimeMillis()
+                Result.success(tags)
             } else {
-                val err = response.errorBody()?.string() ?: "HTTP ${response.code()}"
-                Result.failure(Exception("Failed to fetch rooms: $err"))
+                Result.failure(Exception("Failed to fetch tags: ${response.code()}"))
             }
-        } catch (e: IOException) {
-            tryFallbackRoomsRequest(
-                endpointName = "getRooms",
-                request = { service, bearer -> service.getRooms(bearer) }
-            )
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    suspend fun getDiscoverRooms(): Result<List<RoomDto>> {
+    // ── Rooms ─────────────────────────────────────────────────────────────────
+
+    suspend fun getRooms(forceRefresh: Boolean = false): Result<List<RoomDto>> {
+        if (!forceRefresh && cachedRooms != null && (System.currentTimeMillis() - cachedRoomsTimestamp < ROOMS_CACHE_TTL_MS)) {
+            return Result.success(cachedRooms!!)
+        }
+        return try {
+            val response = api.getRooms(freshBearer())
+            if (response.isSuccessful && response.body() != null) {
+                val rooms = response.body()!!
+                cachedRooms = rooms
+                cachedRoomsTimestamp = System.currentTimeMillis()
+                Result.success(rooms)
+            } else {
+                val err = response.errorBody()?.string() ?: "HTTP ${response.code()}"
+                Result.failure(Exception("Failed to fetch rooms: $err"))
+            }
+        } catch (e: IOException) {
+            Result.failure(e)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getDiscoverRooms(forceRefresh: Boolean = false): Result<List<RoomDto>> {
+        if (!forceRefresh && cachedDiscoverRooms != null && (System.currentTimeMillis() - cachedDiscoverTimestamp < ROOMS_CACHE_TTL_MS)) {
+            return Result.success(cachedDiscoverRooms!!)
+        }
         return try {
             val response = api.getDiscoverRooms(freshBearer())
             if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+                val rooms = response.body()!!
+                cachedDiscoverRooms = rooms
+                cachedDiscoverTimestamp = System.currentTimeMillis()
+                Result.success(rooms)
             } else {
                 Result.failure(Exception("Failed to discover rooms: ${response.code()}"))
             }
         } catch (e: IOException) {
-            tryFallbackRoomsRequest(
-                endpointName = "getDiscoverRooms",
-                request = { service, bearer -> service.getDiscoverRooms(bearer) }
-            )
+            Result.failure(e)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -81,7 +126,7 @@ class RoomRepository {
 
     private suspend fun tryFallbackRoomsRequest(
         endpointName: String,
-        request: suspend (com.dmb.bestbefore.data.api.ApiService, String) -> retrofit2.Response<List<RoomDto>>
+        request: suspend (ApiService, String) -> retrofit2.Response<List<RoomDto>>
     ): Result<List<RoomDto>> {
         return try {
             val bearer = freshBearer()
@@ -138,6 +183,7 @@ class RoomRepository {
             )
             val response = api.createRoom(freshBearer(), request)
             if (response.isSuccessful && response.body() != null) {
+                invalidateRoomsCache()
                 Result.success(response.body()!!.id)
             } else {
                 val err = response.errorBody()?.string() ?: "HTTP ${response.code()}"
@@ -151,8 +197,12 @@ class RoomRepository {
     suspend fun updateRoom(roomId: String, fields: Map<String, Any>): Result<Unit> {
         return try {
             val response = api.updateRoom(freshBearer(), roomId, fields)
-            if (response.isSuccessful) Result.success(Unit)
-            else Result.failure(Exception("Failed to update room: ${response.code()}"))
+            if (response.isSuccessful) {
+                invalidateRoomsCache()
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Failed to update room: ${response.code()}"))
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -161,8 +211,12 @@ class RoomRepository {
     suspend fun deleteRoom(roomId: String): Result<Unit> {
         return try {
             val response = api.deleteRoom(freshBearer(), roomId)
-            if (response.isSuccessful) Result.success(Unit)
-            else Result.failure(Exception("Failed to delete room: ${response.code()}"))
+            if (response.isSuccessful) {
+                invalidateRoomsCache()
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Failed to delete room: ${response.code()}"))
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -243,8 +297,10 @@ class RoomRepository {
     suspend fun addMemoryToRoom(roomId: String, memoryData: Map<String, Any>): Result<Unit> {
         return try {
             val response = api.addMemoryToRoom(freshBearer(), roomId, memoryData)
-            if (response.isSuccessful) Result.success(Unit)
-            else Result.failure(Exception("Failed to add memory: ${response.code()}"))
+            if (response.isSuccessful) {
+                com.dmb.bestbefore.analytics.AnalyticsManager.logAddMemory(roomId, memoryData["type"] as? String ?: "photo")
+                Result.success(Unit)
+            } else Result.failure(Exception("Failed to add memory: ${response.code()}"))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -476,4 +532,3 @@ class RoomRepository {
         }
     }
 }
-

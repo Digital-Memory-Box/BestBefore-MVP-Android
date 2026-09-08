@@ -34,12 +34,22 @@ fun SignupScreen(
     val errorMessage by viewModel.errorMessage.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
+    var ageConfirmed by remember { mutableStateOf(false) }
+    var termsAccepted by remember { mutableStateOf(false) }
+    var showPrivacyPolicyDialog by remember { mutableStateOf(false) }
+    var showTermsDialog by remember { mutableStateOf(false) }
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+
     Box(modifier = Modifier.fillMaxSize()) {
         // ── Animated Background — switches with userType ─────────────
         AnimatedBackgroundView(theme = if (userType == "artist") "artist" else "default")
 
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(top = 16.dp),
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -53,7 +63,7 @@ fun SignupScreen(
             ) {
                 // Title
                 Text(
-                    text = "Create Account",
+                    text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.create_account_title),
                     fontSize = 36.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
@@ -66,23 +76,25 @@ fun SignupScreen(
                     modifier = Modifier.padding(horizontal = 40.dp)
                 ) {
                     BBOutlinedInput(
-                        placeholder = "name",
+                        placeholder = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.name_placeholder),
                         text = name,
                         onValueChange = { viewModel.updateName(it) }
                     )
                     BBOutlinedInput(
-                        placeholder = "email",
+                        placeholder = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.email_placeholder),
                         text = email,
                         onValueChange = { viewModel.updateEmail(it) }
                     )
                     BBOutlinedInput(
-                        placeholder = "password",
+                        placeholder = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.password_placeholder),
                         text = password,
                         onValueChange = { viewModel.updatePassword(it) },
                         isSecure = true
                     )
 
                     // ── User Type Selector ──────────────────────────────
+                    val normalLabel = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.user_type_normal)
+                    val artistLabel = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.user_type_artist)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -91,7 +103,7 @@ fun SignupScreen(
                             .padding(4.dp)
                     ) {
                         Row(modifier = Modifier.fillMaxSize()) {
-                            listOf("normal" to "Normal", "artist" to "Artist").forEach { (type, label) ->
+                            listOf("normal" to normalLabel, "artist" to artistLabel).forEach { (type, label) ->
                                 val isSelected = userType == type
                                 Box(
                                     modifier = Modifier
@@ -115,25 +127,90 @@ fun SignupScreen(
                         }
                     }
 
+                    // ── Terms & Age Checkboxes ──────────────────────────────
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { ageConfirmed = !ageConfirmed }
+                    ) {
+                        Checkbox(
+                            checked = ageConfirmed,
+                            onCheckedChange = { ageConfirmed = it },
+                            colors = CheckboxDefaults.colors(checkedColor = Color.White, checkmarkColor = Color.Black, uncheckedColor = Color.White)
+                        )
+                        Text(
+                            text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.age_confirmation),
+                            color = Color.White,
+                            fontSize = 14.sp
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { termsAccepted = !termsAccepted }
+                    ) {
+                        Checkbox(
+                            checked = termsAccepted,
+                            onCheckedChange = { termsAccepted = it },
+                            colors = CheckboxDefaults.colors(checkedColor = Color.White, checkmarkColor = Color.Black, uncheckedColor = Color.White)
+                        )
+                        Column {
+                            Text(
+                                text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.terms_agreement_prefix),
+                                color = Color.White,
+                                fontSize = 14.sp
+                            )
+                            Row {
+                                Text(
+                                    text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.terms_of_service),
+                                    color = Color(0xFF00BFFF),
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.clickable { showTermsDialog = true }
+                                )
+                                Text(
+                                    text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.terms_and),
+                                    color = Color.White,
+                                    fontSize = 14.sp
+                                )
+                                Text(
+                                    text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.privacy_policy),
+                                    color = Color(0xFF00BFFF),
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.clickable { showPrivacyPolicyDialog = true }
+                                )
+                            }
+                        }
+                    }
+
                     // Sign Up Button
+                    val isFormValid = email.isNotEmpty() && password.isNotEmpty() && name.isNotEmpty() && ageConfirmed && termsAccepted && !isLoading
                     Box(
                         modifier = Modifier
                             .padding(top = 8.dp)
                             .fillMaxWidth()
                             .height(56.dp)
-                            .background(Color.White, RoundedCornerShape(28.dp))
-                            .clickable {
-                                if (email.isNotEmpty() && password.isNotEmpty() && name.isNotEmpty()) {
-                                    viewModel.attemptSignup()
-                                }
+                            .background(if (isFormValid) Color.White else Color.Gray, RoundedCornerShape(28.dp))
+                            .clickable(enabled = isFormValid) {
+                                viewModel.attemptSignup()
                             },
                         contentAlignment = Alignment.Center
                     ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(24.dp))
+                        } else {
+                            Text(
+                                text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.sign_up_button),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black
+                            )
+                        }
+                    }
+                    if (!errorMessage.isNullOrEmpty()) {
                         Text(
-                            text = "Sign Up",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Black
+                            text = errorMessage!!,
+                            color = Color.Red,
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(top = 8.dp)
                         )
                     }
                 }
@@ -144,7 +221,7 @@ fun SignupScreen(
 
             // ── Bottom Link ─────────────────────────────────────────
             Text(
-                text = "already have an account? login",
+                text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.already_have_account),
                 color = Color.White,
                 fontSize = 16.sp,
                 textAlign = TextAlign.Center,
@@ -255,6 +332,13 @@ fun SignupScreen(
                 }
             )
         }
+
+        if (showPrivacyPolicyDialog) {
+            com.dmb.bestbefore.ui.components.PrivacyPolicyDialog(onDismiss = { showPrivacyPolicyDialog = false })
+        }
+        if (showTermsDialog) {
+            com.dmb.bestbefore.ui.components.TermsOfServiceDialog(onDismiss = { showTermsDialog = false })
+        }
     }
 
     // ── Signup Success Flow ─────────────────────────────────────────
@@ -264,4 +348,5 @@ fun SignupScreen(
         }
     }
 }
+
 

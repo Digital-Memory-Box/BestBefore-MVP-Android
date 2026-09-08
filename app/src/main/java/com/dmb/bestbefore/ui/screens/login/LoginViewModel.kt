@@ -23,7 +23,12 @@ enum class LoginMode {
     EVERYONE, ARTISTS
 }
 
-class LoginViewModel(application: Application) : AndroidViewModel(application) {
+class LoginViewModel @JvmOverloads constructor(
+    application: Application,
+    private val repository: AuthRepository = AuthRepository(application),
+    private val sessionManager: SessionManager = SessionManager.getInstance(application),
+    private val isNetworkAvailable: () -> Boolean = { AppErrorUtils.hasInternetConnection(application) }
+) : AndroidViewModel(application) {
 
     private val _loginState = MutableStateFlow(LoginState.INITIAL)
     val loginState: StateFlow<LoginState> = _loginState.asStateFlow()
@@ -39,9 +44,6 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
-
-    private val repository = AuthRepository(application)
-    private val sessionManager = SessionManager(application)
 
     fun updateEmail(newEmail: String) {
         _email.value = newEmail
@@ -78,7 +80,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        if (!AppErrorUtils.hasInternetConnection(getApplication())) {
+        if (!isNetworkAvailable()) {
             _errorMessage.value = AppErrorUtils.NO_INTERNET
             return
         }
@@ -117,6 +119,38 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                         AppErrorUtils.NO_INTERNET
                     else -> AppErrorUtils.userMessage(e, "Login failed. Please try again.")
                 }
+            }
+        }
+    }
+
+    fun loginWithGoogle(idToken: String, loginMode: LoginMode, onSuccess: () -> Unit) {
+        if (!isNetworkAvailable()) {
+            _errorMessage.value = AppErrorUtils.NO_INTERNET
+            return
+        }
+
+        viewModelScope.launch {
+            _isLoading.value = true
+            _errorMessage.value = null
+
+            val result = repository.loginWithGoogleIdToken(idToken)
+            _isLoading.value = false
+
+            result.onSuccess { user ->
+                val type = user.userType ?: "normal"
+                if (loginMode == LoginMode.ARTISTS && type != "artist") {
+                    _errorMessage.value = "This login is for artist accounts only."
+                    return@onSuccess
+                } else if (loginMode == LoginMode.EVERYONE && type == "artist") {
+                    _errorMessage.value = "Artist accounts must use the Artist login screen."
+                    return@onSuccess
+                }
+
+                sessionManager.saveUser(user)
+                viewModelScope.launch { repository.syncFcmToken() }
+                onSuccess()
+            }.onFailure { e ->
+                _errorMessage.value = AppErrorUtils.userMessage(e, "Google Sign-In failed. Please try again.")
             }
         }
     }

@@ -3,14 +3,14 @@ package com.dmb.bestbefore.data.local
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import com.dmb.bestbefore.data.api.models.UserDto
 import com.google.firebase.auth.FirebaseAuth
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
-class SessionManager(context: Context) {
-    private val prefs: SharedPreferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-    private val gson = Gson()
+class SessionManager private constructor(context: Context) {
 
     companion object {
         private const val PREF_NAME = "BestBeforeSession"
@@ -31,6 +31,60 @@ class SessionManager(context: Context) {
         private const val KEY_CACHED_USER = "cached_user_dto"
         private const val KEY_CACHED_HALLWAY = "cached_hallway_cards"
         private const val KEY_MANUAL_PROFILE_TAGS = "manual_profile_tags"
+        private const val KEY_FCM_TOKEN = "fcm_token"
+
+        @Volatile
+        private var INSTANCE: SessionManager? = null
+
+        fun getInstance(context: Context): SessionManager {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: SessionManager(context.applicationContext).also { INSTANCE = it }
+            }
+        }
+    }
+
+    private val prefs: SharedPreferences = initPreferences(context)
+    private val gson = Gson()
+
+    private fun initPreferences(context: Context): SharedPreferences {
+        return try {
+            val encrypted = createEncryptedPrefs(context)
+            // Test if existing keys can be decrypted without crashing (e.g. bad base-64 from legacy plaintext XML)
+            encrypted.all
+            encrypted
+        } catch (e: Throwable) {
+            android.util.Log.w("SessionManager", "EncryptedSharedPreferences validation failed, resetting file: ${e.message}")
+            try {
+                context.deleteSharedPreferences(PREF_NAME)
+                val fresh = createEncryptedPrefs(context)
+                fresh.all
+                fresh
+            } catch (e2: Throwable) {
+                android.util.Log.e("SessionManager", "Fallback to standard SharedPreferences: ${e2.message}")
+                context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            }
+        }
+    }
+
+    private fun createEncryptedPrefs(context: Context): SharedPreferences {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        return EncryptedSharedPreferences.create(
+            context,
+            PREF_NAME,
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
+
+    fun saveFcmToken(token: String) {
+        prefs.edit().putString(KEY_FCM_TOKEN, token).apply()
+    }
+
+    fun getFcmToken(): String? {
+        return prefs.getString(KEY_FCM_TOKEN, null)
     }
 
     fun saveAuthToken(token: String) {
@@ -109,7 +163,7 @@ class SessionManager(context: Context) {
     fun getAccentColor(): String = prefs.getString(KEY_ACCENT_COLOR, "#007AFF") ?: "#007AFF"
     fun getUserType(): String = prefs.getString(KEY_USER_TYPE, "normal") ?: "normal"
     fun getBio(): String? = prefs.getString(KEY_BIO, null)
-    
+
     fun getIgnoredRoomIds(): List<String> {
         val json = prefs.getString(KEY_IGNORED_ROOMS, null) ?: return emptyList()
         val type = object : TypeToken<List<String>>() {}.type
@@ -161,7 +215,15 @@ class SessionManager(context: Context) {
     }
 
     fun clearSession() {
-        prefs.edit { clear() }
-        FirebaseAuth.getInstance().signOut()
+        try {
+            prefs.edit { clear() }
+        } catch (e: Throwable) {
+            android.util.Log.e("SessionManager", "Error clearing preferences: ${e.message}")
+        }
+        try {
+            FirebaseAuth.getInstance().signOut()
+        } catch (e: Exception) {
+            android.util.Log.e("SessionManager", "Error signing out Firebase: ${e.message}")
+        }
     }
 }

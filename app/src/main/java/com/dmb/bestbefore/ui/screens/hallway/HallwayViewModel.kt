@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
@@ -330,7 +331,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun loadCachedData() {
-        val sessionManager = com.dmb.bestbefore.data.local.SessionManager(getApplication())
+        val sessionManager = com.dmb.bestbefore.data.local.SessionManager.getInstance(getApplication())
         val cachedCards = sessionManager.getHallwayCards()
         if (cachedCards.isNotEmpty()) {
             _cards.value = cachedCards
@@ -496,7 +497,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 filterCards(_currentTab.value)
                 
                 // Persist the filtered cards to cache for the next app launch
-                val sessionManager = com.dmb.bestbefore.data.local.SessionManager(getApplication())
+                val sessionManager = com.dmb.bestbefore.data.local.SessionManager.getInstance(getApplication())
                 sessionManager.saveHallwayCards(_cards.value)
                 
                 Log.i(TAG_PERF, "[${ms()}ms] filterCards done → ${_cards.value.size} cards visible")
@@ -511,12 +512,10 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
             // Tags fetch — sequential after cards are visible (non-blocking for UI)
             try {
                 val tagsT0 = System.currentTimeMillis()
-                val token = com.dmb.bestbefore.data.repository.AuthRepository(getApplication()).getFirebaseIdToken(false)
-                if (token != null) {
-                    val tagsResponse = com.dmb.bestbefore.data.api.RetrofitClient.apiService.getTags("Bearer $token")
-                    if (tagsResponse.isSuccessful) {
-                        val bodyElement = tagsResponse.body()
-                        val parsedTags = mutableListOf<String>()
+                val tagsResult = roomRepository.getTags()
+                if (tagsResult.isSuccess) {
+                    val bodyElement = tagsResult.getOrNull()
+                    val parsedTags = mutableListOf<String>()
                         if (bodyElement != null) {
                             if (bodyElement.isJsonArray) {
                                 bodyElement.asJsonArray.forEach { 
@@ -553,7 +552,6 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                         _availableTags.value = parsedTags
                         Log.i(TAG_PERF, "/tags → ${parsedTags.size} tags in ${System.currentTimeMillis() - tagsT0}ms")
                     }
-                }
             } catch (e: Exception) {
                 Log.w(TAG_PERF, "tags fetch unavailable: ${e.message}")
                 if (_availableTags.value.isEmpty()) {
@@ -710,7 +708,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
     private fun watchSearchQueryForSemanticSearch() {
         viewModelScope.launch {
             @Suppress("OPT_IN_USAGE")
-            searchQuery.debounce(500L).collect { query ->
+            searchQuery.debounce(500L).collectLatest { query ->
                 if (query.length >= 3) {
                     _isSemanticSearching.value = true
                     val allAvailable = (myRoomsList + discoverRoomsList).distinctBy { it.id }
@@ -859,7 +857,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
         }
         _cards.value = patch(_cards.value)
         _savedRoomCards.value = patch(_savedRoomCards.value)
-        com.dmb.bestbefore.data.local.SessionManager(getApplication()).saveHallwayCards(_cards.value)
+        com.dmb.bestbefore.data.local.SessionManager.getInstance(getApplication()).saveHallwayCards(_cards.value)
     }
 
     // Pull-to-refresh support
@@ -875,6 +873,27 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
             } else {
                 Log.e("HallwayViewModel", "Failed to delete memory: ${result.exceptionOrNull()?.message}")
                 android.widget.Toast.makeText(getApplication(), AppErrorUtils.userMessage(result.exceptionOrNull()), android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun removeBackgroundMusic(roomId: String) {
+        viewModelScope.launch {
+            // Optimistically clear background music on active cards
+            _cards.value = _cards.value.map { card ->
+                if (card.id == roomId) card.copy(backgroundMusic = null) else card
+            }
+            _savedRoomCards.value = _savedRoomCards.value.map { card ->
+                if (card.id == roomId) card.copy(backgroundMusic = null) else card
+            }
+            val result = roomRepository.updateRoom(roomId, mapOf("backgroundMusic" to ""))
+            if (result.isSuccess) {
+                Log.d("HallwayViewModel", "Successfully removed background music from room $roomId")
+                refreshRooms()
+            } else {
+                Log.e("HallwayViewModel", "Failed to remove background music: ${result.exceptionOrNull()?.message}")
+                android.widget.Toast.makeText(getApplication(), AppErrorUtils.userMessage(result.exceptionOrNull()), android.widget.Toast.LENGTH_SHORT).show()
+                refreshRooms()
             }
         }
     }

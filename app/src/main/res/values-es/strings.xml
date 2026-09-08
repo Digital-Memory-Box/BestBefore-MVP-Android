@@ -1,0 +1,79 @@
+<resources>
+    <string name="app_name">BestBefore</string>
+    <string name="default_web_client_id" translatable="false">913034046682-shihof7s9i6eale40cvjk0802jjfr7gr.apps.googleusercontent.com</string>
+
+    <!-- Common Navigation & Actions -->
+    <string name="cancel">Cancelar</string>
+    <string name="save">Guardar</string>
+    <string name="back">Atrás</string>
+    <string name="close">Cerrar</string>
+    <string name="delete">Eliminar</string>
+    <string name="add">Añadir</string>
+    <string name="retry">Reintentar</string>
+    <string name="loading">Cargando…</string>
+
+    <!-- Auth - Login Screen -->
+    <string name="login_title">BestBefore</string>
+    <string name="login_subtitle">Captura momentos antes de que se desvanezcan</string>
+    <string name="login_everyone">Todos</string>
+    <string name="login_artist">Artista</string>
+    <string name="email_placeholder">correo electrónico</string>
+    <string name="password_placeholder">contraseña</string>
+    <string name="login_button">Iniciar Sesión</string>
+    <string name="sign_in_with_google">Iniciar sesión con Google</string>
+    <string name="dont_have_account">¿no tienes cuenta? regístrate</string>
+    <string name="google_sign_in_failed">El inicio de sesión con Google fue cancelado o falló.</string>
+
+    <!-- Auth - Signup Screen -->
+    <string name="create_account_title">Crear Cuenta</string>
+    <string name="name_placeholder">nombre</string>
+    <string name="user_type_normal">Normal</string>
+    <string name="user_type_artist">Artista</string>
+    <string name="age_confirmation">Confirmo que tengo al menos 16 años</string>
+    <string name="terms_agreement_prefix">Al registrarte, aceptas nuestros</string>
+    <string name="terms_of_service">Términos de Servicio</string>
+    <string name="terms_and"> y </string>
+    <string name="privacy_policy">Política de Privacidad</string>
+    <string name="sign_up_button">Registrarse</string>
+    <string name="already_have_account">¿ya tienes cuenta? inicia sesión</string>
+
+    <!-- Profile & Settings -->
+    <string name="edit_profile">Editar Perfil</string>
+    <string name="dashboard">Panel</string>
+    <string name="settings">Ajustes</string>
+    <string name="legal_and_policies">LEGAL Y POLÍTICAS</string>
+    <string name="update_email">Actualizar Correo</string>
+    <string name="update_password">Actualizar Contraseña</string>
+    <string name="update_credentials">Actualizar Credenciales</string>
+    <string name="logout">Cerrar Sesión</string>
+    <string name="delete_account">Eliminar Cuenta</string>
+    <string name="delete_account_dialog_title">¿Eliminar Cuenta?</string>
+    <string name="delete_account_dialog_message">Esto eliminará permanentemente tu cuenta, tu perfil, tus salas y todos los recuerdos asociados. Esta acción no se puede deshacer.</string>
+    <string name="delete_permanently">Eliminar Permanentemente</string>
+    <string name="ignored_rooms">Salas Ignoradas</string>
+    <string name="no_rooms_ignored">No hay salas ignoradas</string>
+
+    <!-- Safety & UGC Reporting -->
+    <string name="report_content">Reportar Contenido</string>
+    <string name="block_user">Bloquear Usuario</string>
+    <string name="report_success">Gracias. El reporte ha sido enviado para su revisión.</string>
+    <string name="block_success">El usuario ha sido bloqueado.</string>
+
+    <!-- Hallway & Room Management -->
+    <string name="explore">Explorar</string>
+    <string name="all_memories">Todos los Recuerdos</string>
+    <string name="time_capsules">Cápsulas del Tiempo</string>
+    <string name="create_room">Crear Sala</string>
+    <string name="search_hint">Buscar salas, artistas, recuerdos…</string>
+
+    <!-- Extra Screen & Dialog Strings -->
+    <string name="open_source_licenses">Licencias de código abierto</string>
+    <string name="recent_activity">Actividad reciente</string>
+    <string name="no_recent_activity">Sin actividad reciente</string>
+    <string name="account_settings">Configuración de la cuenta</string>
+    <string name="upload_to_current_room">Subir a la sala actual</string>
+    <string name="this_time_capsule_is_locked">Esta cápsula del tiempo está bloqueada</string>
+    <string name="listen_on_soundcloud">Escuchar en SoundCloud</string>
+    <string name="saved">Guardado</string>
+    <string name="remove">Eliminar</string>
+</resources>

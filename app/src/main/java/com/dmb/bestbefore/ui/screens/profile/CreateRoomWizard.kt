@@ -1161,7 +1161,7 @@ fun CalendarEventDropdown(viewModel: ProfileViewModel) {
                     onDismissRequest = { expanded = false },
                     modifier = Modifier.background(CardDarkBg).fillMaxWidth(0.85f)
                 ) {
-                    val dateFormat = java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault())
+                    val dateFormat = remember { java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault()) }
                     events.forEach { event ->
                         DropdownMenuItem(
                             text = {
@@ -2095,6 +2095,7 @@ fun TimeCapsuleListScreen(
                  )
              }
              
+             val unlockDateFormat = remember { java.text.SimpleDateFormat("MMM dd HH:mm", java.util.Locale.getDefault()) }
              LazyColumn(
                  contentPadding = PaddingValues(vertical = 16.dp),
                  verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -2110,7 +2111,7 @@ fun TimeCapsuleListScreen(
                          ) {
                              Column {
                                  Text(room.roomName, color = Color.White, fontWeight = FontWeight.Bold)
-                                 Text("Unlocks: ${java.text.SimpleDateFormat("MMM dd HH:mm").format(java.util.Date(room.unlockTime))}", color = Color.Gray, fontSize = 12.sp)
+                                 Text("Unlocks: ${unlockDateFormat.format(java.util.Date(room.unlockTime))}", color = Color.Gray, fontSize = 12.sp)
                              }
                          }
                      }

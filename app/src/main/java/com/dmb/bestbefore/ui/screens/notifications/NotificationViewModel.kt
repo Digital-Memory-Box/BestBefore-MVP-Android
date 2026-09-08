@@ -10,10 +10,11 @@ import com.dmb.bestbefore.utils.AppErrorUtils
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-class NotificationViewModel(application: Application) : AndroidViewModel(application) {
-
-    private val notificationRepository = NotificationRepository(application)
-    private val roomRepository = RoomRepository()
+class NotificationViewModel @JvmOverloads constructor(
+    application: Application,
+    private val notificationRepository: NotificationRepository = NotificationRepository(application),
+    private val roomRepository: RoomRepository = RoomRepository()
+) : AndroidViewModel(application) {
 
     val notifications: StateFlow<List<AppNotification>> = notificationRepository.notifications
 
@@ -93,6 +94,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
                     removeNotification(notificationId)
                 }
                 result.exceptionOrNull()?.message?.contains("404") == true -> {
+                    // 404 = request no longer pending (stale notification); dismiss it
                     android.widget.Toast.makeText(getApplication(), "This request is no longer pending.", android.widget.Toast.LENGTH_SHORT).show()
                     removeNotification(notificationId)
                 }

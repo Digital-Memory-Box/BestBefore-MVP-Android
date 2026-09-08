@@ -1,6 +1,10 @@
 package com.dmb.bestbefore.ui.navigation
 
 import android.app.Activity
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -15,7 +19,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dmb.bestbefore.ui.screens.login.LoginScreen
 import com.dmb.bestbefore.ui.screens.opening.OpeningScreen
 import com.dmb.bestbefore.ui.screens.profile.ProfileScreen
-import com.dmb.bestbefore.ui.screens.room.RoomScreen
 import com.dmb.bestbefore.ui.screens.signup.SignupScreen
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -57,14 +60,38 @@ fun AppNavigation() {
 
     NavHost(
         navController = navController,
-        startDestination = Routes.OPENING
+        startDestination = Routes.OPENING,
+        enterTransition = {
+            slideIntoContainer(
+                AnimatedContentTransitionScope.SlideDirection.Start,
+                tween(350)
+            ) + fadeIn(tween(350))
+        },
+        exitTransition = {
+            slideOutOfContainer(
+                AnimatedContentTransitionScope.SlideDirection.Start,
+                tween(350)
+            ) + fadeOut(tween(300))
+        },
+        popEnterTransition = {
+            slideIntoContainer(
+                AnimatedContentTransitionScope.SlideDirection.End,
+                tween(350)
+            ) + fadeIn(tween(350))
+        },
+        popExitTransition = {
+            slideOutOfContainer(
+                AnimatedContentTransitionScope.SlideDirection.End,
+                tween(350)
+            ) + fadeOut(tween(300))
+        }
     ) {
         composable(Routes.OPENING) {
             val context = androidx.compose.ui.platform.LocalContext.current
             
             // Auto-login: only if Firebase user exists, email is verified, AND backend sync completed
             LaunchedEffect(Unit) {
-                val sessionManager = com.dmb.bestbefore.data.local.SessionManager(context)
+                val sessionManager = com.dmb.bestbefore.data.local.SessionManager.getInstance(context)
                 val firebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
                 val hasBackendSession = sessionManager.getUserId() != null
 
@@ -198,7 +225,14 @@ fun AppNavigation() {
 
         composable("room_detail/{roomId}") { backStackEntry ->
             val roomId = backStackEntry.arguments?.getString("roomId") ?: ""
-            val profileViewModel: com.dmb.bestbefore.ui.screens.profile.ProfileViewModel = viewModel()
+            val parentEntry = remember(backStackEntry) {
+                runCatching { navController.getBackStackEntry(Routes.PROFILE) }.getOrNull()
+            }
+            val profileViewModel: com.dmb.bestbefore.ui.screens.profile.ProfileViewModel = if (parentEntry != null) {
+                viewModel(parentEntry)
+            } else {
+                viewModel()
+            }
             val context = androidx.compose.ui.platform.LocalContext.current
             
             val multiplePhotoPickerLauncher = rememberLauncherForActivityResult(
@@ -271,16 +305,5 @@ fun AppNavigation() {
             }
         }
 
-        composable(Routes.ROOM) { backStackEntry ->
-            val roomId = backStackEntry.arguments?.getString("roomId") ?: ""
-            val roomName = backStackEntry.arguments?.getString("roomName") ?: ""
-            RoomScreen(
-                roomId = roomId,
-                roomName = roomName,
-                onNavigateBack = {
-                    navController.popBackStack()
-                }
-            )
-        }
     }
 }

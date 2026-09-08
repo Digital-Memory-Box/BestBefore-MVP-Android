@@ -12,6 +12,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -38,6 +39,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlin.math.absoluteValue
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -50,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.activity.compose.BackHandler
 import com.dmb.bestbefore.ui.screens.notifications.NotificationViewModel
 import com.dmb.bestbefore.data.models.CalendarEvent
 import com.dmb.bestbefore.data.models.HallwayCard
@@ -62,7 +66,6 @@ import androidx.core.graphics.toColorInt
 import com.dmb.bestbefore.ui.components.VideoPlayer
 import kotlin.math.absoluteValue
 import kotlinx.coroutines.isActive
-
 
 // ═══════════════════════════════════════════════════════════════════════════
 // BB-UI-04 → BB-UI-10: Hallway Screen
@@ -150,7 +153,7 @@ fun HallwayScreen(
         // Full-screen animated background — color animates to match the active room's theme
         AnimatedBackgroundView(theme = activeCardTheme)
 
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
 
             when (currentTab) {
                 // ═════════════════════════════════════════════════════════
@@ -236,6 +239,7 @@ fun HallwayScreen(
                             onConnectRoom = viewModel::connectRoom,
                             notificationCount = notificationCount.size,
                             onDeleteMemory = { roomId, memoryId -> viewModel.deleteMemory(roomId, memoryId) },
+                            onDeleteMusic = { card -> viewModel.removeBackgroundMusic(card.id) },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -354,7 +358,7 @@ private fun RoomingContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp)
-                    .padding(top = 25.dp),
+                    .padding(top = 32.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -643,14 +647,6 @@ private fun RoomingCard(
             )
             .clickable { onClick() }
     ) {
-        // Gradient or Photo background
-        val searchKeyword = card.title.lowercase()
-            .replace("'s", "")
-            .split(" ")
-            .filter { it.length > 3 && it !in listOf("room", "hallway", "best", "before", "collection") }
-            .take(2)
-            .joinToString(",")
-            .takeIf { it.isNotBlank() } ?: "abstract"
         // Normalise photo URL: HTTP → use as-is; data:image → use as-is;
         // raw base64 (no prefix) → prepend data:image/jpeg;base64,;
         // anything else → fall back to placeholder.
@@ -666,16 +662,28 @@ private fun RoomingCard(
         }
         val rawUrl = if (!card.imageUrl.isNullOrBlank()) card.imageUrl
                      else card.photos.firstOrNull()?.url
-        val roomImage = normalizePhotoUrl(rawUrl) ?: "https://loremflickr.com/640/480/$searchKeyword"
+        val roomImage = normalizePhotoUrl(rawUrl)
 
         Box(modifier = Modifier.fillMaxSize()) {
-            coil.compose.AsyncImage(
-                model = roomImage,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                alpha = 0.6f
-            )
+            if (roomImage != null) {
+                coil.compose.AsyncImage(
+                    model = roomImage,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    alpha = 0.6f
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(themeColor.copy(alpha = 0.35f), Color(0xFF101010))
+                            )
+                        )
+                )
+            }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -905,6 +913,7 @@ private fun HallwayContent(
     onConnectRoom: (HallwayCard) -> Unit = {},
     notificationCount: Int,
     onDeleteMemory: (String, String) -> Unit = { _, _ -> },
+    onDeleteMusic: (HallwayCard) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = LocalBestBeforeColors.current
@@ -931,6 +940,8 @@ private fun HallwayContent(
             similarModeSourceName = similarModeSource?.title,
             onExitSimilarMode = onExitSimilarMode
         )
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         if (isSemanticSearching) {
             // Show a spinner while semantic search is thinking
@@ -973,15 +984,11 @@ private fun HallwayContent(
                 onPagerPageChanged(pagerState.currentPage)
             }
 
-            // Keep carousel geometry stable but bias right inset when orb is visible.
-            val carouselPadding = PaddingValues(
-                start = 40.dp,
-                end = if (isOrbMenuVisible) 84.dp else 40.dp
-            )
+            // Keep carousel perfectly centered on the X-axis
+            val carouselPadding = PaddingValues(horizontal = 40.dp)
             val configuration = LocalConfiguration.current
             val cardHeight = (configuration.screenHeightDp * 0.35f).dp.coerceAtMost(340.dp)
             val cardWidthFraction = 0.9f
-            val cdButtonEndPadding = if (isOrbMenuVisible) 68.dp else 60.dp
 
             Box(
                 modifier = Modifier
@@ -1006,7 +1013,7 @@ private fun HallwayContent(
                             textAlign = TextAlign.Center,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(vertical = 8.dp)
+                            modifier = Modifier.padding(vertical = 12.dp)
                         )
                         if (!activeCard.location.isNullOrEmpty()) {
                             Row(
@@ -1026,6 +1033,7 @@ private fun HallwayContent(
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                         }
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
 
                     // ── Carousel ────────────────────────────────────
@@ -1038,27 +1046,33 @@ private fun HallwayContent(
                         pageSpacing = 8.dp
                     ) { page ->
                         val card = cards[page]
-                        val fraction = pagerState.currentPageOffsetFraction
-                        val pageOffset = ((pagerState.currentPage - page) + (if (fraction.isNaN()) 0f else fraction)).absoluteValue
                         val parsedColor = parseThemeColor(card.themeColorHex)
 
-                        // BB-UI-05: Glow dims as card moves off-center
-                        val glowAlphaRaw = 1f - (pageOffset * 1.5f).coerceIn(0f, 1f)
-                        val glowAlpha = if (glowAlphaRaw.isNaN()) 1f else glowAlphaRaw
-
                         Box(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .graphicsLayer {
+                                    val fraction = pagerState.currentPageOffsetFraction
+                                    val pageOffset = ((pagerState.currentPage - page) + (if (fraction.isNaN()) 0f else fraction)).absoluteValue
+                                    
+                                    // BB-UI-05: Glow dims as card moves off-center
+                                    val glowAlphaRaw = 1f - (pageOffset * 1.5f).coerceIn(0f, 1f)
+                                    val glowAlpha = if (glowAlphaRaw.isNaN()) 1f else glowAlphaRaw
+                                    
+                                    alpha = glowAlpha
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             HallwayActiveCard(
                                 card = card,
-                                glowAlpha = glowAlpha,
+                                glowAlpha = 1f, // Glow alpha is now applied by graphicsLayer above
                                 themeColor = parsedColor,
                                 accentColor = colors.primary,
                                 currentImageIndex = cardImageIndices[card.id] ?: 0,
                                 onImageIndexChange = { newIndex -> onImageIndexChange(card.id, newIndex) },
                                 onOpenRoom = { onOpenRoom(card) },
                                 onDeleteMemory = onDeleteMemory,
+                                onDeleteMusic = { onDeleteMusic(card) },
                                 cardHeight = cardHeight,
                                 widthFraction = cardWidthFraction
                             )
@@ -1066,7 +1080,7 @@ private fun HallwayContent(
                     }
 
                     // ── Card Details — fills remaining space between card and nav ──
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                         ActiveCardDetails(
                             card = activeCard,
@@ -1082,23 +1096,6 @@ private fun HallwayContent(
                             isSimilarMode = similarModeSource != null,
                             onConnectRoom = { onConnectRoom(activeCard) }
                         )
-                    }
-                }
-
-                // ── CD Button ───────────────────────────────────────
-                if (!activeCard.backgroundMusic.isNullOrBlank()) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(end = cdButtonEndPadding, top = 46.dp)
-                            .size(44.dp)
-                            .background(Color.Black.copy(alpha = 0.34f), CircleShape)
-                            .border(1.dp, themeColor.copy(alpha = 0.45f), CircleShape)
-                            .clip(CircleShape)
-                            .clickable { onShowSoundCloud() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CdGlyph(size = 24.dp)
                     }
                 }
             }
@@ -1119,6 +1116,7 @@ fun HallwayActiveCard(
     onImageIndexChange: (Int) -> Unit,
     onOpenRoom: () -> Unit,
     onDeleteMemory: (String, String) -> Unit = { _, _ -> },
+    onDeleteMusic: () -> Unit = {},
     cardHeight: Dp = 350.dp,
     widthFraction: Float = 0.9f
 ) {
@@ -1311,14 +1309,14 @@ fun HallwayActiveCard(
                     .take(2)
                     .joinToString(",")
                     .takeIf { it.isNotBlank() }
-                val searchKeyword = tagKeyword ?: nameKeyword ?: "abstract"
-
-                coil.compose.AsyncImage(
-                    model = "https://loremflickr.com/640/800/$searchKeyword",
-                    contentDescription = "Placeholder",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                    alpha = 0.6f
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(themeColor.copy(alpha = 0.35f), Color(0xFF151515))
+                            )
+                        )
                 )
             }
             
@@ -1338,6 +1336,28 @@ fun HallwayActiveCard(
                         )
                     )
             )
+
+            // Delete Music Button on the top right of the card
+            if (!card.backgroundMusic.isNullOrBlank()) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(14.dp)
+                        .size(36.dp)
+                        .background(Color.Black.copy(alpha = 0.65f), CircleShape)
+                        .border(1.dp, Color.Red.copy(alpha = 0.7f), CircleShape)
+                        .clip(CircleShape)
+                        .clickable { onDeleteMusic() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.MusicOff,
+                        contentDescription = "Remove background music",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -1367,124 +1387,116 @@ fun ActiveCardDetails(
 
     Box(
         modifier = Modifier
-            .fillMaxWidth()
+            .fillMaxSize()
             .padding(horizontal = 24.dp)
+            .padding(bottom = 12.dp)
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
+            verticalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxSize()
         ) {
-            // ── Owner Row + Tags ────────────────────────────────────
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            // ── Top content group ────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // ── Owner Row + Tags ────────────────────────────────────
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    ProfileAvatar(
-                        imageUri = card.ownerProfilePic,
-                        size = 44.dp,
-                        accentColor = Color.White,
-                        onClick = { card.ownerId?.let { onNavigateToCreatorProfile(it) } }
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ProfileAvatar(
+                            imageUri = card.ownerProfilePic,
+                            size = 44.dp,
+                            accentColor = Color.White,
+                            onClick = { card.ownerId?.let { onNavigateToCreatorProfile(it) } }
+                        )
 
-                    val nameText = (card.ownerName?.takeIf { it.isNotBlank() }
-                        ?: card.ownerEmail?.substringBefore("@")
-                        ?: "artist")
-                    Text(
-                        text = nameText,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
+                        val nameText = (card.ownerName?.takeIf { it.isNotBlank() }
+                            ?: card.ownerEmail?.substringBefore("@")
+                            ?: "artist")
+                        Text(
+                            text = nameText,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
 
-                    if (isCollabRoom) {
-                        Box(
-                            modifier = Modifier
-                                .background(themeColor.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
-                                .border(1.dp, themeColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                                .clickable { onToggleCollaborators() }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = if (showAllCollaborators) "show less" else "+${card.collaboratorCount} more",
-                                color = themeColor,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            )
+                        if (isCollabRoom) {
+                            Box(
+                                modifier = Modifier
+                                    .background(themeColor.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                                    .border(1.dp, themeColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                    .clickable { onToggleCollaborators() }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = if (showAllCollaborators) "show less" else "+${card.collaboratorCount} more",
+                                    color = themeColor,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (!isCollabRoom && hasTags) {
+                            card.tags.take(2).forEach { tag -> TagChip("#$tag", themeColor) }
+                            if (card.tags.size > 2) TagChip("+", themeColor)
+                        } else if (isCollabRoom && hasTags) {
+                            TagChip("+ tags", themeColor)
                         }
                     }
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (!isCollabRoom && hasTags) {
-                        card.tags.take(2).forEach { tag -> TagChip("#$tag", themeColor) }
-                        if (card.tags.size > 2) TagChip("+", themeColor)
-                    } else if (isCollabRoom && hasTags) {
-                        TagChip("+ tags", themeColor)
-                    }
-                }
-            }
-
-            // ── Description ─────────────────────────────────────────
-            val descMaxLines = if (hasLocation || isCollabRoom) 1 else 2
-
-            Text(
-                text = if (hasDescription) card.description else "No description provided.",
-                color = if (hasDescription) colors.textPrimary.copy(alpha = 0.7f) else colors.textSecondary,
-                fontSize = 14.sp,
-                maxLines = descMaxLines,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            val isLocked = com.dmb.bestbefore.utils.DateUtils.isLocked(card.unlockDate)
-            if (false && isLocked) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(top = 4.dp)
+                // ── Description ─────────────────────────────────────────
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 40.dp, max = 72.dp),
+                    contentAlignment = Alignment.TopStart
                 ) {
-                    Text("🔒", fontSize = 12.sp)
                     Text(
-                        text = "Unlocks in: ${com.dmb.bestbefore.utils.DateUtils.formatCountdown(card.unlockDate)}",
-                        color = Color(0xFFFF9800),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
+                        text = if (hasDescription) card.description else "No description provided.",
+                        color = if (hasDescription) colors.textPrimary.copy(alpha = 0.7f) else colors.textSecondary,
+                        fontSize = 14.sp,
+                        lineHeight = 18.sp,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
 
-            // ── Actions Row ─────────────────────────────────────────
+            // ── Actions Row (Fixed height & lower in place across all cards) ────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp),
+                    .height(36.dp)
+                    .padding(top = 6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Left Side: See All (Only shows if there is extra content)
-                if (hasDescription || (hasTags && card.tags.size > 2)) {
-                    Box(
-                        modifier = Modifier
-                            .background(accentColor.copy(alpha = 0.18f), RoundedCornerShape(20.dp))
-                            .border(1.dp, accentColor.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
-                            .clickable { onSeeAllClick() }
-                            .padding(horizontal = 14.dp, vertical = 6.dp)
-                    ) {
-                        Text("See All", color = accentColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    }
-                } else {
-                    Spacer(modifier = Modifier.width(8.dp)) // Keeps right-side elements aligned
+                // Left Side: See All Button
+                Box(
+                    modifier = Modifier
+                        .background(accentColor.copy(alpha = 0.18f), RoundedCornerShape(20.dp))
+                        .border(1.dp, accentColor.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
+                        .clickable { onSeeAllClick() }
+                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                ) {
+                    Text("See All", color = accentColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
 
-                // Right Side: Similar Rooms / Connection (ALWAYS SHOWS)
+                // Right Side: Similar Rooms / Connection
                 if (!isSimilarMode) {
                     Row(
-                        modifier = Modifier.clickable { onShowSimilarRooms() }.padding(vertical = 4.dp),
+                        modifier = Modifier
+                            .clickable { onShowSimilarRooms() }
+                            .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
@@ -1583,7 +1595,7 @@ fun HallwayHeader(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp)
-            .padding(top = 25.dp),
+            .padding(top = 32.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1617,29 +1629,27 @@ fun HallwayHeader(
     }
 }
 
-// ── Search Bar + Filter Tags ────────────────────────────────────────────
+// ── Search Bar ──────────────────────────────────────────────────────────
 @Composable
 fun SearchBarAndTags(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
-    selectedTag: String?,
-    onTagSelected: (String?) -> Unit,
-    tags: List<String>,
+    selectedTag: String? = null,
+    onTagSelected: (String?) -> Unit = {},
+    tags: List<String> = emptyList(),
     similarModeSourceName: String? = null,
     onExitSimilarMode: () -> Unit = {}
 ) {
     val colors = LocalBestBeforeColors.current
-    val filterTags = listOf("trip", "music", "science", "party", "family")
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(top = 15.dp)
-                .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .padding(top = 12.dp, bottom = 16.dp)
+            .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
             Icon(Icons.Default.Search, null, tint = colors.textSecondary, modifier = Modifier.size(20.dp))
             Spacer(modifier = Modifier.width(8.dp))
 
@@ -1685,54 +1695,7 @@ fun SearchBarAndTags(
                 }
             )
         }
-
-        LazyRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .background(
-                            if (selectedTag == null) colors.primary
-                            else Color.White.copy(alpha = 0.1f),
-                            CircleShape
-                        )
-                        .clickable { onTagSelected(null) }
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        "All",
-                        color = colors.textPrimary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-            items(filterTags) { tag ->
-                Box(
-                    modifier = Modifier
-                        .background(
-                            if (selectedTag == tag) colors.primary
-                            else Color.White.copy(alpha = 0.1f),
-                            CircleShape
-                        )
-                        .clickable { onTagSelected(tag) }
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        "#$tag",
-                        color = colors.textPrimary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        }
     }
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // BB-UI-10: Expanded Description Overlay (See All)
@@ -1853,19 +1816,31 @@ private fun ExpandedDescriptionOverlay(
                     .takeIf { it.isNotBlank() } ?: "abstract"
                 val rawMediaUrl = card.photos.firstOrNull()?.url
                 val mediaUrl = when {
-                    rawMediaUrl == null -> "https://loremflickr.com/640/800/$searchKeyword"
+                    rawMediaUrl == null -> null
                     rawMediaUrl.startsWith("http") || rawMediaUrl.startsWith("data:image") -> rawMediaUrl
                     rawMediaUrl.startsWith("data:") && rawMediaUrl.contains("base64,") ->
                         "data:image/jpeg;base64," + rawMediaUrl.substringAfter("base64,")
                     rawMediaUrl.length > 100 -> "data:image/jpeg;base64,$rawMediaUrl"
-                    else -> "https://loremflickr.com/640/800/$searchKeyword"
+                    else -> null
                 }
-                coil.compose.AsyncImage(
-                    model = mediaUrl,
-                    contentDescription = card.title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                )
+                if (mediaUrl != null) {
+                    coil.compose.AsyncImage(
+                        model = mediaUrl,
+                        contentDescription = card.title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color(0xFF2C2C2E), Color(0xFF141416))
+                                )
+                            )
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(22.dp))

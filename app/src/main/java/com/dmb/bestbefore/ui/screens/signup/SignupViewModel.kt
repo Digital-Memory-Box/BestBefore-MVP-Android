@@ -16,7 +16,12 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
 import android.util.Log
 
-class SignupViewModel(application: Application) : AndroidViewModel(application) {
+class SignupViewModel @JvmOverloads constructor(
+    application: Application,
+    private val repository: AuthRepository = AuthRepository(application),
+    private val sessionManager: SessionManager = SessionManager.getInstance(application),
+    private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance()
+) : AndroidViewModel(application) {
 
     private val _name = MutableStateFlow("")
     val name: StateFlow<String> = _name.asStateFlow()
@@ -41,10 +46,6 @@ class SignupViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _isVerificationSent = MutableStateFlow(false)
     val isVerificationSent: StateFlow<Boolean> = _isVerificationSent.asStateFlow()
-
-    private val repository = AuthRepository(application)
-    private val sessionManager = SessionManager(application)
-    private val firebaseAuth = FirebaseAuth.getInstance()
 
     fun updateName(newName: String) {
         _name.value = newName

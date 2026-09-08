@@ -24,7 +24,7 @@ class MusicPlayerService : Service(), MediaPlayer.OnPreparedListener, MediaPlaye
     private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
 
     companion object {
-        const val NOTIFICATION_ID = 1001
+        const val NOTIFICATION_ID = 2001
         const val CHANNEL_ID = "music_playback_channel"
 
         const val ACTION_PLAY = "com.dmb.bestbefore.action.PLAY"
@@ -44,21 +44,27 @@ class MusicPlayerService : Service(), MediaPlayer.OnPreparedListener, MediaPlaye
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        // Immediately start foreground to satisfy the Android OS contract (must be called within 5 seconds of startForegroundService)
+        startForegroundCompat(buildNotification(false, "BestBefore Music"))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
+        if (intent == null) {
+            return START_NOT_STICKY
+        }
+
+        when (intent.action) {
             ACTION_PLAY -> {
                 val trackId = intent.getLongExtra(EXTRA_TRACK_ID, 0L)
                 val title = intent.getStringExtra(EXTRA_TRACK_TITLE) ?: "Unknown"
                 val artist = intent.getStringExtra(EXTRA_TRACK_ARTIST) ?: "Unknown"
                 val streamUrlPath = intent.getStringExtra(EXTRA_TRACK_STREAM_URL)
 
-                if (trackId != 0L && streamUrlPath != null) {
-                    currentTrackId = trackId
-                    currentTitle = title
-                    currentArtist = artist
+                currentTrackId = trackId
+                currentTitle = title
+                currentArtist = artist
 
+                if (trackId != 0L && !streamUrlPath.isNullOrBlank()) {
                     val fullUrl = if (streamUrlPath.startsWith("http", ignoreCase = true)) {
                         streamUrlPath
                     } else {
@@ -66,21 +72,33 @@ class MusicPlayerService : Service(), MediaPlayer.OnPreparedListener, MediaPlaye
                         "$baseUrl$streamUrlPath"
                     }
 
+                    startForegroundCompat(buildNotification(true, "Buffering..."))
                     startPlayback(fullUrl)
+                } else {
+                    stopPlayback()
+                    stopSelf()
                 }
             }
             ACTION_PAUSE -> {
                 if (mediaPlayer?.isPlaying == true) {
-                    mediaPlayer?.pause()
+                    try {
+                        mediaPlayer?.pause()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                     MusicPlayerManager.onPlaybackPaused()
                     updateNotification(false)
                 }
             }
             ACTION_RESUME -> {
-                if (mediaPlayer != null && !mediaPlayer!!.isPlaying) {
-                    mediaPlayer?.start()
-                    MusicPlayerManager.onPlaybackStarted()
-                    updateNotification(true)
+                if (mediaPlayer != null && mediaPlayer?.isPlaying == false) {
+                    try {
+                        mediaPlayer?.start()
+                        MusicPlayerManager.onPlaybackStarted()
+                        updateNotification(true)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 }
             }
             ACTION_STOP -> {
@@ -97,51 +115,63 @@ class MusicPlayerService : Service(), MediaPlayer.OnPreparedListener, MediaPlaye
         return START_NOT_STICKY
     }
 
-    private fun startPlayback(url: String) {
-        mediaPlayer?.release()
-        
-        mediaPlayer = MediaPlayer().apply {
-            setWakeMode(applicationContext, android.os.PowerManager.PARTIAL_WAKE_LOCK)
-            
-            if (wifiLock == null) {
-                val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
-                wifiLock = wifiManager.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "BestBeforeMusicLock")
-            }
-            if (wifiLock?.isHeld == false) {
-                wifiLock?.acquire()
-            }
-            
-            setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .build()
+    private fun startForegroundCompat(notification: android.app.Notification) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
             )
-            try {
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
+    }
+
+    private fun startPlayback(url: String) {
+        try {
+            mediaPlayer?.release()
+            mediaPlayer = null
+
+            mediaPlayer = MediaPlayer().apply {
+                setWakeMode(applicationContext, android.os.PowerManager.PARTIAL_WAKE_LOCK)
+
+                if (wifiLock == null) {
+                    val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+                    wifiLock = wifiManager?.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "BestBeforeMusicLock")
+                }
+                if (wifiLock?.isHeld == false) {
+                    wifiLock?.acquire()
+                }
+
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .build()
+                )
                 setDataSource(url)
                 setOnPreparedListener(this@MusicPlayerService)
                 setOnCompletionListener(this@MusicPlayerService)
                 setOnErrorListener(this@MusicPlayerService)
                 prepareAsync()
-            } catch (e: Exception) {
-                e.printStackTrace()
-                MusicPlayerManager.onPlaybackStopped()
-                stopSelf()
             }
-        }
-        
-        // Show indeterminate loading notification initially
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, buildNotification(true, "Buffering..."), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
-        } else {
-            startForeground(NOTIFICATION_ID, buildNotification(true, "Buffering..."))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            stopPlayback()
+            stopSelf()
         }
     }
 
     override fun onPrepared(mp: MediaPlayer?) {
-        mp?.start()
-        MusicPlayerManager.onPlaybackStarted()
-        updateNotification(true)
+        try {
+            mp?.start()
+            MusicPlayerManager.onPlaybackStarted()
+            updateNotification(true)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            stopPlayback()
+            stopSelf()
+        }
     }
 
     override fun onCompletion(mp: MediaPlayer?) {
@@ -149,25 +179,42 @@ class MusicPlayerService : Service(), MediaPlayer.OnPreparedListener, MediaPlaye
     }
 
     override fun onError(mp: MediaPlayer?, what: Int, extra: Int): Boolean {
-        MusicPlayerManager.onPlaybackStopped()
+        stopPlayback()
         stopSelf()
         return true
     }
 
     private fun stopPlayback() {
-        mediaPlayer?.stop()
-        mediaPlayer?.release()
+        try {
+            mediaPlayer?.stop()
+        } catch (e: Exception) {
+            // Ignore if not initialized/playing
+        }
+        try {
+            mediaPlayer?.release()
+        } catch (e: Exception) {
+            // Ignore
+        }
         mediaPlayer = null
         if (wifiLock?.isHeld == true) {
-            wifiLock?.release()
+            try {
+                wifiLock?.release()
+            } catch (e: Exception) {
+                // Ignore
+            }
         }
         MusicPlayerManager.onPlaybackStopped()
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        try {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } catch (e: Exception) {
+            // Ignored if service is not in foreground
+        }
     }
 
     private fun updateNotification(isPlaying: Boolean) {
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(NOTIFICATION_ID, buildNotification(isPlaying, currentTitle))
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        val title = if (currentTitle.isNotBlank()) currentTitle else "BestBefore Music"
+        notificationManager?.notify(NOTIFICATION_ID, buildNotification(isPlaying, title))
     }
 
     private fun buildNotification(isPlaying: Boolean, titleText: String): android.app.Notification {
@@ -202,9 +249,11 @@ class MusicPlayerService : Service(), MediaPlayer.OnPreparedListener, MediaPlaye
         }
         val mainPending = PendingIntent.getActivity(this, 0, mainIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
+        val artistText = if (currentArtist.isNotBlank()) currentArtist else "Playing music"
+
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(titleText)
-            .setContentText(currentArtist)
+            .setContentText(artistText)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentIntent(mainPending)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)

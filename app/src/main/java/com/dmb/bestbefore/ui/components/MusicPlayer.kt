@@ -25,7 +25,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 
 @OptIn(UnstableApi::class)
@@ -166,7 +166,7 @@ fun MusicPlayer(
                     onClick = { exoPlayer.seekTo(currentPosition - 5000) },
                     modifier = Modifier.size(48.dp)
                 ) {
-                    Icon(Icons.Default.Replay5, null, tint = Color.White)
+                    Icon(Icons.Default.Replay5, contentDescription = "Replay 5 seconds", tint = Color.White)
                 }
 
                 Spacer(modifier = Modifier.width(16.dp))
@@ -183,7 +183,7 @@ fun MusicPlayer(
                 ) {
                     Icon(
                         imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = null,
+                        contentDescription = if (isPlaying) "Pause" else "Play",
                         tint = Color.Black,
                         modifier = Modifier.size(32.dp)
                     )
@@ -195,7 +195,7 @@ fun MusicPlayer(
                     onClick = { exoPlayer.seekTo(currentPosition + 5000) },
                     modifier = Modifier.size(48.dp)
                 ) {
-                    Icon(Icons.Default.Forward5, null, tint = Color.White)
+                    Icon(Icons.Default.Forward5, contentDescription = "Forward 5 seconds", tint = Color.White)
                 }
             }
         }

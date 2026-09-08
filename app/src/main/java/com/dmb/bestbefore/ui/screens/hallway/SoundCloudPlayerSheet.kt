@@ -145,10 +145,10 @@ fun SoundCloudPlayerSheet(
                                 horizontalArrangement = Arrangement.Center,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
+                                Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = Color.White)
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Listen on SoundCloud",
+                                    text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.listen_on_soundcloud),
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
                                     fontSize = 16.sp

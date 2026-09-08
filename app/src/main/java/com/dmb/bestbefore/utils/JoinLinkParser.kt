@@ -3,7 +3,7 @@ package com.dmb.bestbefore.utils
 import android.net.Uri
 
 object JoinLinkParser {
-    private const val APP_LINK_HOST = "bestbefore.up.railway.app"
+    private val APP_LINK_HOST = com.dmb.bestbefore.BuildConfig.APP_LINK_HOST
 
     data class ParsedJoinLink(
         val roomId: String? = null,

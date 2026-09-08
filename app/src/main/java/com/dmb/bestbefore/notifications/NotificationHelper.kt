@@ -19,7 +19,6 @@ class NotificationHelper(private val context: Context) {
     companion object {
         const val CHANNEL_ID = "time_capsule_channel"
         const val CHANNEL_NAME = "Time Capsule Notifications"
-        const val NOTIFICATION_ID = 1001
     }
 
     init {
@@ -40,12 +39,6 @@ class NotificationHelper(private val context: Context) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
     }
-
-    fun scheduleTimeCapsuleNotification() {
-        // Stub: WorkManager removed, no background scheduling
-    }
-
-
 
     fun showTimeCapsuleNotification(roomId: String, roomName: String) {
         if (ActivityCompat.checkSelfPermission(
@@ -80,7 +73,8 @@ class NotificationHelper(private val context: Context) {
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .build()
 
-        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+        val notificationId = roomId.hashCode().and(0x7FFFFFFF) % 10000 + 3000
+        NotificationManagerCompat.from(context).notify(notificationId, notification)
     }
 }
 

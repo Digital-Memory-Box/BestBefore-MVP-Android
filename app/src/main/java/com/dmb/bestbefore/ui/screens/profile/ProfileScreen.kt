@@ -58,6 +58,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import com.dmb.bestbefore.ui.screens.hallway.HallwayScreen
 import com.dmb.bestbefore.ui.theme.LocalBestBeforeColors
 import com.dmb.bestbefore.utils.JoinLinkParser
@@ -175,39 +176,26 @@ fun ProfileScreen(
     LaunchedEffect(Unit) {
         viewModel.initDatabase(context)
         
-        viewModel.onRequestNotificationPermission = {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-        viewModel.onRequestCalendarPermission = {
-            calendarPermissionLauncher.launch(Manifest.permission.WRITE_CALENDAR)
-        }
-        viewModel.onRequestReadCalendarPermission = {
-            readCalendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
-        }
-        
-        viewModel.onRequestCameraPermission = {
-            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-        }
-        
-        viewModel.onRequestGalleryPermission = {
-            val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                Manifest.permission.READ_MEDIA_IMAGES
-            } else {
-                Manifest.permission.READ_EXTERNAL_STORAGE
-            }
-            galleryPermissionLauncher.launch(permission)
-        }
-
-        viewModel.onRequestFilePermission = {
-            val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                Manifest.permission.READ_MEDIA_IMAGES
-            } else {
-                Manifest.permission.READ_EXTERNAL_STORAGE
-            }
-            filePermissionLauncher.launch(permission)
-        }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.permissionRequests.collect { request ->
+            when (request) {
+                is ProfileViewModel.PermissionRequest.Notification -> notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                is ProfileViewModel.PermissionRequest.Calendar -> calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
+                is ProfileViewModel.PermissionRequest.ReadCalendar -> readCalendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
+                is ProfileViewModel.PermissionRequest.Camera -> cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                is ProfileViewModel.PermissionRequest.Gallery -> {
+                    val p = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
+                    galleryPermissionLauncher.launch(p)
+                }
+                is ProfileViewModel.PermissionRequest.File -> {
+                    val p = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
+                    filePermissionLauncher.launch(p)
+                }
+            }
+        }
+    }
     // Media Picker Launchers
     val multiplePhotoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
@@ -389,6 +377,7 @@ fun ProfileScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black)
+                    .statusBarsPadding()
                     .padding(16.dp)
             ) {
                 // Header
@@ -415,16 +404,40 @@ fun ProfileScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(30) { index ->
-                        coil.compose.AsyncImage(
-                            model = "https://picsum.photos/seed/${index}/200/300",
-                            contentDescription = "Memory $index",
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                            modifier = Modifier
-                                .aspectRatio(0.7f)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color.DarkGray)
-                        )
+                    val allPhotos = createdRooms.flatMap { it.photos }.mapNotNull { it.url.takeIf { u -> u.isNotBlank() } }
+                    if (allPhotos.isNotEmpty()) {
+                        items(allPhotos.size) { index ->
+                            coil.compose.AsyncImage(
+                                model = allPhotos[index],
+                                contentDescription = "Memory $index",
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                modifier = Modifier
+                                    .aspectRatio(0.7f)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color.DarkGray)
+                            )
+                        }
+                    } else {
+                        items(6) {
+                            Box(
+                                modifier = Modifier
+                                    .aspectRatio(0.7f)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(Color(0xFF222224), Color(0xFF141416))
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.PhotoLibrary,
+                                    contentDescription = null,
+                                    tint = Color.White.copy(alpha = 0.15f),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -578,9 +591,9 @@ fun CameraActionSheet(viewModel: ProfileViewModel, context: android.content.Cont
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.Upload, contentDescription = null, tint = Color.White)
+            Icon(Icons.Default.Upload, contentDescription = "Upload", tint = Color.White)
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Upload to Current Room", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.upload_to_current_room), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -597,3 +610,4 @@ fun CameraActionSheet(viewModel: ProfileViewModel, context: android.content.Cont
         )
     }
 }
+

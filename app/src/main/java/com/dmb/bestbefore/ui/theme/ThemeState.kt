@@ -25,7 +25,7 @@ object ThemeState {
         private set
 
     fun init(context: Context) {
-        val sessionManager = SessionManager(context)
+        val sessionManager = SessionManager.getInstance(context)
         currentTheme = AppThemes.getThemeByName(sessionManager.getTheme())
         val accentHex = sessionManager.getAccentColor()
         try {
@@ -37,13 +37,13 @@ object ThemeState {
 
     fun selectTheme(context: Context, theme: AppTheme) {
         currentTheme = theme
-        SessionManager(context).saveTheme(theme.name)
+        SessionManager.getInstance(context).saveTheme(theme.name)
     }
 
     fun selectAccent(context: Context, color: Color) {
         currentAccent = color
         val hex = String.format("#%06X", (0xFFFFFF and color.toArgb()))
-        SessionManager(context).saveAccentColor(hex)
+        SessionManager.getInstance(context).saveAccentColor(hex)
     }
 
     fun updateApplyAccentToAll(enabled: Boolean) {

@@ -11,26 +11,35 @@ import com.google.firebase.FirebaseApp
 class BestBeforeApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        com.dmb.bestbefore.data.api.RetrofitClient.init(this)
         FirebaseApp.initializeApp(this)
+        com.dmb.bestbefore.analytics.AnalyticsManager.init(this)
         initCoil()
     }
 
     private fun initCoil() {
         try {
+            val coilOkHttpClient = okhttp3.OkHttpClient.Builder()
+                .cache(okhttp3.Cache(cacheDir.resolve("coil_http_cache"), 50L * 1024 * 1024))
+                .build()
+
             Coil.setImageLoader(
                 ImageLoader.Builder(this)
+                    .okHttpClient(coilOkHttpClient)
                     .memoryCache {
                         MemoryCache.Builder(this)
-                            .maxSizePercent(0.20)
+                            .maxSizePercent(0.25)
+                            .strongReferencesEnabled(true)
                             .build()
                     }
                     .diskCache {
                         DiskCache.Builder()
                             .directory(cacheDir.resolve("coil_image_cache"))
-                            .maxSizeBytes(100L * 1024 * 1024)
+                            .maxSizeBytes(150L * 1024 * 1024)
                             .build()
                     }
-                    .crossfade(true)
+                    .crossfade(false)
+                    .respectCacheHeaders(false)
                     .build()
             )
         } catch (e: Exception) {

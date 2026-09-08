@@ -2,6 +2,7 @@ package com.dmb.bestbefore.data.repository
 
 import android.content.Context
 import android.util.Log
+import com.dmb.bestbefore.data.api.ApiService
 import com.dmb.bestbefore.data.api.RetrofitClient
 import com.dmb.bestbefore.data.models.AppNotification
 import com.dmb.bestbefore.data.models.NotificationType
@@ -16,7 +17,14 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class NotificationRepository(private val context: Context? = null) {
+import com.dmb.bestbefore.data.auth.FirebaseTokenProvider
+import com.dmb.bestbefore.data.auth.TokenProvider
+
+class NotificationRepository(
+    private val context: Context? = null,
+    private val api: ApiService = RetrofitClient.apiService,
+    private val tokenProvider: TokenProvider = FirebaseTokenProvider()
+) {
     companion object {
         private const val PREFS_NAME = "bestbefore_notifications"
         private const val KEY_NOTIFICATIONS = "notifications_json"
@@ -25,7 +33,6 @@ class NotificationRepository(private val context: Context? = null) {
         private const val MAX_DISMISSED_NOTIFICATION_IDS = 500
     }
 
-    private val api = RetrofitClient.apiService
     private val _notifications = MutableStateFlow(loadLocalNotifications())
     val notifications: StateFlow<List<AppNotification>> = _notifications.asStateFlow()
 
@@ -68,7 +75,7 @@ class NotificationRepository(private val context: Context? = null) {
 
     suspend fun getNotifications(): Result<List<AppNotification>> {
         return try {
-            val token = FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token
+            val token = tokenProvider.getIdToken(false)
                 ?: return Result.failure(Exception("Not authenticated"))
             
             val response = api.getNotifications("Bearer $token")
@@ -127,7 +134,7 @@ class NotificationRepository(private val context: Context? = null) {
 
     suspend fun respondToInvitation(notificationId: String, accept: Boolean): Result<Unit> {
         return try {
-            val token = FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token
+            val token = tokenProvider.getIdToken(false)
                 ?: return Result.failure(Exception("Not authenticated"))
             
             val action = if (accept) "accept" else "ignore"
@@ -147,7 +154,7 @@ class NotificationRepository(private val context: Context? = null) {
     suspend fun deleteNotification(notificationId: String): Result<Unit> {
         removeNotification(notificationId)
         return try {
-            val token = FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token
+            val token = tokenProvider.getIdToken(false)
                 ?: return Result.failure(Exception("Not authenticated"))
 
             val response = api.deleteNotification("Bearer $token", notificationId)

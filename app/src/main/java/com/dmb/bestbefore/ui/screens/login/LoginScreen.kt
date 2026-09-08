@@ -46,12 +46,12 @@ fun LoginScreen(
     onNavigateToSignup: () -> Unit,
     viewModel: LoginViewModel = viewModel()
 ) {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    var email by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var password by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
 
-    var loginMode by remember { mutableStateOf(LoginMode.EVERYONE) }
+    var loginMode by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(LoginMode.EVERYONE) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
     var arrowPhase by remember { mutableIntStateOf(0) }
 
@@ -90,7 +90,10 @@ fun LoginScreen(
         )
 
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(top = 16.dp),
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -98,19 +101,19 @@ fun LoginScreen(
 
             // ── Title + Form ────────────────────────────────────────────
             Column(
-                verticalArrangement = Arrangement.spacedBy(60.dp),
+                verticalArrangement = Arrangement.spacedBy(36.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 // Logo Section
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     // BB-UI-01: "BestBefore" centered
                     Text(
                         text = "BestBefore",
-                        fontSize = 48.sp,
+                        fontSize = 38.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
                         textAlign = TextAlign.Center
@@ -130,7 +133,7 @@ fun LoginScreen(
                     ) {
                         Text(
                             text = "for Artist",
-                            fontSize = 22.sp,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color.White.copy(alpha = 0.8f),
                             textAlign = TextAlign.Center
@@ -140,16 +143,16 @@ fun LoginScreen(
 
                 // Form Section
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
                     modifier = Modifier.padding(horizontal = 40.dp)
                 ) {
                     BBOutlinedInput(
-                        placeholder = "email or nickname",
+                        placeholder = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.email_placeholder),
                         text = email,
                         onValueChange = { email = it }
                     )
                     BBOutlinedInput(
-                        placeholder = "password",
+                        placeholder = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.password_placeholder),
                         text = password,
                         onValueChange = { password = it },
                         isSecure = true
@@ -158,10 +161,10 @@ fun LoginScreen(
                     // Login Button
                     Box(
                         modifier = Modifier
-                            .padding(top = 20.dp)
+                            .padding(top = 10.dp)
                             .fillMaxWidth()
-                            .height(56.dp)
-                            .background(Color.White, RoundedCornerShape(28.dp))
+                            .height(48.dp)
+                            .background(Color.White, RoundedCornerShape(24.dp))
                             .clickable {
                                 if (email.isNotEmpty() && password.isNotEmpty()) {
                                     viewModel.login(
@@ -175,11 +178,70 @@ fun LoginScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Login",
-                            fontSize = 18.sp,
+                            text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.login_button),
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.Black
                         )
+                    }
+
+                    // ── Google Sign-In Button ────────────────────────────────────
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
+                        contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+                    ) { result ->
+                        val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
+                        try {
+                            val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+                            val idToken = account?.idToken
+                            if (!idToken.isNullOrBlank()) {
+                                viewModel.loginWithGoogle(idToken, loginMode, onLoginSuccess)
+                            }
+                        } catch (e: Exception) {
+                            android.widget.Toast.makeText(
+                                context,
+                                "Google Sign-In cancelled or failed. Verify SHA-1 configuration.",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(24.dp))
+                            .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(24.dp))
+                            .clickable {
+                                val serverClientId = context.getString(com.dmb.bestbefore.R.string.default_web_client_id)
+                                val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(
+                                    com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
+                                )
+                                    .requestIdToken(serverClientId)
+                                    .requestEmail()
+                                    .build()
+                                val client = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
+                                launcher.launch(client.signInIntent)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "G",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White
+                            )
+                            Text(
+                                text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.sign_in_with_google),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
+                        }
                     }
                 }
             }
@@ -189,27 +251,26 @@ fun LoginScreen(
                 Text(
                     text = errorMessage!!,
                     color = Color.Red,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 8.dp)
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 6.dp)
                 )
             }
 
             Spacer(modifier = Modifier.weight(1f))
 
             // ── Swipe Indicator with Turn-Signal Animation ──────────────
-            // BB-UI-01: << swipe for Artists >> with sequential glow
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .padding(vertical = 20.dp)
+                    .padding(vertical = 12.dp)
                     .alpha(0.6f)
             ) {
                 TurnSignalArrows(direction = ArrowDirection.LEFT, phase = arrowPhase)
                 Text(
                     text = if (loginMode == LoginMode.EVERYONE)
                         "swipe for Artists" else "swipe for Everyone",
-                    fontSize = 16.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.White
                 )
@@ -219,26 +280,26 @@ fun LoginScreen(
             // ── Bottom Links ────────────────────────────────────────────
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.padding(bottom = 60.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(bottom = 36.dp)
             ) {
-                // BB-UI-01: "forgot my password" centered
+                // "forgot my password" centered
                 Text(
                     text = "forgot my password",
-                    color = Color.White,
-                    fontSize = 16.sp,
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 12.sp,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.clickable { /* Forgotten logic empty for now */ }
                 )
 
-                // BB-UI-02: "create an [Artists] account" with animated word interpolation
+                // "create an [Artists] account" with animated word interpolation
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.clickable { onNavigateToSignup() }
                 ) {
-                    Text("create", color = Color.White, fontSize = 16.sp)
-                    Text("an", color = Color.White, fontSize = 16.sp)
+                    Text("create", color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
+                    Text("an", color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
 
                     // "Artists" word expands horizontally into the space
                     AnimatedVisibility(
@@ -256,14 +317,13 @@ fun LoginScreen(
                             Text(
                                 "Artist",
                                 color = Color.White,
-                                fontSize = 16.sp,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
-                            //Spacer(modifier = Modifier.width(1.dp))
                         }
                     }
 
-                    Text("account", color = Color.White, fontSize = 16.sp)
+                    Text("account", color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
                 }
             }
         }
@@ -279,7 +339,7 @@ fun LoginScreen(
                 CircularProgressIndicator(
                     color = Color.White,
                     strokeWidth = 3.dp,
-                    modifier = Modifier.scale(1.5f)
+                    modifier = Modifier.scale(1.3f)
                 )
             }
         }
@@ -299,24 +359,24 @@ fun BBOutlinedInput(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(48.dp)
             .border(1.dp, Color.White.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
             .background(Color.Transparent)
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = 16.dp),
         contentAlignment = Alignment.CenterStart
     ) {
         if (text.isEmpty()) {
             Text(
                 text = placeholder,
                 color = Color.White.copy(alpha = 0.4f),
-                fontSize = 16.sp
+                fontSize = 14.sp
             )
         }
 
         BasicTextField(
             value = text,
             onValueChange = onValueChange,
-            textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+            textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
             visualTransformation = if (isSecure)
                 PasswordVisualTransformation() else VisualTransformation.None,
             cursorBrush = SolidColor(Color.White),

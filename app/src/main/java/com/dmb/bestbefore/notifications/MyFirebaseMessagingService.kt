@@ -7,6 +7,9 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Dispatchers
 import androidx.core.app.NotificationCompat
 import com.dmb.bestbefore.MainActivity
 import com.dmb.bestbefore.R
@@ -21,7 +24,17 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         super.onNewToken(token)
         Log.d("FCM", "New Token: $token")
-        // The token will be sent to the backend when the user logs in or next opens the app
+        val sessionManager = com.dmb.bestbefore.data.local.SessionManager.getInstance(applicationContext)
+        sessionManager.saveFcmToken(token)
+        if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser != null) {
+            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    com.dmb.bestbefore.data.repository.AuthRepository(applicationContext).updateMe(com.dmb.bestbefore.data.api.models.UpdateMeRequest(fcmToken = token))
+                } catch (e: Exception) {
+                    Log.e("FCM", "Failed to update FCM token", e)
+                }
+            }
+        }
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
@@ -111,3 +124,5 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         notificationManager.notify(roomId.hashCode(), notification)
     }
 }
+
+

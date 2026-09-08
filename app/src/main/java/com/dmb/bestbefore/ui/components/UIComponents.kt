@@ -291,35 +291,53 @@ fun ProfileAvatar(
         val modelStr = imageUri?.toString()
         val isBase64 = modelStr != null && (modelStr.startsWith("data:") || (modelStr.length > 50 && !modelStr.contains("/")))
         
-        val imageBytes = remember(modelStr) {
-            if (isBase64 && modelStr != null) {
-                try {
-                    val cleanBase64 = modelStr.substringAfter(",")
-                    Base64.decode(cleanBase64, Base64.DEFAULT)
-                } catch (e: IllegalArgumentException) {
-                    null
-                }
-            } else {
-                null
+        if (isBase64 && modelStr != null) {
+            val cachedBitmap = remember(modelStr) {
+                com.dmb.bestbefore.utils.Base64BitmapCache.get(modelStr)
             }
-        }
+            var bitmap by remember(modelStr) { mutableStateOf(cachedBitmap) }
 
-        val finalModel = when {
-            imageBytes != null -> ImageRequest.Builder(context).data(imageBytes).build()
-            isBase64 -> null // Failed to decode base64
-            !modelStr.isNullOrBlank() -> imageUri
-            else -> null
-        }
+            LaunchedEffect(modelStr) {
+                if (bitmap == null) {
+                    val decoded = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                        try {
+                            val cleanBase64 = modelStr.substringAfter(",")
+                            val bytes = Base64.decode(cleanBase64, Base64.DEFAULT)
+                            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        } catch (_: Exception) {
+                            null
+                        }
+                    }
+                    if (decoded != null) {
+                        com.dmb.bestbefore.utils.Base64BitmapCache.put(modelStr, decoded)
+                        bitmap = decoded
+                    }
+                }
+            }
 
-        if (finalModel != null) {
+            if (bitmap != null) {
+                androidx.compose.foundation.Image(
+                    bitmap = bitmap!!.asImageBitmap(),
+                    contentDescription = "Avatar",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                val isLight = accentColor.luminance() > 0.5f
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = null,
+                    tint = if (isLight) Color.Black.copy(alpha = 0.6f) else Color.White,
+                    modifier = Modifier.size(size * 0.5f)
+                )
+            }
+        } else if (!modelStr.isNullOrBlank()) {
             AsyncImage(
-                model = finalModel,
+                model = imageUri,
                 contentDescription = "Avatar",
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
-                error = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Default.Person),
-                // Optimization: crossfade for smoother transition
-                // (Coil handles data URIs on its own background thread)
+                error = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Default.Person)
             )
         } else {
             val isLight = accentColor.luminance() > 0.5f

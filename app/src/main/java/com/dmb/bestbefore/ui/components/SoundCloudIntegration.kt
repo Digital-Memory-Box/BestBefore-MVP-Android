@@ -13,13 +13,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-
-data class SoundCloudTrack(
-    val id: Int,
-    val title: String,
-    val user: String,
-    val artwork: String?
-)
+import com.dmb.bestbefore.data.api.models.SoundCloudTrack
 
 class SoundCloudController {
     var currentTrackTitle by mutableStateOf("")
@@ -79,7 +73,14 @@ fun SoundCloudPlayerView(
                 }
             },
             update = { webView ->
-                // Handled internally, or reload if url changes in dynamic implementation
+                if (webView.url != embedUrl) {
+                    webView.loadUrl(embedUrl)
+                }
+            },
+            onRelease = { webView ->
+                webView.stopLoading()
+                webView.webChromeClient = null
+                webView.destroy()
             }
         )
     }

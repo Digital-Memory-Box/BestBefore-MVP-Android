@@ -26,5 +26,6 @@ data class TimeCapsuleRoom(
     val connectedRooms: List<String> = emptyList(),
     val isOwnedByMe: Boolean = false,
     val isCollaborator: Boolean = false,
-    val ownerUserType: String? = null
+    val ownerUserType: String? = null,
+    val ownerId: String? = null
 )

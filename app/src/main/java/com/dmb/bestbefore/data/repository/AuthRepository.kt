@@ -1,6 +1,7 @@
 package com.dmb.bestbefore.data.repository
 
 import android.content.Context
+import com.dmb.bestbefore.data.api.ApiService
 import com.dmb.bestbefore.data.api.RetrofitClient
 import com.dmb.bestbefore.data.api.models.UpdateMeRequest
 import com.dmb.bestbefore.data.api.models.UserDto
@@ -12,25 +13,27 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
 import java.io.IOException
 
-class AuthRepository(context: Context) {
-    private val sessionManager = SessionManager(context)
-    private val api = RetrofitClient.apiService
-    private val firebaseAuth = FirebaseAuth.getInstance()
+import com.dmb.bestbefore.data.auth.FirebaseTokenProvider
+import com.dmb.bestbefore.data.auth.TokenProvider
+
+open class AuthRepository(
+    context: Context,
+    private val sessionManager: SessionManager = SessionManager.getInstance(context),
+    private val api: ApiService = RetrofitClient.apiService,
+    private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance(),
+    private val tokenProvider: TokenProvider = FirebaseTokenProvider(firebaseAuth)
+) {
 
     /** Get a fresh Firebase ID token for the currently signed-in user. */
-    suspend fun getFirebaseIdToken(forceRefresh: Boolean = false): String? {
-        return try {
-            firebaseAuth.currentUser?.getIdToken(forceRefresh)?.await()?.token
-        } catch (e: Exception) {
-            null
-        }
+    open suspend fun getFirebaseIdToken(forceRefresh: Boolean = false): String? {
+        return tokenProvider.getIdToken(forceRefresh)
     }
 
     /**
      * Sign in with Firebase email/password, then sync to MongoDB backend via POST /auth/sync.
      * Returns the fully synced [UserDto].
      */
-    suspend fun login(email: String, password: String): Result<UserDto> {
+    open suspend fun login(email: String, password: String): Result<UserDto> {
         return try {
             // 1. Firebase sign-in
             val authResult = signInWithRetry(email, password)
@@ -42,7 +45,35 @@ class AuthRepository(context: Context) {
                 ?: return Result.failure(Exception("Failed to retrieve Firebase ID token"))
 
             // 3. Sync with backend (creates MongoDB user if first login)
-            syncWithBackend(idToken)
+            val result = syncWithBackend(idToken)
+            if (result.isSuccess) {
+                com.dmb.bestbefore.analytics.AnalyticsManager.logLogin("email")
+            }
+            result
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Sign in with Google ID token credential, then sync to MongoDB backend via POST /auth/sync.
+     * Returns the fully synced [UserDto].
+     */
+    open suspend fun loginWithGoogleIdToken(idToken: String): Result<UserDto> {
+        return try {
+            val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(idToken, null)
+            val authResult = firebaseAuth.signInWithCredential(credential).await()
+            val firebaseUser = authResult.user
+                ?: return Result.failure(Exception("Firebase Google sign-in returned no user"))
+
+            val firebaseIdToken = firebaseUser.getIdToken(false).await()?.token
+                ?: return Result.failure(Exception("Failed to retrieve Firebase ID token"))
+
+            val result = syncWithBackend(firebaseIdToken)
+            if (result.isSuccess) {
+                com.dmb.bestbefore.analytics.AnalyticsManager.logLogin("google")
+            }
+            result
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -69,7 +100,7 @@ class AuthRepository(context: Context) {
     /**
      * Creating a new user via Firebase, then syncing with Backend.
      */
-    suspend fun signup(email: String, password: String, name: String? = null): Result<UserDto> {
+    open suspend fun signup(email: String, password: String, name: String? = null): Result<UserDto> {
         return try {
             val authResult = firebaseAuth.createUserWithEmailAndPassword(email, password).await()
             val firebaseUser = authResult.user
@@ -78,9 +109,10 @@ class AuthRepository(context: Context) {
             val idToken = firebaseUser.getIdToken(false).await()?.token
                 ?: return Result.failure(Exception("Failed to retrieve Firebase ID token"))
 
-            // Optional: you can wait until the sync sets up the document, then issue a PATCH /me to set the name.
-            // Currently, the backend sync creates the document.
             val syncResult = syncWithBackend(idToken)
+            if (syncResult.isSuccess) {
+                com.dmb.bestbefore.analytics.AnalyticsManager.logSignUp("email")
+            }
             if (syncResult.isSuccess && name != null) {
                 updateMe(UpdateMeRequest(name = name))
             } else {
@@ -95,11 +127,12 @@ class AuthRepository(context: Context) {
      * Call POST /auth/sync with the given Firebase ID token.
      * The backend will find or create the MongoDB user and return its profile.
      */
-    suspend fun syncWithBackend(firebaseIdToken: String): Result<UserDto> {
+    open suspend fun syncWithBackend(firebaseIdToken: String): Result<UserDto> {
         return try {
             val response = api.syncAuth("Bearer $firebaseIdToken")
             if (response.isSuccessful && response.body() != null) {
                 val user = response.body()!!.user
+                com.dmb.bestbefore.analytics.AnalyticsManager.setUserProperties(user.id, user.userType)
                 sessionManager.saveUser(user)
                 sessionManager.saveAuthToken(firebaseIdToken)
                 Result.success(user)
@@ -118,12 +151,14 @@ class AuthRepository(context: Context) {
     }
 
     /** Update user profile fields via PATCH /auth/me */
-    suspend fun updateMe(updates: UpdateMeRequest): Result<UserDto> {
+    open suspend fun updateMe(updates: UpdateMeRequest): Result<UserDto> {
         return try {
             val token = getFirebaseIdToken() ?: return Result.failure(Exception("Not signed in"))
             val response = api.updateMe("Bearer $token", updates)
             if (response.isSuccessful && response.body() != null) {
                 val user = response.body()!!.user
+                cachedUser = user
+                cachedUserTimestamp = System.currentTimeMillis()
                 sessionManager.saveUser(user)
                 Result.success(user)
             } else {
@@ -139,20 +174,37 @@ class AuthRepository(context: Context) {
             android.util.Log.w("AuthRepository", "Update network issue: ${e.message}")
             Result.failure(e)
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             android.util.Log.e("AuthRepository", "Update exception", e)
             Result.failure(e)
+        }
+    }
+
+    companion object {
+        private var cachedUser: UserDto? = null
+        private var cachedUserTimestamp: Long = 0L
+        private const val USER_CACHE_TTL_MS = 30_000L // 30 seconds
+
+        fun invalidateUserCache() {
+            cachedUser = null
+            cachedUserTimestamp = 0L
         }
     }
 
     /**
      * Fetch the user's latest data from the backend via GET /auth/me
      */
-    suspend fun getMe(): Result<UserDto> {
+    open suspend fun getMe(forceRefresh: Boolean = false): Result<UserDto> {
+        if (!forceRefresh && cachedUser != null && (System.currentTimeMillis() - cachedUserTimestamp < USER_CACHE_TTL_MS)) {
+            return Result.success(cachedUser!!)
+        }
         return try {
             val token = getFirebaseIdToken() ?: return Result.failure(Exception("Not signed in"))
             val response = api.getMe("Bearer $token")
             if (response.isSuccessful && response.body() != null) {
                 val user = response.body()!!.user
+                cachedUser = user
+                cachedUserTimestamp = System.currentTimeMillis()
                 sessionManager.saveUser(user)
                 Result.success(user)
             } else {
@@ -169,7 +221,66 @@ class AuthRepository(context: Context) {
         }
     }
 
-    suspend fun syncFcmToken(): Result<Unit> {
+    /**
+     * Delete the user's account: backend data + Firebase Auth + local session.
+     * Required by Google Play and Apple App Store policies.
+     */
+    open suspend fun deleteAccount(): Result<Unit> {
+        return try {
+            val token = getFirebaseIdToken() ?: return Result.failure(Exception("Not signed in"))
+            val response = api.deleteAccount("Bearer $token")
+            if (response.isSuccessful) {
+                // Delete Firebase Auth user locally
+                try {
+                    firebaseAuth.currentUser?.delete()?.await()
+                } catch (e: Exception) {
+                    android.util.Log.w("AuthRepository", "Firebase user delete failed (already deleted server-side): ${e.message}")
+                }
+                invalidateUserCache()
+                sessionManager.clearSession()
+                Result.success(Unit)
+            } else {
+                val errorBody = response.errorBody()?.string()
+                android.util.Log.e("AuthRepository", "Account deletion failed: ${response.code()} - $errorBody")
+                Result.failure(Exception("Account deletion failed: ${response.code()}"))
+            }
+        } catch (e: IOException) {
+            Result.failure(e)
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Result.failure(e)
+        }
+    }
+
+    /** Report content for UGC compliance. */
+    open suspend fun reportContent(targetType: String, targetId: String, reason: String, description: String = ""): Result<Unit> {
+        return try {
+            val token = getFirebaseIdToken() ?: return Result.failure(Exception("Not signed in"))
+            val body = mapOf("targetType" to targetType, "targetId" to targetId, "reason" to reason, "description" to description)
+            val response = api.reportContent("Bearer $token", body)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("Report failed: ${response.code()}"))
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Result.failure(e)
+        }
+    }
+
+    /** Block a user for UGC compliance. */
+    open suspend fun blockUser(blockedUserId: String): Result<Unit> {
+        return try {
+            val token = getFirebaseIdToken() ?: return Result.failure(Exception("Not signed in"))
+            val body = mapOf("blockedUserId" to blockedUserId)
+            val response = api.blockUser("Bearer $token", body)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("Block failed: ${response.code()}"))
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Result.failure(e)
+        }
+    }
+
+    open suspend fun syncFcmToken(): Result<Unit> {
         return try {
             val fcmToken = FirebaseMessaging.getInstance().token.await()
             val token = getFirebaseIdToken() ?: return Result.failure(Exception("Not signed in"))
@@ -183,6 +294,7 @@ class AuthRepository(context: Context) {
 
     /** Sign out from Firebase and clear local session. */
     fun logout() {
+        invalidateUserCache()
         sessionManager.clearSession()
     }
 

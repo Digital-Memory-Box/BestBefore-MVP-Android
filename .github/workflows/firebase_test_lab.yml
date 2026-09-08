@@ -1,0 +1,126 @@
+# ==============================================================================
+# WARNING: BLOCKED ON STAGING INFRASTRUCTURE (See PROVISIONING.md)
+# ------------------------------------------------------------------------------
+# Debug builds currently point directly at the live production backend and
+# Firebase project (best-before-7d4f9).
+# DO NOT trigger this workflow against live builds until staging infrastructure
+# and dev/prod flavors are configured per PROVISIONING.md.
+# ==============================================================================
+
+name: Firebase Test Lab - Cloud Testing Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      device_matrix:
+        description: 'Target Device Profile'
+        required: true
+        default: 'standard'
+        type: choice
+        options:
+          - standard # Pixel 4 (API 30) + Pixel 2 (API 26)
+          - modern   # Pixel 7 (API 33) + Pixel 4 (API 30)
+  push:
+    # Restrict automatic runs to release branches only; keep main runnable via manual workflow_dispatch
+    branches:
+      - 'release/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID || 'best-before-7d4f9' }}
+  RESULTS_BUCKET: ${{ secrets.FIREBASE_RESULTS_BUCKET || 'best-before-7d4f9-testlab-results' }}
+
+jobs:
+  build-and-test-lab:
+    name: Build & Run Firebase Test Lab
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      # 1. Build APKs
+      - name: Build Debug & AndroidTest APKs
+        run: ./gradlew assembleDebug assembleDebugAndroidTest --stacktrace
+
+      # 2. Authenticate to Google Cloud / Firebase via Service Account
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      # 3. Execute Espresso & UI Automator Instrumentation Suite
+      - name: Run Cloud Instrumentation Tests
+        run: |
+          RUN_ID="instrumentation-${GITHUB_SHA::7}-${GITHUB_RUN_NUMBER}"
+          echo "Starting Test Lab Instrumentation Run: $RUN_ID"
+          
+          gcloud firebase test android run \
+            --type instrumentation \
+            --app app/build/outputs/apk/debug/app-debug.apk \
+            --test app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk \
+            --device model=flame,version=30,locale=en,orientation=portrait \
+            --device model=walleye,version=26,locale=en,orientation=portrait \
+            --results-bucket=${{ env.RESULTS_BUCKET }} \
+            --results-dir="$RUN_ID" \
+            --timeout 15m
+
+      # 4. Execute 2-Minute Robo Test (Exploratory UI Fuzzing)
+      - name: Run Cloud Robo Test (2 min)
+        if: always()
+        run: |
+          ROBO_RUN_ID="robo-${GITHUB_SHA::7}-${GITHUB_RUN_NUMBER}"
+          echo "Starting Test Lab Robo Run: $ROBO_RUN_ID"
+          
+          gcloud firebase test android run \
+            --type robo \
+            --app app/build/outputs/apk/debug/app-debug.apk \
+            --device model=flame,version=30,locale=en,orientation=portrait \
+            --results-bucket=${{ env.RESULTS_BUCKET }} \
+            --results-dir="$ROBO_RUN_ID" \
+            --timeout 2m \
+            --robo-directives "text:email or nickname=${{ secrets.TEST_USER_EMAIL || 'test@bestbefore.app' }},text:password=${{ secrets.TEST_USER_PASSWORD || 'secure123' }}"
+
+      # 5. Download Results (logs, videos, screenshots)
+      - name: Pull Down Test Lab Results
+        if: always()
+        run: |
+          mkdir -p testlab-artifacts/instrumentation
+          mkdir -p testlab-artifacts/robo
+          
+          INSTR_DIR="instrumentation-${GITHUB_SHA::7}-${GITHUB_RUN_NUMBER}"
+          ROBO_DIR="robo-${GITHUB_SHA::7}-${GITHUB_RUN_NUMBER}"
+          
+          echo "Fetching instrumentation results from gs://${{ env.RESULTS_BUCKET }}/$INSTR_DIR..."
+          gcloud storage cp -r "gs://${{ env.RESULTS_BUCKET }}/$INSTR_DIR/*" testlab-artifacts/instrumentation/ || true
+          
+          echo "Fetching robo results from gs://${{ env.RESULTS_BUCKET }}/$ROBO_DIR..."
+          gcloud storage cp -r "gs://${{ env.RESULTS_BUCKET }}/$ROBO_DIR/*" testlab-artifacts/robo/ || true
+
+      # 6. Upload Test Lab Artifacts to GitHub Actions
+      - name: Upload Test Lab Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebase-test-lab-results
+          path: testlab-artifacts/
+          retention-days: 30

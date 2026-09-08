@@ -5,6 +5,7 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.dmb.bestbefore.data.api.ApiService
 import com.dmb.bestbefore.data.api.RetrofitClient
 import com.dmb.bestbefore.data.api.models.MemoryPreview
 import com.dmb.bestbefore.data.api.models.PublicProfileDto
@@ -22,7 +23,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
-class CreatorProfileViewModel(application: Application) : AndroidViewModel(application) {
+class CreatorProfileViewModel @JvmOverloads constructor(
+    application: Application,
+    private val api: ApiService = RetrofitClient.apiService,
+    private val sessionManager: SessionManager = SessionManager.getInstance(application)
+) : AndroidViewModel(application) {
     private val _profileState = MutableStateFlow<PublicProfileDto?>(null)
     val profileState: StateFlow<PublicProfileDto?> = _profileState.asStateFlow()
 
@@ -58,7 +63,7 @@ class CreatorProfileViewModel(application: Application) : AndroidViewModel(appli
 
                 var lastError: String? = null
                 repeat(2) { attempt ->
-                    val response = RetrofitClient.apiService.getPublicProfile("Bearer $token", userId)
+                    val response = api.getPublicProfile("Bearer $token", userId)
                     if (response.isSuccessful) {
                         val body = response.body()
                         Log.d("CreatorProfileVM", "Profile loaded successfully for $userId")
@@ -155,7 +160,7 @@ class CreatorProfileViewModel(application: Application) : AndroidViewModel(appli
     }
 
     private fun cachedCardsForUser(userId: String): List<HallwayCard> {
-        return SessionManager(getApplication()).getHallwayCards()
+        return sessionManager.getHallwayCards()
             .filter { it.ownerId == userId }
             .distinctBy { it.id }
     }

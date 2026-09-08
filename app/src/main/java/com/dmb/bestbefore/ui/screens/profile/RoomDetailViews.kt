@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.StickyNote2
 import androidx.compose.material3.*
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -54,15 +55,11 @@ import com.dmb.bestbefore.ui.components.MusicPlayer
 import com.dmb.bestbefore.ui.components.SoundCloudController
 import com.dmb.bestbefore.ui.components.SoundCloudPlayerView
 import com.dmb.bestbefore.notifications.MusicPlayerManager
-import com.dmb.bestbefore.utils.RoomMusicCatalog
-
-
-import androidx.compose.foundation.Image
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.dmb.bestbefore.utils.Base64BitmapCache
+import com.dmb.bestbefore.utils.RoomMusicCatalog
 
-// Helper to prevent UI thread blocking while decoding large Base64 images from backend
 @Composable
 fun AsyncBase64Image(
     itemData: Any,
@@ -70,13 +67,10 @@ fun AsyncBase64Image(
     modifier: Modifier = Modifier
 ) {
     val modelStr = itemData.toString()
-    // Accept any data: URI with base64 content — some platforms store images with
-    // non-image MIME types (e.g. data:application/octet-stream;base64,...).
     if (modelStr.startsWith("data:") && modelStr.contains("base64,")) {
-        // Check in-process LRU cache before decoding to avoid re-decoding on every recompose.
-        var bitmap by remember(modelStr) {
-            mutableStateOf(Base64BitmapCache.get(modelStr))
-        }
+        val cached = remember(modelStr) { Base64BitmapCache.get(modelStr) }
+        var bitmap by remember(modelStr) { mutableStateOf(cached) }
+
         LaunchedEffect(modelStr) {
             if (bitmap == null) {
                 val decoded = withContext(Dispatchers.Default) {
@@ -181,6 +175,12 @@ fun RoomDetailScreen(
     var authToken by remember { mutableStateOf<String?>(null) }
     val musicViewModel: com.dmb.bestbefore.ui.components.MusicViewModel = viewModel()
 
+    var showReportDialog by remember { mutableStateOf(false) }
+    var showBlockConfirm by remember { mutableStateOf(false) }
+    var reportReason by remember { mutableStateOf("Inappropriate content") }
+    var reportDescription by remember { mutableStateOf("") }
+    var isReporting by remember { mutableStateOf(false) }
+
     LaunchedEffect(room?.id) {
         showQrCode = false
         show3DotMenu = false
@@ -192,6 +192,11 @@ fun RoomDetailScreen(
         noteContent = ""
         showAllMediaGrid = false
         showMusicSelector = false
+        showReportDialog = false
+        showBlockConfirm = false
+        reportReason = "Inappropriate content"
+        reportDescription = ""
+        isReporting = false
     }
 
     LaunchedEffect(Unit) {
@@ -376,6 +381,33 @@ fun RoomDetailScreen(
                                                 showDeleteRoomConfirm = true
                                             }
                                         )
+                                    } else {
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Default.Flag, null, tint = Color(0xFFFF9500), modifier = Modifier.size(18.dp))
+                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                    Text("Report Room", color = Color.White)
+                                                }
+                                            },
+                                            onClick = {
+                                                show3DotMenu = false
+                                                showReportDialog = true
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Default.Block, null, tint = Color(0xFFFF3B30), modifier = Modifier.size(18.dp))
+                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                    Text("Block Creator", color = Color(0xFFFF3B30))
+                                                }
+                                            },
+                                            onClick = {
+                                                show3DotMenu = false
+                                                showBlockConfirm = true
+                                            }
+                                        )
                                     }
                                 }
                             }
@@ -464,6 +496,35 @@ fun RoomDetailScreen(
                                                     isIgnored = true
                                                 }
                                                 show3DotMenu = false
+                                            }
+                                        )
+                                    }
+                                    if (room?.isOwnedByMe != true) {
+                                        HorizontalDivider(color = Color.White.copy(alpha = 0.08f), thickness = 0.5.dp)
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Default.Flag, null, tint = Color(0xFFFF9500), modifier = Modifier.size(18.dp))
+                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                    Text("Report Room", color = Color.White)
+                                                }
+                                            },
+                                            onClick = {
+                                                show3DotMenu = false
+                                                showReportDialog = true
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Default.Block, null, tint = Color(0xFFFF3B30), modifier = Modifier.size(18.dp))
+                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                    Text("Block Creator", color = Color(0xFFFF3B30))
+                                                }
+                                            },
+                                            onClick = {
+                                                show3DotMenu = false
+                                                showBlockConfirm = true
                                             }
                                         )
                                     }
@@ -631,7 +692,7 @@ fun RoomDetailScreen(
                 val showViewAll = !isTimeCapsule && !isClosed
 
                 if (false && isLocked) {
-                    val sdf = java.text.SimpleDateFormat("MMM dd, yyyy 'at' hh:mm a", java.util.Locale.getDefault())
+                    val sdf = remember { java.text.SimpleDateFormat("MMM dd, yyyy 'at' hh:mm a", java.util.Locale.getDefault()) }
                     val unlockDateString = sdf.format(java.util.Date(room!!.unlockTime))
                     Box(
                         modifier = Modifier
@@ -652,14 +713,14 @@ fun RoomDetailScreen(
                     }
                     Spacer(modifier = Modifier.height(24.dp))
                 } else if (isClosed) {
-                    val sdf = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
+                    val sdf = remember { java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault()) }
                     Text(
                         "Archived — closed on ${sdf.format(java.util.Date(room!!.scheduledClosureTime))}",
                         color = Color(0xFF8E8E93), fontSize = 13.sp
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                 } else if (room!!.scheduledClosureTime > 0L) {
-                    val sdf = java.text.SimpleDateFormat("MMM dd 'at' h:mm a", java.util.Locale.getDefault())
+                    val sdf = remember { java.text.SimpleDateFormat("MMM dd 'at' h:mm a", java.util.Locale.getDefault()) }
                     Box(modifier = Modifier.fillMaxWidth().background(Color(0xFF1C1C1E).copy(alpha = 0.6f), RoundedCornerShape(12.dp)).padding(16.dp), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("Room closes on ${sdf.format(java.util.Date(room!!.scheduledClosureTime))}", color = Color.Gray, fontSize = 14.sp)
@@ -742,7 +803,7 @@ fun RoomDetailScreen(
                                         val noteBody = parts.getOrElse(1) { "" }
                                         Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)).padding(10.dp)) {
                                             Column {
-                                                Icon(Icons.Default.StickyNote2, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(24.dp))
+                                                Icon(Icons.AutoMirrored.Filled.StickyNote2, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(24.dp))
                                                 Spacer(modifier = Modifier.height(4.dp))
                                                 Text(noteTitle, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                                 Spacer(modifier = Modifier.height(2.dp))
@@ -803,7 +864,7 @@ fun RoomDetailScreen(
                                             val noteBody2 = parts.getOrElse(1) { "" }
                                             Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)).padding(10.dp)) {
                                                 Column {
-                                                    Icon(Icons.Default.StickyNote2, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(24.dp))
+                                                    Icon(Icons.AutoMirrored.Filled.StickyNote2, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(24.dp))
                                                     Spacer(modifier = Modifier.height(4.dp))
                                                     Text(noteTitle2, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                                     Spacer(modifier = Modifier.height(2.dp))
@@ -962,7 +1023,7 @@ fun RoomDetailScreen(
                             val itemStr = item.toString()
                             if (isNoteMemoryUri(item)) {
                                 Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)).padding(4.dp), contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.StickyNote2, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(32.dp))
+                                    Icon(Icons.AutoMirrored.Filled.StickyNote2, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(32.dp))
                                 }
                             } else if (isAudioMemoryUri(item)) {
                                 Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)), contentAlignment = Alignment.Center) {
@@ -1173,12 +1234,21 @@ fun RoomDetailScreen(
                     DetailRow("Name", room?.roomName ?: "")
                     Spacer(modifier = Modifier.height(16.dp))
                     
-                    // Room ID
-                    DetailRow("Room ID", room?.id ?: "")
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    // Unlock Time
-                    DetailRow("Unlock Time", "${room?.capsuleMinutes ?: 0} minutes")
+                    // Unlock Time - Dynamic remaining time / status
+                    val currentRoom = room
+                    val unlockTimeText = if (currentRoom != null && currentRoom.unlockTime > 0L) {
+                        val remainingMs = currentRoom.unlockTime - System.currentTimeMillis()
+                        if (remainingMs <= 0) {
+                            "Unlocked"
+                        } else {
+                            com.dmb.bestbefore.utils.DateUtils.formatCountdown(currentRoom.unlockTime)
+                        }
+                    } else if ((currentRoom?.capsuleMinutes ?: 0) > 0) {
+                        "${currentRoom?.capsuleMinutes} minutes"
+                    } else {
+                        "Unlocked"
+                    }
+                    DetailRow("Unlock Time", unlockTimeText)
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     // Privacy
@@ -1187,7 +1257,7 @@ fun RoomDetailScreen(
                     
                     // Created Date
                     val dateCreated = room?.dateCreated ?: 0L
-                    val dateFormat = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
+                    val dateFormat = remember { java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault()) }
                     DetailRow("Created", if (dateCreated > 0) dateFormat.format(java.util.Date(dateCreated)) else "Unknown")
                     
                     Spacer(modifier = Modifier.height(32.dp))
@@ -1272,6 +1342,108 @@ fun RoomDetailScreen(
             )
         }
 
+        if (showReportDialog) {
+            val reasons = listOf(
+                "Inappropriate content",
+                "Harassment or hate speech",
+                "Copyright infringement",
+                "Spam or misleading",
+                "Other"
+            )
+            AlertDialog(
+                onDismissRequest = { showReportDialog = false },
+                containerColor = Color(0xFF1C1C1E),
+                title = { Text("Report Room", color = Color.White, fontWeight = FontWeight.Bold) },
+                text = {
+                    Column {
+                        Text("Why are you reporting this room?", color = Color.LightGray, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        reasons.forEach { reason ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { reportReason = reason }
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = (reportReason == reason),
+                                    onClick = { reportReason = reason },
+                                    colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF007AFF))
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(reason, color = Color.White, fontSize = 14.sp)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = !isReporting,
+                        onClick = {
+                            isReporting = true
+                            viewModel.reportContent(
+                                targetType = "room",
+                                targetId = room?.id ?: "",
+                                reason = reportReason,
+                                description = reportDescription
+                            ) { success ->
+                                isReporting = false
+                                showReportDialog = false
+                                if (success) {
+                                    android.widget.Toast.makeText(context, "Report submitted. Thank you.", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    android.widget.Toast.makeText(context, "Failed to submit report. Please try again.", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    ) {
+                        Text("Submit Report", color = Color(0xFFFF9500), fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showReportDialog = false }) {
+                        Text("Cancel", color = Color.Gray)
+                    }
+                }
+            )
+        }
+
+        if (showBlockConfirm) {
+            AlertDialog(
+                onDismissRequest = { showBlockConfirm = false },
+                containerColor = Color(0xFF1C1C1E),
+                title = { Text("Block Creator?", color = Color.White, fontWeight = FontWeight.Bold) },
+                text = {
+                    Text(
+                        "You will no longer see rooms or content created by this user.",
+                        color = Color.LightGray
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showBlockConfirm = false
+                            val creatorId = room?.ownerId.orEmpty()
+                            if (creatorId.isNotBlank()) {
+                                viewModel.blockUser(creatorId) { success ->
+                                    if (success) {
+                                        android.widget.Toast.makeText(context, "User blocked.", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        }
+                    ) {
+                        Text("Block User", color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showBlockConfirm = false }) {
+                        Text("Cancel", color = Color.Gray)
+                    }
+                }
+            )
+        }
         if (isUploading) {
             Box(
                 modifier = Modifier
@@ -1636,7 +1808,6 @@ fun ProfileGalleryViewer(
         }
     }
 }
-
 // ── Connect Rooms Screen ──────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1823,7 +1994,7 @@ fun ConnectRoomsScreen(
 }
 
 @Composable
-private fun SuggestionCard(
+fun SuggestionCard(
     suggestion: com.dmb.bestbefore.data.api.models.RoomSuggestionDto,
     onAccept: () -> Unit,
     onReject: () -> Unit
@@ -1981,7 +2152,7 @@ fun TimeUnitBox(value: Long, unit: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoomDetailsBottomSheet(
-    room: TimeCapsuleRoom,
+    room: com.dmb.bestbefore.data.models.TimeCapsuleRoom,
     onDismiss: () -> Unit
 ) {
     ModalBottomSheet(
@@ -2029,11 +2200,14 @@ fun RoomDetailsBottomSheet(
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                // Unlock Date/Time
+                // Unlock Date/Time / Remaining
                 val unlockDateText = if (room.unlockTime > 0) {
-                    java.text.SimpleDateFormat("d MMM yyyy, HH:mm", java.util.Locale.US).format(
-                        java.util.Date(room.unlockTime)
-                    )
+                    val remainingMs = room.unlockTime - System.currentTimeMillis()
+                    if (remainingMs <= 0) {
+                        "Unlocked"
+                    } else {
+                        com.dmb.bestbefore.utils.DateUtils.formatCountdown(room.unlockTime)
+                    }
                 } else {
                     "No unlock time set"
                 }
@@ -2092,7 +2266,7 @@ fun DetailRow(label: String, value: String) {
 }
 
 @Composable
-private fun ConnectedRoomItem(
+fun ConnectedRoomItem(
     targetId: String,
     viewModel: ProfileViewModel,
     onClick: (com.dmb.bestbefore.data.models.TimeCapsuleRoom) -> Unit
@@ -2142,3 +2316,4 @@ private fun ConnectedRoomItem(
         }
     }
 }
+

@@ -1,0 +1,79 @@
+<resources>
+    <string name="app_name">BestBefore</string>
+    <string name="default_web_client_id" translatable="false">913034046682-shihof7s9i6eale40cvjk0802jjfr7gr.apps.googleusercontent.com</string>
+
+    <!-- Common Navigation & Actions -->
+    <string name="cancel">İptal</string>
+    <string name="save">Kaydet</string>
+    <string name="back">Geri</string>
+    <string name="close">Kapat</string>
+    <string name="delete">Sil</string>
+    <string name="add">Ekle</string>
+    <string name="retry">Tekrar Dene</string>
+    <string name="loading">Yükleniyor…</string>
+
+    <!-- Auth - Login Screen -->
+    <string name="login_title">BestBefore</string>
+    <string name="login_subtitle">Anları solup gitmeden yakalayın</string>
+    <string name="login_everyone">Herkes</string>
+    <string name="login_artist">Sanatçı</string>
+    <string name="email_placeholder">e-posta</string>
+    <string name="password_placeholder">şifre</string>
+    <string name="login_button">Giriş Yap</string>
+    <string name="sign_in_with_google">Google ile Giriş Yap</string>
+    <string name="dont_have_account">hesabınız yok mu? kayıt olun</string>
+    <string name="google_sign_in_failed">Google ile giriş iptal edildi veya başarısız oldu.</string>
+
+    <!-- Auth - Signup Screen -->
+    <string name="create_account_title">Hesap Oluştur</string>
+    <string name="name_placeholder">isim</string>
+    <string name="user_type_normal">Normal</string>
+    <string name="user_type_artist">Sanatçı</string>
+    <string name="age_confirmation">En az 16 yaşında olduğumu onaylıyorum</string>
+    <string name="terms_agreement_prefix">Kayıt olarak şunları kabul etmiş olursunuz:</string>
+    <string name="terms_of_service">Kullanım Koşulları</string>
+    <string name="terms_and"> ve </string>
+    <string name="privacy_policy">Gizlilik Politikası</string>
+    <string name="sign_up_button">Kayıt Ol</string>
+    <string name="already_have_account">zaten hesabınız var mı? giriş yapın</string>
+
+    <!-- Profile & Settings -->
+    <string name="edit_profile">Profili Düzenle</string>
+    <string name="dashboard">Panel</string>
+    <string name="settings">Ayarlar</string>
+    <string name="legal_and_policies">YASAL &amp; POLİTİKALAR</string>
+    <string name="update_email">E-postayı Güncelle</string>
+    <string name="update_password">Şifreyi Güncelle</string>
+    <string name="update_credentials">Bilgileri Güncelle</string>
+    <string name="logout">Çıkış Yap</string>
+    <string name="delete_account">Hesabı Sil</string>
+    <string name="delete_account_dialog_title">Hesap Silinsin mi?</string>
+    <string name="delete_account_dialog_message">Bu işlem hesabınızı, profilinizi, sahip olduğunuz odaları ve tüm anılarınızı kalıcı olarak silecektir. Bu işlem geri alınamaz.</string>
+    <string name="delete_permanently">Kalıcı Olarak Sil</string>
+    <string name="ignored_rooms">Gizlenen Odalar</string>
+    <string name="no_rooms_ignored">Gizlenen oda yok</string>
+
+    <!-- Safety & UGC Reporting -->
+    <string name="report_content">İçeriği Bildir</string>
+    <string name="block_user">Kullanıcıyı Engelle</string>
+    <string name="report_success">Teşekkürler. Bildiriminiz inceleme için iletildi.</string>
+    <string name="block_success">Kullanıcı engellendi.</string>
+
+    <!-- Hallway & Room Management -->
+    <string name="explore">Keşfet</string>
+    <string name="all_memories">Tüm Anılar</string>
+    <string name="time_capsules">Zaman Kapsülleri</string>
+    <string name="create_room">Oda Oluştur</string>
+    <string name="search_hint">Oda, sanatçı veya anı ara…</string>
+
+    <!-- Extra Screen & Dialog Strings -->
+    <string name="open_source_licenses">Açık Kaynak Lisansları</string>
+    <string name="recent_activity">Son Etkinlik</string>
+    <string name="no_recent_activity">Son etkinlik yok</string>
+    <string name="account_settings">Hesap Ayarları</string>
+    <string name="upload_to_current_room">Mevcut Odaya Yükle</string>
+    <string name="this_time_capsule_is_locked">Bu Zaman Kapsülü kilitli</string>
+    <string name="listen_on_soundcloud">SoundCloud\'da Dinle</string>
+    <string name="saved">Kaydedildi</string>
+    <string name="remove">Kaldır</string>
+</resources>

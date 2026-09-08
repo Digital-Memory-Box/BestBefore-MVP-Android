@@ -34,14 +34,27 @@ object MusicPlayerManager {
             putExtra(MusicPlayerService.EXTRA_TRACK_STREAM_URL, track.streamUrl)
             putExtra(MusicPlayerService.EXTRA_TRACK_ARTWORK, track.artworkUrl)
         }
-        context.startForegroundService(intent)
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            _isPlaying.value = false
+        }
     }
 
     fun togglePlayPause(context: Context) {
         val intent = Intent(context, MusicPlayerService::class.java).apply {
             action = if (_isPlaying.value) MusicPlayerService.ACTION_PAUSE else MusicPlayerService.ACTION_RESUME
         }
-        context.startService(intent)
+        try {
+            context.startService(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     fun stop(context: Context) {
@@ -50,7 +63,11 @@ object MusicPlayerManager {
         val intent = Intent(context, MusicPlayerService::class.java).apply {
             action = MusicPlayerService.ACTION_STOP
         }
-        context.startService(intent)
+        try {
+            context.startService(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     // Callbacks from Service

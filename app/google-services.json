@@ -12,7 +12,20 @@
           "package_name": "com.dmb.bestbefore"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "913034046682-5a8beasvgdet5gm6gpmstq79ta9rl464.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.dmb.bestbefore",
+            "certificate_hash": "360462ac4d13dc41172c43ae0bfdf859de85ce2d"
+          }
+        },
+        {
+          "client_id": "913034046682-shihof7s9i6eale40cvjk0802jjfr7gr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAnhoLASa3zDIIasr3A_EdNG6Eoj3NJEBE"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "913034046682-shihof7s9i6eale40cvjk0802jjfr7gr.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "913034046682-ue2gn67sd653t84pa0khf40jkr4p35to.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.ctis480.BestBefore-Prototype-IOS"
+              }
+            }
+          ]
         }
       }
     }

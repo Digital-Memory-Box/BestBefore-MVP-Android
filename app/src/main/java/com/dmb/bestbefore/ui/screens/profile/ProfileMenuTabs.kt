@@ -1,5 +1,4 @@
 package com.dmb.bestbefore.ui.screens.profile
-
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -52,9 +51,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import com.dmb.bestbefore.ui.theme.LocalBestBeforeColors
 import coil.compose.AsyncImage
 import com.dmb.bestbefore.ui.components.ProfileAvatar
-
 // --- REFACTORED PROFILE MENU (iOS Tab Style) ---
-
 @Composable
 fun ProfileMenuScreen(
     viewModel: ProfileViewModel,
@@ -71,7 +68,6 @@ fun ProfileMenuScreen(
     }
     
     var selectedTab by remember { mutableIntStateOf(0) } // Default to Dashboard (0)
-
     val colors = LocalBestBeforeColors.current
     Box(modifier = Modifier.fillMaxSize().background(colors.background)) {
         Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
@@ -105,7 +101,6 @@ fun ProfileMenuScreen(
                     }
                 )
             }
-
             // Tabs Segment
             Row(
                 modifier = Modifier
@@ -139,9 +134,7 @@ fun ProfileMenuScreen(
                     }
                 }
             }
-
             Spacer(modifier = Modifier.height(16.dp))
-
             // Tab Content
             Box(modifier = Modifier.weight(1f)) {
                 when (selectedTab) {
@@ -153,7 +146,6 @@ fun ProfileMenuScreen(
         }
     }
 }
-
 // --- TAB 1: DASHBOARD ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -173,7 +165,6 @@ fun DashboardTab(
     val roomersCount by viewModel.roomersCount.collectAsState(initial = 0)
     val profileImageUri by viewModel.profileImageUri.collectAsState(initial = null as Uri?)
     val preferredTags by viewModel.preferredTags.collectAsState(initial = emptyList<String>())
-
     androidx.compose.material3.pulltorefresh.PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = { viewModel.initDatabase(context) },
@@ -196,7 +187,6 @@ fun DashboardTab(
                 tags = preferredTags
             )
             Spacer(modifier = Modifier.height(16.dp))
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -218,7 +208,6 @@ fun DashboardTab(
             }
             Spacer(modifier = Modifier.height(24.dp))
         }
-
         // Your Rooms
         item {
             Text("Your Rooms", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
@@ -270,8 +259,7 @@ fun DashboardTab(
                                       Box(
                                           modifier = Modifier
                                               .align(Alignment.TopEnd)
-                                              .padding(8.dp)
-                                              .size(24.dp)
+                                              .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
                                               .background(Color.Black.copy(alpha = 0.5f), CircleShape)
                                               .clickable { showMenu = !showMenu },
                                           contentAlignment = Alignment.Center
@@ -349,14 +337,15 @@ fun DashboardTab(
         
         // Recent Activity
         item {
-            Text("Recent Activity", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text(androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.recent_activity), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
             Spacer(modifier = Modifier.height(12.dp))
             val activities by viewModel.recentActivities.collectAsState(initial = emptyList())
             
             if (activities.isEmpty()) {
-                Text("No recent activity", color = Color.Gray, fontSize = 14.sp)
+                Text(androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.no_recent_activity), color = Color.Gray, fontSize = 14.sp)
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val activityDateFormat = remember { java.text.SimpleDateFormat("d MMMM yyyy", java.util.Locale.getDefault()) }
                     activities.forEach { activity ->
                         ActivityItem(
                             icon = when (activity.type) {
@@ -365,7 +354,7 @@ fun DashboardTab(
                                 else -> Icons.Default.Bolt
                             },
                             title = activity.title,
-                            date = java.text.SimpleDateFormat("d MMMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(activity.date))
+                            date = activityDateFormat.format(java.util.Date(activity.date))
                         )
                     }
                 }
@@ -375,7 +364,6 @@ fun DashboardTab(
     }
 }
 }
-
 @Composable
 fun ActivityItem(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, date: String) {
     Row(
@@ -398,7 +386,6 @@ fun ActivityItem(icon: androidx.compose.ui.graphics.vector.ImageVector, title: S
          }
     }
 }
-
 // --- TAB 2: CUSTOMIZATION ---
 @Composable
 fun CustomizationTab(
@@ -416,15 +403,12 @@ fun CustomizationTab(
     val bioText by viewModel.bio.collectAsState(initial = "")
     val preferredTags by viewModel.preferredTags.collectAsState(initial = emptyList<String>())
     val accentColorTags by viewModel.accentColor.collectAsState(initial = Color(0xFF007AFF))
-
     val colors = LocalBestBeforeColors.current
-
     val updatePhotoLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         uri?.let { viewModel.updateProfileImage(it, context) }
     }
-
     // Load tracks when tab is active
     var authToken by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
@@ -458,7 +442,6 @@ fun CustomizationTab(
             }
         )
         Spacer(modifier = Modifier.height(20.dp))
-
         // BB-UI-14: Biography
         Text(text = "Biography", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
@@ -477,10 +460,8 @@ fun CustomizationTab(
             }
         )
         Spacer(modifier = Modifier.height(20.dp))
-
         // ── Profile Tags ──────────────────────────────────────────────
         var tagInput by remember { mutableStateOf("") }
-
         Text(
             text = "Profile Tags",
             color = Color.Gray,
@@ -488,7 +469,6 @@ fun CustomizationTab(
             fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.height(8.dp))
-
         // Tag chips display (scrollable)
         if (preferredTags.isNotEmpty()) {
             androidx.compose.foundation.lazy.LazyRow(
@@ -524,7 +504,7 @@ fun CustomizationTab(
                         Spacer(modifier = Modifier.width(4.dp))
                         Box(
                             modifier = Modifier
-                                .size(16.dp)
+                                .sizeIn(minWidth = 32.dp, minHeight = 32.dp)
                                 .background(Color.White.copy(alpha = 0.15f), CircleShape)
                                 .clickable { viewModel.removeProfileTag(tag, context) },
                             contentAlignment = Alignment.Center
@@ -541,7 +521,6 @@ fun CustomizationTab(
                 }
             }
         }
-
         // Tag input row
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -600,7 +579,6 @@ fun CustomizationTab(
             fontSize = 11.sp
         )
         Spacer(modifier = Modifier.height(20.dp))
-
         // BB-UI-14: Profile Photo
         Text(text = "Profile Photo", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
@@ -611,7 +589,6 @@ fun CustomizationTab(
             onClick = { updatePhotoLauncher.launch("image/*") }
         )
         Spacer(modifier = Modifier.height(24.dp))
-
         // BB-UI-15: Interface Theme
         Text(text = "Interface Theme", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
@@ -647,9 +624,7 @@ fun CustomizationTab(
                }
             }
         }
-
         Spacer(modifier = Modifier.height(20.dp))
-
         // BB-UI-15: Accent Color
         Text(text = "Accent Color", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
@@ -670,13 +645,10 @@ fun CustomizationTab(
                 )
             }
         }
-
         Spacer(modifier = Modifier.height(24.dp))
-
         // Advanced Customization
         Text(text = "Advanced Customization", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
-
         // Apply Accent Toggle
         Row(
             modifier = Modifier
@@ -696,9 +668,7 @@ fun CustomizationTab(
                 colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = accentColor)
             )
         }
-
         Spacer(modifier = Modifier.height(8.dp))
-
         // Sync Accent Toggle
         Row(
             modifier = Modifier
@@ -718,16 +688,12 @@ fun CustomizationTab(
                 colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = accentColor)
             )
         }
-
         Spacer(modifier = Modifier.height(24.dp))
-
         // BB-UI-15: Profile Music
         Text(text = "Profile Music", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
-
         val selectedMusic by viewModel.profileMusic.collectAsState(initial = "None")
         val musicTracks by musicViewModel.tracks.collectAsState(initial = emptyList())
-
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -748,7 +714,6 @@ fun CustomizationTab(
                  Spacer(modifier = Modifier.weight(1f))
                  if(isNone) Icon(Icons.Default.CheckCircle, null, tint = accentColor)
              }
-
              musicTracks.forEach { track ->
                  Row(
                      modifier = Modifier
@@ -763,9 +728,7 @@ fun CustomizationTab(
                  }
              }
         }
-
         Spacer(modifier = Modifier.height(24.dp))
-
         // BB-UI-15: Memory Suggestions (Placeholder)
         Text(text = "Memory Suggestions", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
@@ -778,11 +741,9 @@ fun CustomizationTab(
         ) {
             Text("Suggestions feature coming soon", color = Color.Gray)
         }
-
         Spacer(modifier = Modifier.height(32.dp))
     }
 }
-
 // --- TAB 3: SETTINGS ---
 // BB-UI-16
 @Composable
@@ -794,12 +755,16 @@ fun SettingsTab(
     val context = androidx.compose.ui.platform.LocalContext.current
     val colors = LocalBestBeforeColors.current
     val accentColor = colors.primary
-
     var newEmail by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var showIgnoredRooms by remember { mutableStateOf(false) }
+    var showCredentialDialog by remember { mutableStateOf(false) }
+    var currentPassword by remember { mutableStateOf("") }
+    var showDeleteAccountDialog by remember { mutableStateOf(false) }
+    var showLicensesDialog by remember { mutableStateOf(false) }
+    var showPrivacyPolicyDialog by remember { mutableStateOf(false) }
+    var showTermsDialog by remember { mutableStateOf(false) }
     val ignoredRoomCards by hallwayViewModel.ignoredRoomCards.collectAsState(initial = emptyList())
-
     // ── Ignored Rooms Full-Screen Overlay ─────────────────────────────────────
     if (showIgnoredRooms) {
         androidx.activity.compose.BackHandler { showIgnoredRooms = false }
@@ -819,7 +784,7 @@ fun SettingsTab(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(32.dp)
+                            .size(48.dp)
                             .background(Color.White.copy(alpha = 0.08f), CircleShape)
                             .clickable { showIgnoredRooms = false },
                         contentAlignment = Alignment.Center
@@ -828,7 +793,7 @@ fun SettingsTab(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             "Back",
                             tint = Color.White,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(16.dp))
@@ -846,7 +811,6 @@ fun SettingsTab(
                         )
                     }
                 }
-
                 if (ignoredRoomCards.isEmpty()) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
@@ -888,7 +852,6 @@ fun SettingsTab(
                                         .let { raw -> Color(raw) }
                                 } ?: Color(0xFF1C1C1E)
                             } catch (e: Exception) { Color(0xFF1C1C1E) }
-
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -909,7 +872,6 @@ fun SettingsTab(
                                             )
                                         )
                                 )
-
                                 // Ignored badge
                                 Box(
                                     modifier = Modifier
@@ -926,7 +888,6 @@ fun SettingsTab(
                                         Text("Ignored", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                     }
                                 }
-
                                 // Room info + Unignore button
                                 Column(
                                     modifier = Modifier
@@ -978,7 +939,6 @@ fun SettingsTab(
         }
         return
     }
-
     // ── Normal Settings Content ───────────────────────────────────────────────
     Column(
         modifier = Modifier
@@ -986,9 +946,8 @@ fun SettingsTab(
             .padding(horizontal = 16.dp)
             .verticalScroll(androidx.compose.foundation.rememberScrollState())
     ) {
-        Text("Account Settings", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Text(androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.account_settings), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(modifier = Modifier.height(16.dp))
-
         // Ignored Rooms entry row
         Row(
             modifier = Modifier
@@ -1009,7 +968,7 @@ fun SettingsTab(
                     Icon(Icons.Default.Block, null, tint = Color(0xFFFF3B30), modifier = Modifier.size(18.dp))
                 }
                 Column {
-                    Text("Ignored Rooms", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    Text(androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.ignored_rooms), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                     Text(
                         if (ignoredRoomCards.isEmpty()) "No rooms ignored"
                         else "${ignoredRoomCards.size} room${if (ignoredRoomCards.size != 1) "s" else ""} hidden",
@@ -1036,11 +995,9 @@ fun SettingsTab(
                 Icon(Icons.Default.ChevronRight, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
             }
         }
-
         Spacer(modifier = Modifier.height(20.dp))
-
         // Update Email
-        Text("Update Email", color = Color.Gray, fontSize = 14.sp)
+        Text(androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.update_email), color = Color.Gray, fontSize = 14.sp)
         Spacer(modifier = Modifier.height(8.dp))
         BasicTextField(
             value = newEmail,
@@ -1055,11 +1012,9 @@ fun SettingsTab(
                 innerTextField()
             }
         )
-
         Spacer(modifier = Modifier.height(20.dp))
-
         // Update Password
-        Text("Update Password", color = Color.Gray, fontSize = 14.sp)
+        Text(androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.update_password), color = Color.Gray, fontSize = 14.sp)
         Spacer(modifier = Modifier.height(8.dp))
         BasicTextField(
             value = newPassword,
@@ -1075,37 +1030,252 @@ fun SettingsTab(
                 innerTextField()
             }
         )
-
         Spacer(modifier = Modifier.height(24.dp))
-
         // Update Credentials Button
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(accentColor.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
                 .border(1.dp, accentColor.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-                .clickable { }
+                .clickable { showCredentialDialog = true }
                 .padding(vertical = 16.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text("Update Credentials", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(
+                androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.update_credentials),
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
         }
-
+        if (showCredentialDialog) {
+            AlertDialog(
+                onDismissRequest = { showCredentialDialog = false },
+                containerColor = Color(0xFF2C2C2E),
+                title = { Text("Confirm Update", color = Color.White) },
+                text = {
+                    Column {
+                        Text("Enter your current password to confirm changes:", color = Color.LightGray, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        BasicTextField(
+                            value = currentPassword,
+                            onValueChange = { currentPassword = it },
+                            textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.DarkGray, RoundedCornerShape(8.dp))
+                                .padding(12.dp)
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            if (newEmail.isNotBlank()) viewModel.updateEmail(context, newEmail, currentPassword)
+                            if (newPassword.isNotBlank()) viewModel.updatePassword(context, newPassword, currentPassword)
+                            showCredentialDialog = false
+                            currentPassword = ""
+                        }
+                    ) { Text("Confirm", color = accentColor) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showCredentialDialog = false }) { Text(androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.cancel), color = Color.Gray) }
+                }
+            )
+        }
         Spacer(modifier = Modifier.height(32.dp))
-
+        // Legal & Compliance Section
+        Text(
+            androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.legal_and_policies),
+            color = Color.White.copy(alpha = 0.5f),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
+                    .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+                    .clickable { showPrivacyPolicyDialog = true }
+                    .padding(vertical = 14.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.privacy_policy),
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
+                    .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+                    .clickable { showTermsDialog = true }
+                    .padding(vertical = 14.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.terms_of_service),
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        // Open Source Licenses Button
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+                .clickable { showLicensesDialog = true }
+                .padding(vertical = 14.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.open_source_licenses),
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp
+            )
+        }
+        if (showLicensesDialog) {
+            AlertDialog(
+                onDismissRequest = { showLicensesDialog = false },
+                containerColor = Color(0xFF1C1C1E),
+                title = { Text("Open Source Licenses", color = Color.White, fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 350.dp)
+                            .verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        listOf(
+                            "Retrofit & Converter Gson" to "Square, Inc. — Apache License 2.0",
+                            "OkHttp & Logging Interceptor" to "Square, Inc. — Apache License 2.0",
+                            "Coil Image Loading" to "Coil Contributors — Apache License 2.0",
+                            "Media3 ExoPlayer" to "Google LLC — Apache License 2.0",
+                            "ZXing Android Embedded" to "Journey Mobile — Apache License 2.0",
+                            "Firebase Android SDKs" to "Google LLC — Apache License 2.0",
+                            "Jetpack Compose & Material 3" to "Google LLC / AOSP — Apache License 2.0",
+                            "Kotlinx Coroutines" to "JetBrains s.r.o. — Apache License 2.0"
+                        ).forEach { (lib, lic) ->
+                            Column {
+                                Text(lib, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                Text(lic, color = Color.Gray, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showLicensesDialog = false }) {
+                        Text("Close", color = accentColor)
+                    }
+                }
+            )
+        }
+        if (showPrivacyPolicyDialog) {
+            com.dmb.bestbefore.ui.components.PrivacyPolicyDialog(onDismiss = { showPrivacyPolicyDialog = false })
+        }
+        if (showTermsDialog) {
+            com.dmb.bestbefore.ui.components.TermsOfServiceDialog(onDismiss = { showTermsDialog = false })
+        }
+        Spacer(modifier = Modifier.height(32.dp))
         // Log Out Button
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+                .clickable { onLogout() }
+                .padding(vertical = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.logout),
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        // Delete Account Button
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Color(0xFF3B0D0D), RoundedCornerShape(12.dp))
                 .border(1.dp, Color(0xFFFF3B30).copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                .clickable { onLogout() }
+                .clickable { showDeleteAccountDialog = true }
                 .padding(vertical = 16.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text("Log Out", color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(
+                androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.delete_account),
+                color = Color(0xFFFF3B30),
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
         }
-
+        if (showDeleteAccountDialog) {
+            AlertDialog(
+                onDismissRequest = { showDeleteAccountDialog = false },
+                title = {
+                    Text(
+                        text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.delete_account_dialog_title),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Text(
+                        text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.delete_account_dialog_message),
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showDeleteAccountDialog = false
+                            viewModel.deleteAccount(
+                                onSuccess = {
+                                    onLogout()
+                                },
+                                onError = { errorMsg ->
+                                    android.widget.Toast.makeText(context, errorMsg, android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        }
+                    ) {
+                        Text(
+                            text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.delete_permanently),
+                            color = Color(0xFFFF3B30),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteAccountDialog = false }) {
+                        Text(
+                            text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.cancel),
+                            color = Color.White
+                        )
+                    }
+                },
+                containerColor = Color(0xFF1C1C1E)
+            )
+        }
         Spacer(modifier = Modifier.height(48.dp))
     }
 }

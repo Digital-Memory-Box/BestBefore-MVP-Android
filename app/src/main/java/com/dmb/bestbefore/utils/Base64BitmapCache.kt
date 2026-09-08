@@ -23,7 +23,10 @@ object Base64BitmapCache {
     }
 
     private fun cacheKey(dataUri: String): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(dataUri.toByteArray())
-        return digest.joinToString(separator = "") { byte -> "%02x".format(byte) }
+        val len = dataUri.length
+        if (len <= 128) return dataUri
+        val first = dataUri.substring(0, 64)
+        val last = dataUri.substring(len - 64)
+        return "${len}_${first}_${last}".hashCode().toString()
     }
 }

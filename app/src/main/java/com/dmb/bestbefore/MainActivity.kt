@@ -13,10 +13,15 @@ import com.dmb.bestbefore.utils.JoinLinkParser
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.remember
 
+import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         // Handle deep link from notification
         handleNotificationIntent(intent)
@@ -47,7 +52,7 @@ class MainActivity : AppCompatActivity() {
                 val token = task.result
                 if (token != null) {
                     val appContext = applicationContext
-                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                         try {
                             com.dmb.bestbefore.data.repository.AuthRepository(appContext).updateMe(
                                 com.dmb.bestbefore.data.api.models.UpdateMeRequest(fcmToken = token)

@@ -3,6 +3,7 @@ package com.dmb.bestbefore.ui.components
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dmb.bestbefore.data.api.ApiService
 import com.dmb.bestbefore.data.api.RetrofitClient
 import com.dmb.bestbefore.data.api.models.SoundCloudTrack
 import com.dmb.bestbefore.notifications.MusicPlayerManager
@@ -12,7 +13,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class MusicViewModel : ViewModel() {
+class MusicViewModel @JvmOverloads constructor(
+    private val api: ApiService = RetrofitClient.apiService
+) : ViewModel() {
 
     private val _tracks = MutableStateFlow<List<SoundCloudTrack>>(emptyList())
     val tracks: StateFlow<List<SoundCloudTrack>> = _tracks.asStateFlow()
@@ -30,11 +33,19 @@ class MusicViewModel : ViewModel() {
             _isLoading.value = true
             _error.value = null
             try {
-                val response = RetrofitClient.apiService.getSoundCloudPlaylist("Bearer $token")
+                val response = api.getSoundCloudPlaylist("Bearer $token")
                 if (response.isSuccessful) {
                     val tracksList = response.body()?.tracks ?: emptyList()
-                    _tracks.value = tracksList
-                    MusicPlayerManager.setPlaylist(tracksList)
+                    val baseUrl = com.dmb.bestbefore.BuildConfig.API_BASE_URL.removeSuffix("/")
+                    val mappedTracks = tracksList.map { track ->
+                        if (track.streamUrl.startsWith("/")) {
+                            track.copy(streamUrl = baseUrl + track.streamUrl)
+                        } else {
+                            track
+                        }
+                    }
+                    _tracks.value = mappedTracks
+                    MusicPlayerManager.setPlaylist(mappedTracks)
                 } else {
                     _error.value = if (response.code() in 500..599) AppErrorUtils.LOADING_ERROR else "Failed to load playlist"
                 }
@@ -50,9 +61,12 @@ class MusicViewModel : ViewModel() {
         MusicPlayerManager.playTrack(context, track)
     }
 
-    fun searchTracks(query: String) {
-        val clientId = "ALkAMYHptiNuZ5wq0viSlcF0BfWrSTD2"
-        viewModelScope.launch {
+    private var searchJob: kotlinx.coroutines.Job? = null
+
+    fun searchTracks(token: String, query: String) {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(300L)
             _isLoading.value = true
             _error.value = null
             try {
@@ -61,22 +75,16 @@ class MusicViewModel : ViewModel() {
                     _isLoading.value = false
                     return@launch
                 }
-                val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
-                val url = "https://api.soundcloud.com/tracks?q=$encodedQuery&client_id=$clientId&limit=30"
-                val response = RetrofitClient.apiService.searchSoundCloudDirect(url)
+                val response = api.searchSoundCloudTracks("Bearer $token", query)
                 if (response.isSuccessful) {
-                    val rawTracks = response.body() ?: emptyList()
-                    val mappedTracks = rawTracks.mapNotNull { item ->
-                        try {
-                            val id = (item["id"] as? Number)?.toLong() ?: return@mapNotNull null
-                            val title = item["title"] as? String ?: return@mapNotNull null
-                            val userObj = item["user"] as? Map<*, *>
-                            val artist = userObj?.get("username") as? String ?: "Unknown Artist"
-                            val duration = (item["duration"] as? Number)?.toLong() ?: 0L
-                            val streamUrl = item["stream_url"] as? String ?: return@mapNotNull null
-                            val artworkUrl = item["artwork_url"] as? String
-                            SoundCloudTrack(id, title, artist, duration, "$streamUrl?client_id=$clientId", artworkUrl)
-                        } catch (e: Exception) { null }
+                    val tracksList = response.body()?.tracks ?: emptyList()
+                    val baseUrl = com.dmb.bestbefore.BuildConfig.API_BASE_URL.removeSuffix("/")
+                    val mappedTracks = tracksList.map { track ->
+                        if (track.streamUrl.startsWith("/")) {
+                            track.copy(streamUrl = baseUrl + track.streamUrl)
+                        } else {
+                            track
+                        }
                     }
                     _tracks.value = mappedTracks
                     MusicPlayerManager.setPlaylist(mappedTracks)

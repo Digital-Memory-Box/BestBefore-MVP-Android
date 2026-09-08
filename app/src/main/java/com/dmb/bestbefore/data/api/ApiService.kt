@@ -283,6 +283,13 @@ interface ApiService {
         @Header("Authorization") token: String
     ): Response<SoundCloudPlaylistResponse>
 
+    @GET("api/soundcloud/search")
+    suspend fun searchSoundCloudTracks(
+        @Header("Authorization") token: String,
+        @Query("q") query: String,
+        @Query("limit") limit: Int = 30
+    ): Response<SoundCloudPlaylistResponse>
+
     // ── Tags ──────────────────────────────────────────────────────────────────
     @GET("tags")
     suspend fun getTags(
@@ -314,4 +321,34 @@ interface ApiService {
     suspend fun searchSoundCloudDirect(
         @Url url: String
     ): Response<List<Map<String, @JvmSuppressWildcards Any>>>
+
+    // ── Account Deletion ─────────────────────────────────────────────────────
+    @DELETE("me")
+    suspend fun deleteAccount(
+        @Header("Authorization") token: String
+    ): Response<Unit>
+
+    // ── Content Reporting & User Blocking (UGC Compliance) ───────────────────
+    @POST("reports")
+    suspend fun reportContent(
+        @Header("Authorization") token: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<Unit>
+
+    @POST("reports/block-user")
+    suspend fun blockUser(
+        @Header("Authorization") token: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<Unit>
+
+    @GET("reports/blocked-users")
+    suspend fun getBlockedUsers(
+        @Header("Authorization") token: String
+    ): Response<List<String>>
+
+    @DELETE("reports/block-user/{userId}")
+    suspend fun unblockUser(
+        @Header("Authorization") token: String,
+        @Path("userId") userId: String
+    ): Response<Unit>
 }

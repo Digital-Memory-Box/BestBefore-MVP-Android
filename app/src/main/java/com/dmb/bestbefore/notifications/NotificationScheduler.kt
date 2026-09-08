@@ -1,111 +1,43 @@
 package com.dmb.bestbefore.notifications
 
-import android.app.AlarmManager
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import androidx.core.app.NotificationCompat
-import com.dmb.bestbefore.R
+import android.util.Log
+import androidx.work.*
+import java.util.concurrent.TimeUnit
 
 object NotificationScheduler {
-    private const val CHANNEL_ID = "room_unlock_channel"
-    private const val CHANNEL_NAME = "Room Unlock Notifications"
+    private const val TAG = "NotificationScheduler"
     
-    fun scheduleRoomUnlockNotification(
-        context: Context,
-        roomId: String,
-        roomName: String,
-        unlockTimeMillis: Long
-    ) {
-        createNotificationChannel(context)
-        
-        val intent = Intent(context, RoomUnlockReceiver::class.java).apply {
-            putExtra("ROOM_ID", roomId)
-            putExtra("ROOM_NAME", roomName)
+    fun scheduleRoomUnlock(context: Context, roomId: String, roomName: String, unlockTimeMillis: Long) {
+        val delayMillis = unlockTimeMillis - System.currentTimeMillis()
+        if (delayMillis <= 0) {
+            Log.d(TAG, "Unlock time is in the past for room $roomId, skipping")
+            return
         }
         
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            roomId.hashCode(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val inputData = workDataOf(
+            "roomId" to roomId,
+            "roomName" to roomName
         )
         
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-
-        if (alarmManager.canScheduleExactAlarms()) {
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                unlockTimeMillis,
-                pendingIntent
-            )
-        } else {
-            // Fallback for when exact alarms are not permitted
-            alarmManager.setAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                unlockTimeMillis,
-                pendingIntent
-            )
-        }
-    }
-    
-
-    
-    private fun createNotificationChannel(context: Context) {
-        val importance = NotificationManager.IMPORTANCE_HIGH
-        val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, importance).apply {
-            description = "Notifications for when time capsule rooms unlock"
-        }
-
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.createNotificationChannel(channel)
-    }
-}
-
-class RoomUnlockReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        val roomId = intent.getStringExtra("ROOM_ID") ?: return
-        val roomName = intent.getStringExtra("ROOM_NAME") ?: "Your Room"
-        
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        
-        // Create intent to open room when notification is tapped - matching MainActivity deep link logic
-        val openIntent = Intent(context, com.dmb.bestbefore.MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            action = "com.dmb.bestbefore.OPEN_ROOM"
-            putExtra("extra_room_id", roomId)
-            putExtra("extra_room_name", roomName)
-        }
-
-        val pendingIntent = PendingIntent.getActivity(
-            context,
-            roomId.hashCode(),
-            openIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        
-        val notification = NotificationCompat.Builder(context, "room_unlock_channel")
-            .setSmallIcon(R.drawable.ic_launcher_foreground) // Ensure this icon exists or use android default
-            .setContentTitle("Time Capsule Unlocked")
-            .setContentText("\"$roomName\" is now available to see")
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
+        val workRequest = OneTimeWorkRequestBuilder<RoomUnlockWorker>()
+            .setInitialDelay(delayMillis, TimeUnit.MILLISECONDS)
+            .setInputData(inputData)
+            .addTag("room_unlock_$roomId")
             .build()
         
-        notificationManager.notify(roomId.hashCode(), notification)
-
-        com.dmb.bestbefore.data.repository.NotificationRepository(context).addNotification(
-            com.dmb.bestbefore.data.models.AppNotification(
-                title = "Time Capsule Unlocked",
-                message = "\"$roomName\" is now available to see",
-                type = com.dmb.bestbefore.data.models.NotificationType.ROOM_UNLOCKED,
-                relatedRoomId = roomId,
-                relatedRoomName = roomName
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(
+                "room_unlock_$roomId",
+                ExistingWorkPolicy.REPLACE,
+                workRequest
             )
-        )
+        
+        Log.d(TAG, "Scheduled unlock for room $roomId in ${delayMillis / 1000}s")
+    }
+    
+    fun cancelRoomUnlock(context: Context, roomId: String) {
+        WorkManager.getInstance(context)
+            .cancelUniqueWork("room_unlock_$roomId")
     }
 }
