@@ -36,8 +36,6 @@ fun SignupScreen(
 
     var ageConfirmed by remember { mutableStateOf(false) }
     var termsAccepted by remember { mutableStateOf(false) }
-    var showPrivacyPolicyDialog by remember { mutableStateOf(false) }
-    var showTermsDialog by remember { mutableStateOf(false) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
 
@@ -164,7 +162,10 @@ fun SignupScreen(
                                     text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.terms_of_service),
                                     color = Color(0xFF00BFFF),
                                     fontSize = 14.sp,
-                                    modifier = Modifier.clickable { showTermsDialog = true }
+                                    modifier = Modifier.clickable {
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("${com.dmb.bestbefore.BuildConfig.API_BASE_URL}terms"))
+                                        context.startActivity(intent)
+                                    }
                                 )
                                 Text(
                                     text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.terms_and),
@@ -175,7 +176,10 @@ fun SignupScreen(
                                     text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.privacy_policy),
                                     color = Color(0xFF00BFFF),
                                     fontSize = 14.sp,
-                                    modifier = Modifier.clickable { showPrivacyPolicyDialog = true }
+                                    modifier = Modifier.clickable {
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("${com.dmb.bestbefore.BuildConfig.API_BASE_URL}privacy"))
+                                        context.startActivity(intent)
+                                    }
                                 )
                             }
                         }
@@ -331,13 +335,6 @@ fun SignupScreen(
                     }
                 }
             )
-        }
-
-        if (showPrivacyPolicyDialog) {
-            com.dmb.bestbefore.ui.components.PrivacyPolicyDialog(onDismiss = { showPrivacyPolicyDialog = false })
-        }
-        if (showTermsDialog) {
-            com.dmb.bestbefore.ui.components.TermsOfServiceDialog(onDismiss = { showTermsDialog = false })
         }
     }
 

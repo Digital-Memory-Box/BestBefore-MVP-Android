@@ -8,6 +8,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -153,6 +155,24 @@ fun HallwayScreen(
                     }
                 }
             }
+            .pointerInput(Unit) {
+                var tapCount = 0
+                var lastTapTime = 0L
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    val currentTime = System.currentTimeMillis()
+                    if (currentTime - lastTapTime < 450L) {
+                        tapCount++
+                    } else {
+                        tapCount = 1
+                    }
+                    lastTapTime = currentTime
+                    if (tapCount >= 3) {
+                        viewModel.setOrbMenuVisible(true)
+                        tapCount = 0
+                    }
+                }
+            }
     ) {
         // Full-screen animated background — color animates to match the active room's theme
         AnimatedBackgroundView(theme = activeCardTheme)
@@ -276,7 +296,14 @@ fun HallwayScreen(
                 onProfileClick = onNavigateToProfile,
                 onAddClick = onCreateRoomClick,
                 onCameraClick = onCameraClick,
-                profileImageUrl = userProfileImageUrl
+                profileImageUrl = userProfileImageUrl,
+                modifier = Modifier.pointerInput(Unit) {
+                    detectHorizontalDragGestures { _, dragAmount ->
+                        if (dragAmount > 10f) {
+                            viewModel.setOrbMenuVisible(false)
+                        }
+                    }
+                }
             )
         }
 
@@ -668,6 +695,7 @@ private fun RoomingCard(
             if (url.isNullOrBlank()) return null
             return when {
                 url.startsWith("http") || url.startsWith("data:image") -> url
+                url.startsWith("/") -> com.dmb.bestbefore.data.api.RetrofitClient.BASE_URL.removeSuffix("/") + url
                 url.startsWith("data:") && url.contains("base64,") ->
                     "data:image/jpeg;base64," + url.substringAfter("base64,")
                 url.length > 100 -> "data:image/jpeg;base64,$url"
@@ -1288,6 +1316,7 @@ fun HallwayActiveCard(
             if (rawMediaUrl != null) {
                 val mediaUrl = when {
                     rawMediaUrl.startsWith("http") || rawMediaUrl.startsWith("data:") -> rawMediaUrl
+                    rawMediaUrl.startsWith("/") -> com.dmb.bestbefore.data.api.RetrofitClient.BASE_URL.removeSuffix("/") + rawMediaUrl
                     rawMediaUrl.length > 100 -> "data:image/jpeg;base64,$rawMediaUrl"
                     else -> rawMediaUrl
                 }
@@ -1814,10 +1843,12 @@ private fun ExpandedDescriptionOverlay(
                     .take(2)
                     .joinToString(",")
                     .takeIf { it.isNotBlank() } ?: "abstract"
-                val rawMediaUrl = card.photos.firstOrNull()?.url
+                val rawMediaUrl = card.imageUrl?.takeIf { it.isNotBlank() }
+                    ?: card.photos.firstOrNull()?.url?.takeIf { it.isNotBlank() }
                 val mediaUrl = when {
                     rawMediaUrl == null -> null
                     rawMediaUrl.startsWith("http") || rawMediaUrl.startsWith("data:image") -> rawMediaUrl
+                    rawMediaUrl.startsWith("/") -> com.dmb.bestbefore.data.api.RetrofitClient.BASE_URL.removeSuffix("/") + rawMediaUrl
                     rawMediaUrl.startsWith("data:") && rawMediaUrl.contains("base64,") ->
                         "data:image/jpeg;base64," + rawMediaUrl.substringAfter("base64,")
                     rawMediaUrl.length > 100 -> "data:image/jpeg;base64,$rawMediaUrl"

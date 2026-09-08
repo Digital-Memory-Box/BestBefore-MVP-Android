@@ -84,14 +84,14 @@
     <string name="tutorial_how_to_use">Guía de Uso</string>
     <string name="tutorial_step1_badge">PASO 1 DE 4 • DESCUBRE</string>
     <string name="tutorial_step1_title">Explora el Hallway</string>
-    <string name="tutorial_step1_desc">Desliza a izquierda y derecha por las cápsulas de tiempo comunitarias. Toca cualquier tarjeta para entrar y ver recuerdos y fotos.</string>
-    <string name="tutorial_step2_badge">PASO 2 DE 4 • INSPIRACIÓN</string>
+    <string name="tutorial_step1_desc">Desliza a izquierda y derecha entre las cápsulas de tiempo compartidas. Toca la tarjeta principal para entrar y ver fotos completas, audios y recuerdos. Toca \'Salas similares\' o \'Ver todo\' para expandir tu experiencia.</string>
+    <string name="tutorial_step2_badge">PASO 2 DE 4 • CREADORES</string>
     <string name="tutorial_step2_title">Artistas y Portafolios</string>
-    <string name="tutorial_step2_desc">Descubre espacios seleccionados de creadores verificados. Toca el avatar de cualquier creador para ver su trabajo y colaboraciones.</string>
-    <string name="tutorial_step3_badge">PASO 3 DE 4 • BÓVEDA</string>
-    <string name="tutorial_step3_title">Rooming y Acceso QR</string>
-    <string name="tutorial_step3_desc">Guarda tus salas favoritas en Rooming para acceder rápidamente. Toca \'Escanear\' para desbloquear cápsulas físicas con códigos QR al instante.</string>
-    <string name="tutorial_step4_badge">PASO 4 DE 4 • CREA</string>
+    <string name="tutorial_step2_desc">Ve a la pestaña Artistas para descubrir colecciones curadas de creadores destacados. Toca el avatar de un creador para visitar su perfil, ver su portafolio creativo y explorar salas públicas compartidas.</string>
+    <string name="tutorial_step3_badge">PASO 3 DE 4 • TU BÓVEDA</string>
+    <string name="tutorial_step3_title">Rooming y Escáner QR</string>
+    <string name="tutorial_step3_desc">Accede a tus cápsulas guardadas y en colaboración dentro de Rooming. Toca \'Escanear\' en la esquina superior derecha para desbloquear cápsulas físicas en el mundo real mediante códigos QR.</string>
+    <string name="tutorial_step4_badge">PASO 4 DE 4 • CREACIÓN</string>
     <string name="tutorial_step4_title">Crea y Sella Cápsulas</string>
-    <string name="tutorial_step4_desc">Desliza desde el borde derecho o toca el Menú Orb (+) para crear tu cápsula. ¡Agrega fotos, notas de voz, música y fija una fecha de apertura!</string>
+    <string name="tutorial_step4_desc">Desliza desde el borde derecho o toca el Menú Orb (+) para comenzar a crear. Nombra tu cápsula, añade etiquetas, sube fotos, adjunta música o notas de voz y fija un tiempo de bloqueo para sellar tu recuerdo.</string>
 </resources>

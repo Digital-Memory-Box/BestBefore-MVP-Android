@@ -84,14 +84,14 @@
     <string name="tutorial_how_to_use">App Learning Guide</string>
     <string name="tutorial_step1_badge">STEP 1 OF 4 • DISCOVER</string>
     <string name="tutorial_step1_title">Explore the Hallway</string>
-    <string name="tutorial_step1_desc">Swipe left and right through time capsules created by the community. Tap any card to step inside and experience photos and memories.</string>
-    <string name="tutorial_step2_badge">STEP 2 OF 4 • INSPIRATION</string>
+    <string name="tutorial_step1_desc">Swipe left and right through shared time capsules. Tap the main card to step inside and view full photos, soundscapes, and memories. Tap \'Show Similar Rooms\' or \'See All\' to expand your discovery.</string>
+    <string name="tutorial_step2_badge">STEP 2 OF 4 • CREATORS</string>
     <string name="tutorial_step2_title">Artists &amp; Portfolios</string>
-    <string name="tutorial_step2_desc">Discover curated spaces from verified creators. Tap on any creator\'s profile avatar to view their creative journey and collaborative rooms.</string>
-    <string name="tutorial_step3_badge">STEP 3 OF 4 • VAULT</string>
-    <string name="tutorial_step3_title">Rooming &amp; QR Access</string>
-    <string name="tutorial_step3_desc">Keep your favorite capsules in Rooming for fast access. Tap \'Scan\' to unlock real-world physical capsules with QR codes instantly.</string>
-    <string name="tutorial_step4_badge">STEP 4 OF 4 • CREATE</string>
+    <string name="tutorial_step2_desc">Navigate to the Artists tab to discover curated collections from featured creators. Tap any creator\'s avatar to visit their profile, explore their creative portfolio, and view shared public rooms.</string>
+    <string name="tutorial_step3_badge">STEP 3 OF 4 • YOUR VAULT</string>
+    <string name="tutorial_step3_title">Rooming &amp; QR Scanner</string>
+    <string name="tutorial_step3_desc">Access your saved and collaborated capsules under Rooming. Tap \'Scan\' in the top right to instantly unlock physical time capsules in the real world using QR codes.</string>
+    <string name="tutorial_step4_badge">STEP 4 OF 4 • CREATION</string>
     <string name="tutorial_step4_title">Create &amp; Seal Capsules</string>
-    <string name="tutorial_step4_desc">Swipe from the right edge or tap the Orb Menu (+) to create your capsule. Add photos, voice notes, SoundCloud music, and seal it with a lock date!</string>
+    <string name="tutorial_step4_desc">Swipe from the right edge or tap the Orb Menu (+) to start creating. Name your capsule, add tags, upload photos, attach music or voice notes, and set a lock duration to seal your memory.</string>
 </resources>

@@ -2652,7 +2652,7 @@ class ProfileViewModel @JvmOverloads constructor(
     
     // ========== CREDENTIAL UPDATE FUNCTIONS ==========
     
-    fun updateEmail(context: Context, newEmail: String, currentPassword: String) {
+    fun updateEmail(context: Context, newEmail: String, currentEmail: String, currentPassword: String) {
         viewModelScope.launch {
             _isUpdatingCredential.value = true
             _credentialUpdateError.value = null
@@ -2667,9 +2667,16 @@ class ProfileViewModel @JvmOverloads constructor(
                     _isUpdatingCredential.value = false
                     return@launch
                 }
+
+                val accountEmail = user.email ?: ""
+                if (!currentEmail.trim().equals(accountEmail.trim(), ignoreCase = true)) {
+                    _credentialUpdateError.value = "Current email does not match your account email."
+                    _isUpdatingCredential.value = false
+                    return@launch
+                }
                 
-                // Re-authenticate first (Firebase requirement)
-                val credential = EmailAuthProvider.getCredential(user.email!!, currentPassword)
+                // Re-authenticate with current credentials
+                val credential = EmailAuthProvider.getCredential(currentEmail.trim(), currentPassword)
                 user.reauthenticate(credential).addOnCompleteListener { reAuthTask ->
                     if (reAuthTask.isSuccessful) {
                         // Update email in Firebase
@@ -2706,7 +2713,7 @@ class ProfileViewModel @JvmOverloads constructor(
                             }
                         }
                     } else {
-                        _credentialUpdateError.value = "Re-authentication failed. Check password."
+                        _credentialUpdateError.value = "Re-authentication failed. Incorrect password."
                         _isUpdatingCredential.value = false
                     }
                 }
@@ -2717,7 +2724,7 @@ class ProfileViewModel @JvmOverloads constructor(
         }
     }
     
-    fun updatePassword(context: Context, newPassword: String, currentPassword: String) {
+    fun updatePassword(context: Context, newPassword: String, currentEmail: String, currentPassword: String) {
         viewModelScope.launch {
             _isUpdatingCredential.value = true
             _credentialUpdateError.value = null
@@ -2732,9 +2739,16 @@ class ProfileViewModel @JvmOverloads constructor(
                     _isUpdatingCredential.value = false
                     return@launch
                 }
+
+                val accountEmail = user.email ?: ""
+                if (!currentEmail.trim().equals(accountEmail.trim(), ignoreCase = true)) {
+                    _credentialUpdateError.value = "Current email does not match your account email."
+                    _isUpdatingCredential.value = false
+                    return@launch
+                }
                 
                 // Re-authenticate first
-                val credential = EmailAuthProvider.getCredential(user.email!!, currentPassword)
+                val credential = EmailAuthProvider.getCredential(currentEmail.trim(), currentPassword)
                 user.reauthenticate(credential).addOnCompleteListener { reAuthTask ->
                     if (reAuthTask.isSuccessful) {
                         // Update password in Firebase
@@ -2751,7 +2765,7 @@ class ProfileViewModel @JvmOverloads constructor(
                             }
                         }
                     } else {
-                        _credentialUpdateError.value = "Re-authentication failed. Check current password."
+                        _credentialUpdateError.value = "Re-authentication failed. Incorrect current password."
                         _isUpdatingCredential.value = false
                     }
                 }

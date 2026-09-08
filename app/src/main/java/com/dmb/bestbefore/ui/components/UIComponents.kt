@@ -76,7 +76,7 @@ fun SharedUserCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val displayName = if (name.isEmpty()) "Username" else if (name.startsWith("@")) name else "@$name"
+                    val displayName = if (name.isEmpty()) "Username" else name.removePrefix("@")
                     Text(
                         text = displayName,
                         fontSize = 26.sp,

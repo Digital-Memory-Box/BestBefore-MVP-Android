@@ -177,7 +177,7 @@ fun DashboardTab(
         // Stats Cards
         item {
             com.dmb.bestbefore.ui.components.SharedUserCard(
-                name = if (userName.startsWith("@")) userName else "@$userName",
+                name = userName.removePrefix("@"),
                 biography = bio,
                 roomingCount = roomingCount.toString(),
                 roomersCount = roomersCount.toString(),
@@ -688,59 +688,6 @@ fun CustomizationTab(
                 colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = accentColor)
             )
         }
-        Spacer(modifier = Modifier.height(24.dp))
-        // BB-UI-15: Profile Music
-        Text(text = "Profile Music", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(8.dp))
-        val selectedMusic by viewModel.profileMusic.collectAsState(initial = "None")
-        val musicTracks by musicViewModel.tracks.collectAsState(initial = emptyList())
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(colors.surface, RoundedCornerShape(12.dp))
-        ) {
-             val isNone = selectedMusic == "None" || selectedMusic == null
-             Row(
-                 modifier = Modifier
-                     .fillMaxWidth()
-                     .border(if (isNone) 2.dp else 0.dp, if (isNone) accentColor else Color.Transparent, RoundedCornerShape(12.dp))
-                     .clickable { viewModel.saveProfileMusic(context, "None") }
-                     .padding(16.dp),
-                 verticalAlignment = Alignment.CenterVertically
-             ) {
-                 Icon(Icons.AutoMirrored.Filled.VolumeOff, null, tint = if(isNone) Color.White else Color.Gray)
-                 Spacer(modifier = Modifier.width(16.dp))
-                 Text("None", color = Color.White, fontWeight = FontWeight.Bold)
-                 Spacer(modifier = Modifier.weight(1f))
-                 if(isNone) Icon(Icons.Default.CheckCircle, null, tint = accentColor)
-             }
-             musicTracks.forEach { track ->
-                 Row(
-                     modifier = Modifier
-                         .fillMaxWidth()
-                         .clickable { viewModel.saveProfileMusic(context, track.title) }
-                         .padding(16.dp),
-                     verticalAlignment = Alignment.CenterVertically
-                 ) {
-                     Icon(Icons.Default.Done, null, tint = Color.Gray)
-                     Spacer(modifier = Modifier.width(16.dp))
-                     Text(track.title, color = Color.Gray, fontWeight = FontWeight.Bold)
-                 }
-             }
-        }
-        Spacer(modifier = Modifier.height(24.dp))
-        // BB-UI-15: Memory Suggestions (Placeholder)
-        Text(text = "Memory Suggestions", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(8.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(100.dp)
-                .background(colors.surface, RoundedCornerShape(12.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("Suggestions feature coming soon", color = Color.Gray)
-        }
         Spacer(modifier = Modifier.height(32.dp))
     }
 }
@@ -759,12 +706,11 @@ fun SettingsTab(
     var newPassword by remember { mutableStateOf("") }
     var showIgnoredRooms by remember { mutableStateOf(false) }
     var showCredentialDialog by remember { mutableStateOf(false) }
+    var currentEmail by remember { mutableStateOf("") }
     var currentPassword by remember { mutableStateOf("") }
+    var credentialError by remember { mutableStateOf<String?>(null) }
     var showDeleteAccountDialog by remember { mutableStateOf(false) }
     var showLicensesDialog by remember { mutableStateOf(false) }
-    var showPrivacyPolicyDialog by remember { mutableStateOf(false) }
-    var showTermsDialog by remember { mutableStateOf(false) }
-    var showTutorialDialog by remember { mutableStateOf(false) }
     val ignoredRoomCards by hallwayViewModel.ignoredRoomCards.collectAsState(initial = emptyList())
     // ── Ignored Rooms Full-Screen Overlay ─────────────────────────────────────
     if (showIgnoredRooms) {
@@ -1051,37 +997,82 @@ fun SettingsTab(
         }
         if (showCredentialDialog) {
             AlertDialog(
-                onDismissRequest = { showCredentialDialog = false },
+                onDismissRequest = { 
+                    showCredentialDialog = false 
+                    credentialError = null
+                },
                 containerColor = Color(0xFF2C2C2E),
                 title = { Text("Confirm Update", color = Color.White) },
                 text = {
                     Column {
-                        Text("Enter your current password to confirm changes:", color = Color.LightGray, fontSize = 14.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Enter your current email and password to confirm changes:", color = Color.LightGray, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("Current Email", color = Color.Gray, fontSize = 12.sp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        BasicTextField(
+                            value = currentEmail,
+                            onValueChange = { 
+                                currentEmail = it 
+                                credentialError = null
+                            },
+                            textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.DarkGray, RoundedCornerShape(8.dp))
+                                .padding(12.dp),
+                            decorationBox = { inner ->
+                                if (currentEmail.isEmpty()) Text("current@example.com", color = Color.Gray, fontSize = 15.sp)
+                                inner()
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("Current Password", color = Color.Gray, fontSize = 12.sp)
+                        Spacer(modifier = Modifier.height(4.dp))
                         BasicTextField(
                             value = currentPassword,
-                            onValueChange = { currentPassword = it },
-                            textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                            onValueChange = { 
+                                currentPassword = it 
+                                credentialError = null
+                            },
+                            textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
                             visualTransformation = PasswordVisualTransformation(),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(Color.DarkGray, RoundedCornerShape(8.dp))
-                                .padding(12.dp)
+                                .padding(12.dp),
+                            decorationBox = { inner ->
+                                if (currentPassword.isEmpty()) Text("••••••••", color = Color.Gray, fontSize = 15.sp)
+                                inner()
+                            }
                         )
+                        val vmError by viewModel.credentialUpdateError.collectAsState()
+                        val displayError = credentialError ?: vmError
+                        if (!displayError.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(displayError, color = Color(0xFFFF453A), fontSize = 12.sp)
+                        }
                     }
                 },
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            if (newEmail.isNotBlank()) viewModel.updateEmail(context, newEmail, currentPassword)
-                            if (newPassword.isNotBlank()) viewModel.updatePassword(context, newPassword, currentPassword)
+                            if (currentEmail.isBlank() || currentPassword.isBlank()) {
+                                credentialError = "Please enter both your current email and password."
+                                return@TextButton
+                            }
+                            if (newEmail.isNotBlank()) viewModel.updateEmail(context, newEmail, currentEmail, currentPassword)
+                            if (newPassword.isNotBlank()) viewModel.updatePassword(context, newPassword, currentEmail, currentPassword)
                             showCredentialDialog = false
                             currentPassword = ""
+                            currentEmail = ""
                         }
                     ) { Text("Confirm", color = accentColor) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showCredentialDialog = false }) { Text(androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.cancel), color = Color.Gray) }
+                    TextButton(onClick = { 
+                        showCredentialDialog = false 
+                        credentialError = null
+                    }) { Text(androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.cancel), color = Color.Gray) }
                 }
             )
         }
@@ -1104,7 +1095,10 @@ fun SettingsTab(
                     .weight(1f)
                     .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
                     .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
-                    .clickable { showPrivacyPolicyDialog = true }
+                    .clickable { 
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("${com.dmb.bestbefore.BuildConfig.API_BASE_URL}privacy"))
+                        context.startActivity(intent)
+                    }
                     .padding(vertical = 14.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -1120,7 +1114,10 @@ fun SettingsTab(
                     .weight(1f)
                     .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
                     .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
-                    .clickable { showTermsDialog = true }
+                    .clickable { 
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("${com.dmb.bestbefore.BuildConfig.API_BASE_URL}terms"))
+                        context.startActivity(intent)
+                    }
                     .padding(vertical = 14.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -1148,29 +1145,6 @@ fun SettingsTab(
                 color = Color.White,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp
-            )
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        // App Learning Guide Button
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
-                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
-                .clickable { showTutorialDialog = true }
-                .padding(vertical = 14.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.tutorial_how_to_use),
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp
-            )
-        }
-        if (showTutorialDialog) {
-            com.dmb.bestbefore.ui.components.TutorialGuideDialog(
-                onDismiss = { showTutorialDialog = false }
             )
         }
         if (showLicensesDialog) {
@@ -1209,12 +1183,6 @@ fun SettingsTab(
                     }
                 }
             )
-        }
-        if (showPrivacyPolicyDialog) {
-            com.dmb.bestbefore.ui.components.PrivacyPolicyDialog(onDismiss = { showPrivacyPolicyDialog = false })
-        }
-        if (showTermsDialog) {
-            com.dmb.bestbefore.ui.components.TermsOfServiceDialog(onDismiss = { showTermsDialog = false })
         }
         Spacer(modifier = Modifier.height(32.dp))
         // Log Out Button
