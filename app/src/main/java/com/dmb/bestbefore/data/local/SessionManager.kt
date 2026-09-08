@@ -32,6 +32,7 @@ class SessionManager private constructor(context: Context) {
         private const val KEY_CACHED_HALLWAY = "cached_hallway_cards"
         private const val KEY_MANUAL_PROFILE_TAGS = "manual_profile_tags"
         private const val KEY_FCM_TOKEN = "fcm_token"
+        private const val KEY_HAS_SEEN_TUTORIAL = "has_seen_tutorial"
 
         @Volatile
         private var INSTANCE: SessionManager? = null
@@ -208,6 +209,12 @@ class SessionManager private constructor(context: Context) {
 
     fun saveRoomEmotions(userId: String?, emotions: Map<String, String>) {
         prefs.edit { putString(roomEmotionKey(userId), gson.toJson(emotions)) }
+    }
+
+    fun hasSeenTutorial(): Boolean = prefs.getBoolean(KEY_HAS_SEEN_TUTORIAL, false)
+
+    fun setHasSeenTutorial(seen: Boolean) {
+        prefs.edit { putBoolean(KEY_HAS_SEEN_TUTORIAL, seen) }
     }
 
     fun isLoggedIn(): Boolean {

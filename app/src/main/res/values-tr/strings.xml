@@ -76,4 +76,22 @@
     <string name="listen_on_soundcloud">SoundCloud\'da Dinle</string>
     <string name="saved">Kaydedildi</string>
     <string name="remove">Kaldır</string>
+
+    <!-- Learning Guide / Onboarding Tutorial -->
+    <string name="tutorial_skip">Geç</string>
+    <string name="tutorial_next">İleri</string>
+    <string name="tutorial_get_started">Başla</string>
+    <string name="tutorial_how_to_use">Kullanım Kılavuzu</string>
+    <string name="tutorial_step1_badge">ADIM 1 / 4 • KEŞFET</string>
+    <string name="tutorial_step1_title">Hallway\'i Keşfet</string>
+    <string name="tutorial_step1_desc">Topluluk tarafından oluşturulan zaman kapsülleri arasında sağa ve sola kaydırın. Fotoğrafları ve anıları görmek için herhangi bir karta dokunun.</string>
+    <string name="tutorial_step2_badge">ADIM 2 / 4 • İLHAM</string>
+    <string name="tutorial_step2_title">Sanatçılar ve Portfolyolar</string>
+    <string name="tutorial_step2_desc">Doğrulanmış üreticilerin özel odalarını keşfedin. Sanatçının profil fotoğrafına dokunarak üretimlerini ve ortak çalışmalarını inceleyin.</string>
+    <string name="tutorial_step3_badge">ADIM 3 / 4 • KASA</string>
+    <string name="tutorial_step3_title">Rooming ve QR Erişimi</string>
+    <string name="tutorial_step3_desc">Favori kapsüllerinizi hızlı erişim için Rooming sekmesinde saklayın. Fiziksel kapsülleri hemen açmak için sağ üstteki \'Tara\' butonunu kullanın.</string>
+    <string name="tutorial_step4_badge">ADIM 4 / 4 • ÜRET</string>
+    <string name="tutorial_step4_title">Kapsül Oluştur ve Kilitle</string>
+    <string name="tutorial_step4_desc">Sağ kenardan kaydırarak Orb Menüsü (+) ile yeni kapsül oluşturun. Fotoğraf, ses kayıtları, müzik ekleyin ve kilit tarihi belirleyin!</string>
 </resources>

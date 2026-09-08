@@ -76,4 +76,22 @@
     <string name="listen_on_soundcloud">Listen on SoundCloud</string>
     <string name="saved">Saved</string>
     <string name="remove">Remove</string>
+
+    <!-- Learning Guide / Onboarding Tutorial -->
+    <string name="tutorial_skip">Skip</string>
+    <string name="tutorial_next">Next</string>
+    <string name="tutorial_get_started">Get Started</string>
+    <string name="tutorial_how_to_use">App Learning Guide</string>
+    <string name="tutorial_step1_badge">STEP 1 OF 4 • DISCOVER</string>
+    <string name="tutorial_step1_title">Explore the Hallway</string>
+    <string name="tutorial_step1_desc">Swipe left and right through time capsules created by the community. Tap any card to step inside and experience photos and memories.</string>
+    <string name="tutorial_step2_badge">STEP 2 OF 4 • INSPIRATION</string>
+    <string name="tutorial_step2_title">Artists &amp; Portfolios</string>
+    <string name="tutorial_step2_desc">Discover curated spaces from verified creators. Tap on any creator\'s profile avatar to view their creative journey and collaborative rooms.</string>
+    <string name="tutorial_step3_badge">STEP 3 OF 4 • VAULT</string>
+    <string name="tutorial_step3_title">Rooming &amp; QR Access</string>
+    <string name="tutorial_step3_desc">Keep your favorite capsules in Rooming for fast access. Tap \'Scan\' to unlock real-world physical capsules with QR codes instantly.</string>
+    <string name="tutorial_step4_badge">STEP 4 OF 4 • CREATE</string>
+    <string name="tutorial_step4_title">Create &amp; Seal Capsules</string>
+    <string name="tutorial_step4_desc">Swipe from the right edge or tap the Orb Menu (+) to create your capsule. Add photos, voice notes, SoundCloud music, and seal it with a lock date!</string>
 </resources>

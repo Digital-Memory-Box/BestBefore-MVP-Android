@@ -764,6 +764,7 @@ fun SettingsTab(
     var showLicensesDialog by remember { mutableStateOf(false) }
     var showPrivacyPolicyDialog by remember { mutableStateOf(false) }
     var showTermsDialog by remember { mutableStateOf(false) }
+    var showTutorialDialog by remember { mutableStateOf(false) }
     val ignoredRoomCards by hallwayViewModel.ignoredRoomCards.collectAsState(initial = emptyList())
     // ── Ignored Rooms Full-Screen Overlay ─────────────────────────────────────
     if (showIgnoredRooms) {
@@ -1147,6 +1148,29 @@ fun SettingsTab(
                 color = Color.White,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        // App Learning Guide Button
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+                .clickable { showTutorialDialog = true }
+                .padding(vertical = 14.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.tutorial_how_to_use),
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp
+            )
+        }
+        if (showTutorialDialog) {
+            com.dmb.bestbefore.ui.components.TutorialGuideDialog(
+                onDismiss = { showTutorialDialog = false }
             )
         }
         if (showLicensesDialog) {

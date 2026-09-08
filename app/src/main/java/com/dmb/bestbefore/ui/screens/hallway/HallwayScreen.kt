@@ -60,6 +60,8 @@ import com.dmb.bestbefore.data.models.HallwayCard
 import com.dmb.bestbefore.ui.components.AnimatedBackgroundView
 import com.dmb.bestbefore.ui.components.OrbMenu
 import com.dmb.bestbefore.ui.components.ProfileAvatar
+import com.dmb.bestbefore.ui.components.TutorialGuideDialog
+import com.dmb.bestbefore.data.local.SessionManager
 import com.dmb.bestbefore.ui.theme.LocalBestBeforeColors
 import com.dmb.bestbefore.ui.theme.ThemeState
 import androidx.core.graphics.toColorInt
@@ -110,6 +112,8 @@ fun HallwayScreen(
     val orbWidth = (screenWidthDp * 0.82f).dp.coerceIn(300.dp, 420.dp)
     val contentEndInset = 0.dp
     val context = LocalContext.current
+    val sessionManager = remember { SessionManager.getInstance(context) }
+    var showTutorialGuide by remember { mutableStateOf(!sessionManager.hasSeenTutorial()) }
 
     LaunchedEffect(errorMessage) {
         errorMessage?.let { message ->
@@ -303,6 +307,16 @@ fun HallwayScreen(
                 )
             }
         }
+
+        // ── Pop-up Learning Guide Tutorial for New Users ────────────
+        if (showTutorialGuide) {
+            TutorialGuideDialog(
+                onDismiss = {
+                    sessionManager.setHasSeenTutorial(true)
+                    showTutorialGuide = false
+                }
+            )
+        }
     }
 }
 
@@ -430,7 +444,7 @@ private fun RoomingContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp)
-                    .padding(top = 15.dp)
+                    .padding(top = 24.dp)
                     .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
                     .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -1396,59 +1410,44 @@ fun ActiveCardDetails(
             modifier = Modifier.fillMaxSize()
         ) {
             // ── Top content group ────────────────────────────────
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // ── Owner Row + Tags ────────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // ── Owner Row (tags removed) ─────────────────────────
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        ProfileAvatar(
-                            imageUri = card.ownerProfilePic,
-                            size = 44.dp,
-                            accentColor = Color.White,
-                            onClick = { card.ownerId?.let { onNavigateToCreatorProfile(it) } }
-                        )
+                    ProfileAvatar(
+                        imageUri = card.ownerProfilePic,
+                        size = 44.dp,
+                        accentColor = Color.White,
+                        onClick = { card.ownerId?.let { onNavigateToCreatorProfile(it) } }
+                    )
 
-                        val nameText = (card.ownerName?.takeIf { it.isNotBlank() }
-                            ?: card.ownerEmail?.substringBefore("@")
-                            ?: "artist")
-                        Text(
-                            text = nameText,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
-                            modifier = Modifier.padding(end = 4.dp)
-                        )
+                    val nameText = (card.ownerName?.takeIf { it.isNotBlank() }
+                        ?: card.ownerEmail?.substringBefore("@")
+                        ?: "artist")
+                    Text(
+                        text = nameText,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        modifier = Modifier.padding(start = 8.dp, end = 4.dp)
+                    )
 
-                        if (isCollabRoom) {
-                            Box(
-                                modifier = Modifier
-                                    .background(themeColor.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
-                                    .border(1.dp, themeColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                                    .clickable { onToggleCollaborators() }
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    text = if (showAllCollaborators) "show less" else "+${card.collaboratorCount} more",
-                                    color = themeColor,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-                    }
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        if (!isCollabRoom && hasTags) {
-                            card.tags.take(2).forEach { tag -> TagChip("#$tag", themeColor) }
-                            if (card.tags.size > 2) TagChip("+", themeColor)
-                        } else if (isCollabRoom && hasTags) {
-                            TagChip("+ tags", themeColor)
+                    if (isCollabRoom) {
+                        Box(
+                            modifier = Modifier
+                                .background(themeColor.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                                .border(1.dp, themeColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                .clickable { onToggleCollaborators() }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = if (showAllCollaborators) "show less" else "+${card.collaboratorCount} more",
+                                color = themeColor,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
                         }
                     }
                 }
@@ -1457,6 +1456,7 @@ fun ActiveCardDetails(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .padding(top = 4.dp)
                         .heightIn(min = 40.dp, max = 72.dp),
                     contentAlignment = Alignment.TopStart
                 ) {
@@ -1645,7 +1645,7 @@ fun SearchBarAndTags(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp)
-            .padding(top = 12.dp, bottom = 16.dp)
+            .padding(top = 24.dp, bottom = 16.dp)
             .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically

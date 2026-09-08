@@ -76,4 +76,22 @@
     <string name="listen_on_soundcloud">Escuchar en SoundCloud</string>
     <string name="saved">Guardado</string>
     <string name="remove">Eliminar</string>
+
+    <!-- Learning Guide / Onboarding Tutorial -->
+    <string name="tutorial_skip">Saltar</string>
+    <string name="tutorial_next">Siguiente</string>
+    <string name="tutorial_get_started">Comenzar</string>
+    <string name="tutorial_how_to_use">Guía de Uso</string>
+    <string name="tutorial_step1_badge">PASO 1 DE 4 • DESCUBRE</string>
+    <string name="tutorial_step1_title">Explora el Hallway</string>
+    <string name="tutorial_step1_desc">Desliza a izquierda y derecha por las cápsulas de tiempo comunitarias. Toca cualquier tarjeta para entrar y ver recuerdos y fotos.</string>
+    <string name="tutorial_step2_badge">PASO 2 DE 4 • INSPIRACIÓN</string>
+    <string name="tutorial_step2_title">Artistas y Portafolios</string>
+    <string name="tutorial_step2_desc">Descubre espacios seleccionados de creadores verificados. Toca el avatar de cualquier creador para ver su trabajo y colaboraciones.</string>
+    <string name="tutorial_step3_badge">PASO 3 DE 4 • BÓVEDA</string>
+    <string name="tutorial_step3_title">Rooming y Acceso QR</string>
+    <string name="tutorial_step3_desc">Guarda tus salas favoritas en Rooming para acceder rápidamente. Toca \'Escanear\' para desbloquear cápsulas físicas con códigos QR al instante.</string>
+    <string name="tutorial_step4_badge">PASO 4 DE 4 • CREA</string>
+    <string name="tutorial_step4_title">Crea y Sella Cápsulas</string>
+    <string name="tutorial_step4_desc">Desliza desde el borde derecho o toca el Menú Orb (+) para crear tu cápsula. ¡Agrega fotos, notas de voz, música y fija una fecha de apertura!</string>
 </resources>
