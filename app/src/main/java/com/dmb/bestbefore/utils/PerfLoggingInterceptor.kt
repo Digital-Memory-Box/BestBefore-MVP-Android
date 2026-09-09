@@ -38,48 +38,60 @@ class PerfLoggingInterceptor : Interceptor {
         val ms = System.currentTimeMillis() - t0
         val speedFlag = speedFlag(ms)
 
-        if (shouldSkipBodyInspection(request.url.encodedPath)) {
+        try {
             val contentLength = response.body?.contentLength() ?: -1L
-            val sizeLabel = if (contentLength >= 0L) formatSize(contentLength) else "streaming"
-            Log.i(TAG, "<-  $label  $speedFlag ${response.code}  |  ${ms} ms  |  $sizeLabel")
-            return response
-        }
 
-        val contentType = response.body?.contentType()
-        val rawBytes = try {
-            response.body?.bytes() ?: ByteArray(0)
-        } catch (e: Exception) {
-            Log.w(TAG, "<-  $label  body read failed after ${ms} ms: ${e.message}")
-            return response
-        }
-
-        val sizeBytes = rawBytes.size
-        val sizeLabel = formatSize(sizeBytes.toLong())
-        val bodyPreview = rawBytes.decodeToString().take(8_192)
-        val base64PhotoCount = countOccurrences(bodyPreview, "data:image")
-        val base64Warn = if (base64PhotoCount > 0) {
-            "  BASE64 PHOTOS x$base64PhotoCount (likely large payload)"
-        } else {
-            ""
-        }
-        val largePayloadWarn = if (sizeBytes > 200_000) "  LARGE PAYLOAD" else ""
-
-        Log.i(TAG, "<-  $label  $speedFlag ${response.code}  |  ${ms} ms  |  $sizeLabel$largePayloadWarn$base64Warn")
-
-        if (sizeBytes > 100_000) {
-            val arrayItemCount = countOccurrences(bodyPreview.take(2_048), "\"_id\"")
-            if (arrayItemCount > 0) {
-                Log.i(TAG, "    array-item estimate: ~$arrayItemCount items in first 2 KB of body")
+            if (shouldSkipBodyInspection(request.url.encodedPath)) {
+                val sizeLabel = if (contentLength >= 0L) formatSize(contentLength) else "streaming"
+                Log.i(TAG, "<-  $label  $speedFlag ${response.code}  |  ${ms} ms  |  $sizeLabel")
+                return response
             }
-            Log.i(TAG, "    payload breakdown: Content-Type=${contentType?.type}/${contentType?.subtype}")
+
+            // Peek at most 64 KB of the body without consuming or buffering the entire response stream
+            val peekLimit = 64L * 1024L
+            val peekBody = response.peekBody(peekLimit)
+            val peekString = peekBody.string()
+            val peekLength = peekString.length.toLong()
+
+            val sizeBytes = if (contentLength >= 0L) contentLength else peekLength
+            val sizeLabel = if (contentLength >= 0L) formatSize(contentLength) else "~${formatSize(peekLength)}"
+            val base64PhotoCount = countOccurrences(peekString, "data:image")
+            val base64Warn = if (base64PhotoCount > 0) {
+                "  BASE64 PHOTOS x$base64PhotoCount (likely large payload)"
+            } else {
+                ""
+            }
+            val largePayloadWarn = if (sizeBytes > 200_000) "  LARGE PAYLOAD" else ""
+
+            Log.i(TAG, "<-  $label  $speedFlag ${response.code}  |  ${ms} ms  |  $sizeLabel$largePayloadWarn$base64Warn")
+
+            if (sizeBytes > 100_000) {
+                val arrayItemCount = countOccurrences(peekString.take(2_048), "\"_id\"")
+                if (arrayItemCount > 0) {
+                    Log.i(TAG, "    array-item estimate: ~$arrayItemCount items in first 2 KB of body")
+                }
+                val contentType = response.body?.contentType()
+                Log.i(TAG, "    payload breakdown: Content-Type=${contentType?.type}/${contentType?.subtype}")
+            }
+        } catch (t: Throwable) {
+            // NEVER let logging fail or throw OutOfMemoryError
+            Log.w(TAG, "<-  $label  body inspection skipped/failed after ${ms} ms: ${t.message}")
         }
 
-        val rebuiltBody = rawBytes.toResponseBody(contentType)
-        return response.newBuilder().body(rebuiltBody).build()
+        return response
     }
 
     private fun shouldSkipBodyInspection(path: String): Boolean {
-        return path.contains("/memories")
+        val lower = path.lowercase()
+        return lower.contains("/memories") ||
+               lower.contains("/rooms") ||
+               lower.contains("/stock-photos") ||
+               lower.endsWith(".jpg") ||
+               lower.endsWith(".jpeg") ||
+               lower.endsWith(".png") ||
+               lower.endsWith(".webp") ||
+               lower.endsWith(".mp4") ||
+               lower.endsWith(".mp3")
     }
 
     private fun formatSize(sizeBytes: Long): String {

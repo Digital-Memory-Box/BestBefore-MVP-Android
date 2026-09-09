@@ -95,6 +95,7 @@ data class RoomDto(
     val ownerUserType: String? = null,
     val ownerProfilePic: String? = null,
     val createdAt: String?,
+    val imageUrl: String? = null,
     val photos: List<MemoryPreview>? = null,
     val capsuleDurationDays: Int = 0,
     val capsuleDurationHours: Int = 0,

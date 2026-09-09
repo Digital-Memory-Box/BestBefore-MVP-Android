@@ -26,6 +26,15 @@ class BestBeforeApplication : Application() {
             Coil.setImageLoader(
                 ImageLoader.Builder(this)
                     .okHttpClient(coilOkHttpClient)
+                    .components {
+                        add(coil.map.Mapper<String, String> { data, _ ->
+                            if (data.startsWith("/")) {
+                                com.dmb.bestbefore.data.api.RetrofitClient.BASE_URL.removeSuffix("/") + data
+                            } else {
+                                data
+                            }
+                        })
+                    }
                     .memoryCache {
                         MemoryCache.Builder(this)
                             .maxSizePercent(0.25)

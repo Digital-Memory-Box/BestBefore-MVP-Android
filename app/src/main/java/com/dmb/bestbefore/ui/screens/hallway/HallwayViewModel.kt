@@ -347,8 +347,8 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
             fun ms() = System.currentTimeMillis() - t0
             Log.i(TAG_PERF, "━━━ fetchRooms START ━━━")
 
-            // ── Server warm-up ping ───────────────────────────────────────────
-            // Railway free tier cold-starts in 20–60 s. Fire /health first.
+            // ── Server warm-up ping in parallel ──────────────────────────────
+            // Railway free tier cold-starts in 20–60 s.
             // After 2 s with no response, flip to WARMING_UP so the UI can tell
             // the user the server is starting rather than showing a blank screen.
             val warmupJob = launch {
@@ -358,28 +358,9 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                     Log.i(TAG_PERF, "[${ms()}ms] server still cold — showing warm-up message")
                 }
             }
-            val pingT0 = System.currentTimeMillis()
-            try {
-                val pingResult = withTimeoutOrNull(90_000L) {
-                    com.dmb.bestbefore.data.api.RetrofitClient.apiService.health()
-                }
-                val pingMs = System.currentTimeMillis() - pingT0
-                if (pingResult?.isSuccessful == true) {
-                    Log.i(TAG_PERF, "[${ms()}ms] /health OK in ${pingMs}ms — server is warm ✅")
-                } else {
-                    Log.w(TAG_PERF, "[${ms()}ms] /health ${pingResult?.code()} in ${pingMs}ms — proceeding anyway")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG_PERF, "[${ms()}ms] /health exception in ${System.currentTimeMillis() - pingT0}ms: ${e.message}")
-                _errorMessage.value = AppErrorUtils.userMessage(e)
-            } finally {
-                warmupJob.cancel()
-                _serverStatus.value = ServerStatus.READY
-            }
-            Log.i(TAG_PERF, "[${ms()}ms] warm-up done — launching data fetches")
 
             try {
-                // Launch all three in parallel and record when each fires
+                // Launch all three in parallel immediately
                 Log.i(TAG_PERF, "[${ms()}ms] launching getRooms + getDiscoverRooms + getMe in parallel")
                 val myDeferred      = async { roomRepository.getRooms() }
                 val discoverDeferred = async { roomRepository.getDiscoverRooms() }
@@ -391,6 +372,9 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 Log.i(TAG_PERF, "[${ms()}ms] getDiscoverRooms DONE")
                 val meResult      = meDeferred.await()
                 Log.i(TAG_PERF, "[${ms()}ms] getMe DONE  — all 3 parallel calls complete")
+
+                warmupJob.cancel()
+                _serverStatus.value = ServerStatus.READY
 
                 if (myResult.isSuccess) {
                     val rooms = myResult.getOrThrow()
@@ -452,7 +436,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                             title = room.name,
                             timeCapsuleDays = room.capsuleDurationDays,
                             description = room.description ?: room.generatedDescription ?: "",
-                            imageUrl = room.photos?.firstOrNull()?.url,
+                            imageUrl = room.imageUrl ?: room.photos?.firstOrNull()?.url,
                             photos = room.photos ?: emptyList(),
                             themeColorHex = room.theme,
                             tags = room.tags ?: emptyList(),
@@ -476,7 +460,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                             title = room.name,
                             timeCapsuleDays = room.capsuleDurationDays,
                             description = room.description ?: room.generatedDescription ?: "",
-                            imageUrl = room.photos?.firstOrNull()?.url,
+                            imageUrl = room.imageUrl ?: room.photos?.firstOrNull()?.url,
                             photos = room.photos ?: emptyList(),
                             themeColorHex = room.theme,
                             tags = room.tags ?: emptyList(),
@@ -667,7 +651,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 title = room.name,
                 timeCapsuleDays = room.capsuleDurationDays,
                 description = if (!room.description.isNullOrBlank()) room.description else (room.generatedDescription ?: ""),
-                imageUrl = room.photos?.firstOrNull()?.url,
+                imageUrl = room.imageUrl ?: room.photos?.firstOrNull()?.url,
                 photos = room.photos ?: emptyList(),
                 themeColorHex = room.theme,
                 tags = room.tags ?: emptyList(),

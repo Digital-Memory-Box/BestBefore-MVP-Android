@@ -10,7 +10,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
-class SessionManager private constructor(context: Context) {
+class SessionManager(context: Context) {
 
     companion object {
         private const val PREF_NAME = "BestBeforeSession"
@@ -141,7 +141,12 @@ class SessionManager private constructor(context: Context) {
     }
 
     fun saveHallwayCards(cards: List<com.dmb.bestbefore.data.models.HallwayCard>) {
-        prefs.edit { putString(KEY_CACHED_HALLWAY, gson.toJson(cards)) }
+        val sanitized = cards.map { card ->
+            val safeImageUrl = if (card.imageUrl != null && card.imageUrl.startsWith("data:") && card.imageUrl.length > 2000) null else card.imageUrl
+            val safePhotos = card.photos.filter { it.url.length <= 2000 }
+            card.copy(imageUrl = safeImageUrl, photos = safePhotos)
+        }
+        prefs.edit { putString(KEY_CACHED_HALLWAY, gson.toJson(sanitized)) }
     }
 
     fun getHallwayCards(): List<com.dmb.bestbefore.data.models.HallwayCard> {

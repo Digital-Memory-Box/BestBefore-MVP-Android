@@ -21,5 +21,6 @@ data class PublicRoomDto(
     @SerializedName("theme") val theme: String?,
     @SerializedName("tags") val tags: List<String>,
     @SerializedName("description") val description: String? = null,
+    @SerializedName("imageUrl") val imageUrl: String? = null,
     @SerializedName("photos") val photos: List<MemoryPreview> = emptyList()
 )

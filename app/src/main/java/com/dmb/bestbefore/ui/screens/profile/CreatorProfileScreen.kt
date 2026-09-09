@@ -279,7 +279,7 @@ fun PublicRoomCard(room: PublicRoomDto, onClick: () -> Unit) {
             .take(2)
             .joinToString(",")
             .takeIf { it.isNotBlank() } ?: "abstract"
-        val roomImage = normalizeCreatorRoomPhoto(room.photos.firstOrNull()?.url)
+        val roomImage = normalizeCreatorRoomPhoto(room.imageUrl ?: room.photos?.firstOrNull()?.url)
 
         Box(
             modifier = Modifier
@@ -340,6 +340,7 @@ private fun normalizeCreatorRoomPhoto(url: String?): String? {
     if (url.isNullOrBlank()) return null
     return when {
         url.startsWith("http", ignoreCase = true) -> url
+        url.startsWith("/") -> com.dmb.bestbefore.data.api.RetrofitClient.BASE_URL.removeSuffix("/") + url
         url.startsWith("data:image", ignoreCase = true) -> url
         url.startsWith("data:", ignoreCase = true) && url.contains("base64,") ->
             "data:image/jpeg;base64,${url.substringAfter("base64,")}"
