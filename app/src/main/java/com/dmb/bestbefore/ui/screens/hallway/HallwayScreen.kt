@@ -261,28 +261,27 @@ fun HallwayScreen(
                 onProfileClick = onNavigateToProfile,
                 onAddClick = onCreateRoomClick,
                 onCameraClick = onCameraClick,
+                onClose = { viewModel.setOrbMenuVisible(false) },
                 profileImageUrl = userProfileImageUrl
             )
         }
 
-        // Right edge swipe zone (64dp):
-        // When visible: swipe RIGHT on the orb menu to close it
-        // When hidden: swipe LEFT from the far right edge to open it
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .fillMaxHeight()
-                .width(64.dp)
-                .pointerInput(isOrbMenuVisible) {
-                    detectHorizontalDragGestures { _, dragAmount ->
-                        if (isOrbMenuVisible && dragAmount > 12f) {
-                            viewModel.setOrbMenuVisible(false)
-                        } else if (!isOrbMenuVisible && dragAmount < -15f) {
-                            viewModel.setOrbMenuVisible(true)
+        // Edge pull zone: when OrbMenu is hidden, swipe LEFT from the far right edge to open it
+        if (!isOrbMenuVisible) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .width(48.dp)
+                    .pointerInput(Unit) {
+                        detectHorizontalDragGestures { _, dragAmount ->
+                            if (dragAmount < -15f) {
+                                viewModel.setOrbMenuVisible(true)
+                            }
                         }
                     }
-                }
-        )
+            )
+        }
 
         // ── SoundCloud Modal ────────────────────────────────────────
         if (showingSoundCloudModal && currentTab != BottomTab.ROOMING && cards.isNotEmpty()) {
@@ -1448,15 +1447,27 @@ fun ActiveCardDetails(
             // ── Top content group ────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 // ── Owner Row (tags removed) ─────────────────────────
+                val creatorTargetId = card.ownerId?.takeIf { it.isNotBlank() } ?: card.ownerEmail
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .then(
+                            if (!creatorTargetId.isNullOrBlank()) {
+                                Modifier.clickable { onNavigateToCreatorProfile(creatorTargetId) }
+                            } else Modifier
+                        ),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     ProfileAvatar(
                         imageUri = card.ownerProfilePic,
                         size = 44.dp,
                         accentColor = Color.White,
-                        onClick = { card.ownerId?.let { onNavigateToCreatorProfile(it) } }
+                        onClick = {
+                            if (!creatorTargetId.isNullOrBlank()) {
+                                onNavigateToCreatorProfile(creatorTargetId)
+                            }
+                        }
                     )
 
                     val nameText = (card.ownerName?.takeIf { it.isNotBlank() }
@@ -1755,6 +1766,8 @@ private fun ExpandedDescriptionOverlay(
     val colors = LocalBestBeforeColors.current
     val overlayBase = Color(0xFF090B12)
 
+    BackHandler(onBack = onDismiss)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1799,31 +1812,55 @@ private fun ExpandedDescriptionOverlay(
         ) {
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Header + CD action
-            Box(modifier = Modifier.fillMaxWidth()) {
+            // Header: Back Button + Title + CD action
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                // Circular frosted back button on the left
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.12f))
+                        .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape)
+                        .clickable { onDismiss() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
                 Text(
                     text = card.title,
-                    fontSize = 30.sp,
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = colors.textPrimary,
                     textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(end = 62.dp)
+                        .padding(horizontal = 52.dp)
                 )
 
                 if (!card.backgroundMusic.isNullOrBlank()) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
-                            .size(52.dp)
+                            .size(42.dp)
                             .clip(CircleShape)
                             .background(Color.Black.copy(alpha = 0.36f))
                             .border(1.dp, themeColor.copy(alpha = 0.55f), CircleShape)
                             .clickable { onShowSoundCloud() },
                         contentAlignment = Alignment.Center
                     ) {
-                        CdGlyph(size = 28.dp)
+                        CdGlyph(size = 24.dp)
                     }
                 }
             }
@@ -1889,15 +1926,27 @@ private fun ExpandedDescriptionOverlay(
 
             Spacer(modifier = Modifier.height(22.dp))
 
+            val creatorTargetId = card.ownerId?.takeIf { it.isNotBlank() } ?: card.ownerEmail
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .then(
+                        if (!creatorTargetId.isNullOrBlank()) {
+                            Modifier.clickable { onNavigateToCreatorProfile(creatorTargetId) }
+                        } else Modifier
+                    )
             ) {
                 ProfileAvatar(
                     imageUri = card.ownerProfilePic,
                     size = 48.dp,
                     accentColor = themeColor,
-                    onClick = { card.ownerId?.let { onNavigateToCreatorProfile(it) } }
+                    onClick = {
+                        if (!creatorTargetId.isNullOrBlank()) {
+                            onNavigateToCreatorProfile(creatorTargetId)
+                        }
+                    }
                 )
                 Text(
                     text = "@${card.ownerEmail?.substringBefore("@") ?: "artist"}",
@@ -2021,9 +2070,10 @@ private fun BottomNavigation(currentTab: BottomTab, onTabSelected: (BottomTab) -
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 30.dp, vertical = 20.dp),
+            .navigationBarsPadding()
+            .padding(horizontal = 24.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Bottom
+        verticalAlignment = Alignment.CenterVertically
     ) {
         BottomNavItem("Rooming", currentTab == BottomTab.ROOMING) {
             onTabSelected(BottomTab.ROOMING)
@@ -2042,10 +2092,15 @@ private fun BottomNavItem(text: String, isSelected: Boolean, onClick: () -> Unit
     val colors = LocalBestBeforeColors.current
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable { onClick() }
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
         if (isSelected) {
             Text("▽", fontSize = 12.sp, color = colors.textPrimary)
+        } else {
+            Spacer(modifier = Modifier.height(14.dp))
         }
         Text(
             text = text,

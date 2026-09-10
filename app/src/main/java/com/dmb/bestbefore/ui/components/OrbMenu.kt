@@ -22,6 +22,9 @@ import com.dmb.bestbefore.ui.theme.ThemeState
 
 import androidx.compose.foundation.shape.CircleShape
 
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+
 /**
  * Shared geometry contract for OrbMenu placement ensuring a perfect half circle.
  */
@@ -51,6 +54,7 @@ fun OrbMenu(
     onAddClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
     onCameraClick: () -> Unit = {},
+    onClose: () -> Unit = {},
     profileImageUrl: String? = null
 ) {
     val theme = ThemeState.currentTheme
@@ -120,6 +124,13 @@ fun OrbMenu(
                 if (isMidnight || isGlass) Modifier.border(2.dp, accentColor.copy(alpha = 0.85f), CircleShape)
                 else Modifier
             )
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures { _, dragAmount ->
+                    if (dragAmount > 15f) {
+                        onClose()
+                    }
+                }
+            }
     ) {
         // İkonlar merkeze göre sol tarafa offsetlenir.
 
