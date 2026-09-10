@@ -148,7 +148,7 @@ fun HallwayScreen(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onDoubleTap = {
-                        viewModel.setOrbMenuVisible(!isOrbMenuVisible)
+                        viewModel.toggleOrbMenu()
                     }
                 )
             }
@@ -227,7 +227,7 @@ fun HallwayScreen(
                             notificationCount = notificationCount.size,
                             onDeleteMemory = { roomId, memoryId -> viewModel.deleteMemory(roomId, memoryId) },
                             onDeleteMusic = { card -> viewModel.removeBackgroundMusic(card.id) },
-                            onToggleOrbMenu = { viewModel.setOrbMenuVisible(true) },
+                            onToggleOrbMenu = { viewModel.toggleOrbMenu() },
                             onRefresh = { viewModel.refreshRooms() },
                             modifier = Modifier.weight(1f)
                         )

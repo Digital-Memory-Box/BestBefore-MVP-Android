@@ -800,6 +800,10 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
         _isOrbMenuVisible.value = isVisible
     }
 
+    fun toggleOrbMenu() {
+        _isOrbMenuVisible.value = !_isOrbMenuVisible.value
+    }
+
     fun setSoundCloudModalVisible(isVisible: Boolean) {
         _showingSoundCloudModal.value = isVisible
     }
