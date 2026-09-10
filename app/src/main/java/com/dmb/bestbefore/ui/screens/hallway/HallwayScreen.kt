@@ -256,45 +256,33 @@ fun HallwayScreen(
             ),
             modifier = Modifier.align(Alignment.CenterEnd)
         ) {
-            Box(
-                modifier = Modifier
-                    .width(72.dp)
-                    .fillMaxHeight(),
-                contentAlignment = Alignment.CenterEnd
-            ) {
-                OrbMenu(
-                    diameter = orbWidth,
-                    onProfileClick = onNavigateToProfile,
-                    onAddClick = onCreateRoomClick,
-                    onCameraClick = onCameraClick,
-                    profileImageUrl = userProfileImageUrl,
-                    modifier = Modifier.pointerInput(Unit) {
-                        detectHorizontalDragGestures { _, dragAmount ->
-                            if (dragAmount > 10f) {
-                                viewModel.setOrbMenuVisible(false)
-                            }
-                        }
-                    }
-                )
-            }
-        }
-
-        // Edge pull zone to restore OrbMenu with a leftward swipe from the right edge
-        if (!isOrbMenuVisible) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .fillMaxHeight()
-                    .width(48.dp)
-                    .pointerInput(Unit) {
-                        detectHorizontalDragGestures { _, dragAmount ->
-                            if (dragAmount < -15f) {
-                                viewModel.setOrbMenuVisible(true)
-                            }
-                        }
-                    }
+            OrbMenu(
+                diameter = orbWidth,
+                onProfileClick = onNavigateToProfile,
+                onAddClick = onCreateRoomClick,
+                onCameraClick = onCameraClick,
+                profileImageUrl = userProfileImageUrl
             )
         }
+
+        // Right edge swipe zone (64dp):
+        // When visible: swipe RIGHT on the orb menu to close it
+        // When hidden: swipe LEFT from the far right edge to open it
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight()
+                .width(64.dp)
+                .pointerInput(isOrbMenuVisible) {
+                    detectHorizontalDragGestures { _, dragAmount ->
+                        if (isOrbMenuVisible && dragAmount > 12f) {
+                            viewModel.setOrbMenuVisible(false)
+                        } else if (!isOrbMenuVisible && dragAmount < -15f) {
+                            viewModel.setOrbMenuVisible(true)
+                        }
+                    }
+                }
+        )
 
         // ── SoundCloud Modal ────────────────────────────────────────
         if (showingSoundCloudModal && currentTab != BottomTab.ROOMING && cards.isNotEmpty()) {
