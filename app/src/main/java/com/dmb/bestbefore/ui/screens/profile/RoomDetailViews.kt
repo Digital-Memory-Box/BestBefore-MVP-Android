@@ -64,24 +64,39 @@ import com.dmb.bestbefore.utils.RoomMusicCatalog
 fun AsyncBase64Image(
     itemData: Any,
     contentScale: androidx.compose.ui.layout.ContentScale,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    targetSize: Int? = null
 ) {
     val modelStr = itemData.toString()
     if (modelStr.startsWith("data:") && modelStr.contains("base64,")) {
-        val cached = remember(modelStr) { Base64BitmapCache.get(modelStr) }
-        var bitmap by remember(modelStr) { mutableStateOf(cached) }
+        val cached = remember(modelStr, targetSize) { Base64BitmapCache.get(modelStr, targetSize) }
+        var bitmap by remember(modelStr, targetSize) { mutableStateOf(cached) }
 
-        LaunchedEffect(modelStr) {
+        LaunchedEffect(modelStr, targetSize) {
             if (bitmap == null) {
                 val decoded = withContext(Dispatchers.Default) {
                     try {
                         val cleanStr = modelStr.substringAfter("base64,")
                         val bytes = android.util.Base64.decode(cleanStr, android.util.Base64.DEFAULT)
-                        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        if (targetSize != null && targetSize > 0) {
+                            val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+                            var sampleSize = 1
+                            while (opts.outWidth / sampleSize > targetSize * 2 || opts.outHeight / sampleSize > targetSize * 2) {
+                                sampleSize *= 2
+                            }
+                            val decodeOpts = android.graphics.BitmapFactory.Options().apply {
+                                inSampleSize = sampleSize
+                                inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+                            }
+                            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOpts)
+                        } else {
+                            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        }
                     } catch (_: Exception) { null }
                 }
                 if (decoded != null) {
-                    Base64BitmapCache.put(modelStr, decoded)
+                    Base64BitmapCache.put(modelStr, decoded, targetSize)
                     bitmap = decoded
                 }
             }
@@ -256,7 +271,37 @@ fun RoomDetailScreen(
             theme = room?.theme?.lowercase() ?: "default"
         )
         if (room == null) {
-            Text("Room not found", color = Color.White, modifier = Modifier.align(Alignment.Center))
+            val isLoading by viewModel.isLoading.collectAsState()
+            if (isLoading) {
+                CircularProgressIndicator(
+                    color = Color(0xFF007AFF),
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            } else {
+                var showNotFound by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(600L)
+                    showNotFound = true
+                }
+                if (showNotFound) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.align(Alignment.Center).padding(24.dp)
+                    ) {
+                        Text("Room not found", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                        Text("This room may have been deleted or is no longer accessible.", color = Color.Gray, fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = { viewModel.goBack() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Go Back", color = Color.White)
+                        }
+                    }
+                }
+            }
         } else {
             androidx.compose.material3.pulltorefresh.PullToRefreshBox(
                 isRefreshing = isRefreshing,
@@ -832,7 +877,8 @@ fun RoomDetailScreen(
                                         AsyncBase64Image(
                                             itemData = item1,
                                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize()
+                                            modifier = Modifier.fillMaxSize(),
+                                            targetSize = 200
                                         )
                                     }
                                 }
@@ -893,7 +939,8 @@ fun RoomDetailScreen(
                                             AsyncBase64Image(
                                                 itemData = item2,
                                                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                                modifier = Modifier.fillMaxSize()
+                                                modifier = Modifier.fillMaxSize(),
+                                                targetSize = 200
                                             )
                                         }
                                     }
@@ -1037,7 +1084,8 @@ fun RoomDetailScreen(
                                 AsyncBase64Image(
                                     itemData = item,
                                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
+                                    modifier = Modifier.fillMaxSize(),
+                                    targetSize = 200
                                 )
                             }
                         }
@@ -1082,17 +1130,41 @@ fun RoomDetailScreen(
         if (showQrCode) {
             val invLink = "https://bestbefore.up.railway.app/join/${room?.id}"
 
-            AlertDialog(
-                onDismissRequest = {
-                    showQrCode = false
-                },
-                containerColor = Color(0xFF1C1C1E),
-                title = { Text("Room Share Link", color = Color.White) },
-                text = {
+            androidx.compose.ui.window.Dialog(
+                onDismissRequest = { showQrCode = false }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF1C1C1E), RoundedCornerShape(20.dp))
+                        .padding(24.dp)
+                ) {
+                    IconButton(
+                        onClick = { showQrCode = false },
+                        modifier = Modifier.align(Alignment.TopEnd).offset(x = 12.dp, y = (-12).dp)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
+                    }
+
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.fillMaxWidth()
                     ) {
+                        Text(
+                            text = "Room Share Link",
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Scan to join room: ${room?.roomName}",
+                            color = Color.Gray,
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        
                         val qrBitmap = remember(invLink) {
                             try {
                                 val size = 512
@@ -1119,19 +1191,12 @@ fun RoomDetailScreen(
                                 bitmap = qrBitmap.asImageBitmap(),
                                 contentDescription = "QR Code",
                                 modifier = Modifier
-                                    .size(200.dp)
+                                    .size(280.dp)
                                     .background(Color.White, RoundedCornerShape(12.dp))
                                     .padding(8.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "Scan to join room: ${room?.roomName}",
-                            color = Color.Gray,
-                            fontSize = 12.sp,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(24.dp))
                         
                         // Share button
                         Button(
@@ -1143,22 +1208,16 @@ fun RoomDetailScreen(
                                 context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Invite"))
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF)),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
                             Icon(Icons.Default.Share, "Share", tint = Color.White)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Share Link", color = Color.White)
+                            Text("Share Link", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        showQrCode = false
-                    }) {
-                        Text("Close", color = Color(0xFF007AFF))
-                    }
                 }
-            )
+            }
         }
         
         // Write Note Dialog

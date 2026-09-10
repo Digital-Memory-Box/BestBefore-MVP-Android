@@ -1467,6 +1467,10 @@ class ProfileViewModel @JvmOverloads constructor(
                                 type == "video" -> "data:${mimeType ?: "video/mp4"};base64,$content"
                                 type == "note" -> "NOTE:${title ?: ""}:$content"
                                 content.startsWith("http") -> content
+                                content.startsWith("/") -> com.dmb.bestbefore.data.api.RetrofitClient.BASE_URL.removeSuffix("/") + content
+                                // For photo with a valid ID, stream directly via /memories/:id/photo so Coil streams and caches in parallel
+                                type == "photo" && memoryId.isNotEmpty() ->
+                                    "${com.dmb.bestbefore.data.api.RetrofitClient.BASE_URL}memories/$memoryId/photo"
                                 // Already a full data URI — normalise non-image types to image/jpeg
                                 // so AsyncBase64Image can decode them (e.g. data:application/octet-stream)
                                 content.startsWith("data:image") -> content
@@ -1825,11 +1829,16 @@ class ProfileViewModel @JvmOverloads constructor(
                 val returnTo = previousStepBeforeRoomDetail
                 previousStepBeforeRoomDetail = ProfileStep.NONE
                 clearRoomTransientUiState()
-                _selectedRoom.value = null
                 if (returnTo == ProfileStep.NONE) {
                     _currentStep.value = ProfileStep.NONE
                 } else {
                     _currentStep.value = returnTo
+                }
+                viewModelScope.launch {
+                    kotlinx.coroutines.delay(400L)
+                    if (_currentStep.value != ProfileStep.ROOM_DETAIL) {
+                        _selectedRoom.value = null
+                    }
                 }
                 true
             }
@@ -1843,7 +1852,12 @@ class ProfileViewModel @JvmOverloads constructor(
     fun closeOverlay() {
         clearRoomTransientUiState()
         _currentStep.value = ProfileStep.NONE
-        _selectedRoom.value = null
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(400L)
+            if (_currentStep.value != ProfileStep.ROOM_DETAIL) {
+                _selectedRoom.value = null
+            }
+        }
     }
 
     fun startCreateRoom(

@@ -51,6 +51,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import com.dmb.bestbefore.ui.theme.LocalBestBeforeColors
 import coil.compose.AsyncImage
 import com.dmb.bestbefore.ui.components.ProfileAvatar
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 // --- REFACTORED PROFILE MENU (iOS Tab Style) ---
 @Composable
 fun ProfileMenuScreen(
@@ -67,7 +71,9 @@ fun ProfileMenuScreen(
         viewModel.loadThemePreferences(context)
     }
     
-    var selectedTab by remember { mutableIntStateOf(0) } // Default to Dashboard (0)
+    val pagerState = rememberPagerState(pageCount = { 3 })
+    val coroutineScope = rememberCoroutineScope()
+    val selectedTab = pagerState.currentPage
     val colors = LocalBestBeforeColors.current
     Box(modifier = Modifier.fillMaxSize().background(colors.background)) {
         Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
@@ -122,7 +128,7 @@ fun ProfileMenuScreen(
                                 if (isSelected) Color(0xFF636366) else Color.Transparent,
                                 RoundedCornerShape(6.dp)
                             )
-                            .clickable { selectedTab = index },
+                            .clickable { coroutineScope.launch { pagerState.animateScrollToPage(index) } },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -136,8 +142,12 @@ fun ProfileMenuScreen(
             }
             Spacer(modifier = Modifier.height(16.dp))
             // Tab Content
-            Box(modifier = Modifier.weight(1f)) {
-                when (selectedTab) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.weight(1f),
+                beyondViewportPageCount = 1
+            ) { page ->
+                when (page) {
                     0 -> DashboardTab(viewModel, createdRooms)
                     1 -> CustomizationTab(viewModel, musicViewModel)
                     2 -> SettingsTab(viewModel, hallwayViewModel, onLogout)

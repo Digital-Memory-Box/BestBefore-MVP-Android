@@ -16,17 +16,18 @@ object Base64BitmapCache {
         override fun sizeOf(key: String, value: Bitmap) = value.byteCount
     }
 
-    fun get(dataUri: String): Bitmap? = cache.get(cacheKey(dataUri))
+    fun get(dataUri: String, targetSize: Int? = null): Bitmap? = cache.get(cacheKey(dataUri, targetSize))
 
-    fun put(dataUri: String, bitmap: Bitmap) {
-        cache.put(cacheKey(dataUri), bitmap)
+    fun put(dataUri: String, bitmap: Bitmap, targetSize: Int? = null) {
+        cache.put(cacheKey(dataUri, targetSize), bitmap)
     }
 
-    private fun cacheKey(dataUri: String): String {
+    private fun cacheKey(dataUri: String, targetSize: Int? = null): String {
         val len = dataUri.length
-        if (len <= 128) return dataUri
+        val prefix = if (targetSize != null) "s${targetSize}_" else ""
+        if (len <= 128) return prefix + dataUri
         val first = dataUri.substring(0, 64)
         val last = dataUri.substring(len - 64)
-        return "${len}_${first}_${last}".hashCode().toString()
+        return prefix + "${len}_${first}_${last}".hashCode().toString()
     }
 }

@@ -4,6 +4,8 @@ package com.dmb.bestbefore.ui.screens.hallway
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -12,6 +14,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -143,35 +146,11 @@ fun HallwayScreen(
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                detectHorizontalDragGestures { change, dragAmount ->
-                    // BB-UI-06: Swipe RIGHT → orb menu disappears
-                    val isRightSwipe = dragAmount > 20
-                    // BB-UI-06: Swipe LEFT from right edge → orb menu reappears
-                    val isEdgeSwipeLeft = dragAmount < -20 && change.position.x > size.width * 0.7f
-                    if (isRightSwipe) {
-                        viewModel.setOrbMenuVisible(false)
-                    } else if (isEdgeSwipeLeft) {
-                        viewModel.setOrbMenuVisible(true)
+                detectTapGestures(
+                    onDoubleTap = {
+                        viewModel.setOrbMenuVisible(!isOrbMenuVisible)
                     }
-                }
-            }
-            .pointerInput(Unit) {
-                var tapCount = 0
-                var lastTapTime = 0L
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    val currentTime = System.currentTimeMillis()
-                    if (currentTime - lastTapTime < 450L) {
-                        tapCount++
-                    } else {
-                        tapCount = 1
-                    }
-                    lastTapTime = currentTime
-                    if (tapCount >= 3) {
-                        viewModel.setOrbMenuVisible(true)
-                        tapCount = 0
-                    }
-                }
+                )
             }
     ) {
         // Full-screen animated background — color animates to match the active room's theme
@@ -211,26 +190,10 @@ fun HallwayScreen(
                                 .fillMaxWidth(),
                             contentAlignment = Alignment.Center
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
-                            ) {
-                                CircularProgressIndicator(color = LocalBestBeforeColors.current.primary)
-                                val loadingText = when (serverStatus) {
-                                    HallwayViewModel.ServerStatus.WARMING_UP ->
-                                        "Server is starting up...\nThis takes ~30 s after inactivity."
-                                    HallwayViewModel.ServerStatus.READY ->
-                                        if (currentTab == BottomTab.ARTISTS) "Loading artists..." else "Loading rooms..."
-                                    else ->
-                                        "Connecting..."
-                                }
-                                androidx.compose.material3.Text(
-                                    text = loadingText,
-                                    color = LocalBestBeforeColors.current.textSecondary,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium
-                                )
-                            }
+                            AestheticGlowingLoader(
+                                color = LocalBestBeforeColors.current.primary,
+                                size = 56.dp
+                            )
                         }
                     } else {
                         HallwayContent(
@@ -264,6 +227,8 @@ fun HallwayScreen(
                             notificationCount = notificationCount.size,
                             onDeleteMemory = { roomId, memoryId -> viewModel.deleteMemory(roomId, memoryId) },
                             onDeleteMusic = { card -> viewModel.removeBackgroundMusic(card.id) },
+                            onToggleOrbMenu = { viewModel.setOrbMenuVisible(true) },
+                            onRefresh = { viewModel.refreshRooms() },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -291,19 +256,43 @@ fun HallwayScreen(
             ),
             modifier = Modifier.align(Alignment.CenterEnd)
         ) {
-            OrbMenu(
-                diameter = orbWidth,
-                onProfileClick = onNavigateToProfile,
-                onAddClick = onCreateRoomClick,
-                onCameraClick = onCameraClick,
-                profileImageUrl = userProfileImageUrl,
-                modifier = Modifier.pointerInput(Unit) {
-                    detectHorizontalDragGestures { _, dragAmount ->
-                        if (dragAmount > 10f) {
-                            viewModel.setOrbMenuVisible(false)
+            Box(
+                modifier = Modifier
+                    .width(72.dp)
+                    .fillMaxHeight(),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                OrbMenu(
+                    diameter = orbWidth,
+                    onProfileClick = onNavigateToProfile,
+                    onAddClick = onCreateRoomClick,
+                    onCameraClick = onCameraClick,
+                    profileImageUrl = userProfileImageUrl,
+                    modifier = Modifier.pointerInput(Unit) {
+                        detectHorizontalDragGestures { _, dragAmount ->
+                            if (dragAmount > 10f) {
+                                viewModel.setOrbMenuVisible(false)
+                            }
                         }
                     }
-                }
+                )
+            }
+        }
+
+        // Edge pull zone to restore OrbMenu with a leftward swipe from the right edge
+        if (!isOrbMenuVisible) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .width(48.dp)
+                    .pointerInput(Unit) {
+                        detectHorizontalDragGestures { _, dragAmount ->
+                            if (dragAmount < -15f) {
+                                viewModel.setOrbMenuVisible(true)
+                            }
+                        }
+                    }
             )
         }
 
@@ -956,6 +945,8 @@ private fun HallwayContent(
     notificationCount: Int,
     onDeleteMemory: (String, String) -> Unit = { _, _ -> },
     onDeleteMusic: (HallwayCard) -> Unit = {},
+    onToggleOrbMenu: () -> Unit = {},
+    onRefresh: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = LocalBestBeforeColors.current
@@ -999,10 +990,64 @@ private fun HallwayContent(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .padding(horizontal = 32.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text("No rooms found.", color = Color.Gray, fontSize = 20.sp)
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    val emptyTitle = when {
+                        searchQuery.isNotBlank() -> "No rooms found for \"$searchQuery\""
+                        selectedFilterTag != null -> "No rooms with tag #$selectedFilterTag"
+                        currentTab == BottomTab.ARTISTS -> "No artist rooms found"
+                        else -> "No rooms available"
+                    }
+                    val emptySubtitle = when {
+                        searchQuery.isNotBlank() || selectedFilterTag != null -> "Try searching with different keywords or clear the filter."
+                        currentTab == BottomTab.ARTISTS -> "Public rooms created by verified artists will appear here."
+                        else -> "Create your first room or refresh to check for new rooms."
+                    }
+                    Text(
+                        text = emptyTitle,
+                        color = colors.textPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Text(
+                        text = emptySubtitle,
+                        color = colors.textSecondary,
+                        fontSize = 13.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (searchQuery.isNotBlank() || selectedFilterTag != null) {
+                            OutlinedButton(
+                                onClick = {
+                                    onSearchQueryChange("")
+                                    onFilterTagSelected(null)
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, colors.primary)
+                            ) {
+                                Text("Clear Filter", color = colors.primary)
+                            }
+                        }
+                        Button(
+                            onClick = onRefresh,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = colors.primary)
+                        ) {
+                            Text("Refresh", color = Color.White)
+                        }
+                    }
+                }
             }
         } else {
             val pagerState = rememberPagerState(pageCount = { cards.size })
@@ -1038,47 +1083,10 @@ private fun HallwayContent(
                     .fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Top
                 ) {
-                    // ── Room Name + Location ────────────────────────
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp)
-                    ) {
-                        Text(
-                            text = activeCard.title,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = colors.textPrimary,
-                            textAlign = TextAlign.Center,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(vertical = 12.dp)
-                        )
-                        if (!activeCard.location.isNullOrEmpty()) {
-                            Row(
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("📍", fontSize = 12.sp)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = activeCard.location,
-                                    fontSize = 14.sp,
-                                    color = colors.textSecondary,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-
-                    // ── Carousel ────────────────────────────────────
+                    // ── Active Card Pager ─────────────────────────────────
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier
@@ -1115,6 +1123,8 @@ private fun HallwayContent(
                                 onOpenRoom = { onOpenRoom(card) },
                                 onDeleteMemory = onDeleteMemory,
                                 onDeleteMusic = { onDeleteMusic(card) },
+                                isOrbMenuVisible = isOrbMenuVisible,
+                                onToggleOrbMenu = onToggleOrbMenu,
                                 cardHeight = cardHeight,
                                 widthFraction = cardWidthFraction
                             )
@@ -1159,38 +1169,31 @@ fun HallwayActiveCard(
     onOpenRoom: () -> Unit,
     onDeleteMemory: (String, String) -> Unit = { _, _ -> },
     onDeleteMusic: () -> Unit = {},
+    isOrbMenuVisible: Boolean = true,
+    onToggleOrbMenu: () -> Unit = {},
     cardHeight: Dp = 350.dp,
     widthFraction: Float = 0.9f
 ) {
     val colors = LocalBestBeforeColors.current
 
     // Drive pulse animations from a single withInfiniteAnimationFrameMillis loop.
-    // Avoids InfiniteTransition + tween() which reports targetBasedFrameRate=NaN,
-    // causing setRequestedFrameRate(NaN) spam and the GPU running at max rate.
-    var pulseScale by remember { mutableFloatStateOf(1f) }
-    var pulseAlpha by remember { mutableFloatStateOf(0.95f) }
+    // Values are read ONLY inside graphicsLayer lambdas to avoid recomposing the
+    // entire card composable 60+ times per second.
+    val pulseScaleState = remember { mutableFloatStateOf(1f) }
+    val pulseAlphaState = remember { mutableFloatStateOf(0.95f) }
 
     LaunchedEffect(Unit) {
         while (isActive) {
             androidx.compose.animation.core.withInfiniteAnimationFrameMillis { ms ->
                 // Scale: 0.96 → 1.06, period 2800 ms (1400 ms each way)
                 val sf = (ms % 2800L).toFloat() / 1400f
-                pulseScale = 0.96f + (if (sf <= 1f) sf else 2f - sf) * 0.10f
+                pulseScaleState.floatValue = 0.96f + (if (sf <= 1f) sf else 2f - sf) * 0.10f
                 // Alpha: 0.90 → 1.00, period 2600 ms (1300 ms each way)
                 val af = (ms % 2600L).toFloat() / 1300f
-                pulseAlpha = 0.90f + (if (af <= 1f) af else 2f - af) * 0.10f
+                pulseAlphaState.floatValue = 0.90f + (if (af <= 1f) af else 2f - af) * 0.10f
             }
         }
     }
-
-    val dynamicGlowAlpha = glowAlpha * pulseAlpha
-
-    // Animate scale: active card is 1f, side cards are 0.92f
-    val animatedScale by animateFloatAsState(
-        targetValue = if (glowAlpha >= 0.9f) 1f else 0.92f,
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow),
-        label = "cardScale"
-    )
 
     // Deletion dialog state
     var showDeleteConfirm by remember { mutableStateOf<String?>(null) } // memoryId
@@ -1216,16 +1219,19 @@ fun HallwayActiveCard(
         modifier = Modifier
             .fillMaxWidth(widthFraction)
             .height(cardHeight)
-            .scale(animatedScale)
     ) {
-        // Layer 1: wide ambient halo
+        // Layer 1: wide ambient halo — reads pulse state in graphicsLayer only
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(2.dp)
-                .alpha(dynamicGlowAlpha * 0.34f)
+                .graphicsLayer {
+                    val ps = pulseScaleState.floatValue
+                    val pa = pulseAlphaState.floatValue
+                    scaleX = 1.2f * ps; scaleY = 1.2f * ps
+                    alpha = glowAlpha * pa * 0.34f
+                }
                 .blur(32.dp)
-                .scale(1.2f * pulseScale)
                 .background(
                     brush = Brush.radialGradient(
                         colors = listOf(
@@ -1243,9 +1249,14 @@ fun HallwayActiveCard(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(6.dp)
-                .alpha(dynamicGlowAlpha * 0.7f)
+                .graphicsLayer {
+                    val ps = pulseScaleState.floatValue
+                    val pa = pulseAlphaState.floatValue
+                    scaleX = 1.08f * ps
+                    scaleY = 1.08f * ps
+                    alpha = glowAlpha * pa * 0.7f
+                }
                 .blur(16.dp)
-                .scale(1.08f * pulseScale)
                 .background(
                     brush = Brush.radialGradient(
                         colors = listOf(
@@ -1264,7 +1275,10 @@ fun HallwayActiveCard(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(1.dp)
-                .alpha(dynamicGlowAlpha * 0.82f)
+                .graphicsLayer {
+                    val pa = pulseAlphaState.floatValue
+                    alpha = glowAlpha * pa * 0.82f
+                }
                 .border(
                     width = 1.8.dp,
                     brush = Brush.linearGradient(
@@ -1284,7 +1298,7 @@ fun HallwayActiveCard(
                 .fillMaxSize()
                 .border(
                     2.dp,
-                    themeColor.copy(alpha = (dynamicGlowAlpha * 0.9f).coerceAtLeast(0.5f)),
+                    themeColor.copy(alpha = (glowAlpha * 0.9f).coerceAtLeast(0.5f)),
                     RoundedCornerShape(32.dp)
                 )
                 .clip(RoundedCornerShape(32.dp))
@@ -1298,7 +1312,12 @@ fun HallwayActiveCard(
                 )
                 .pointerInput(Unit) {
                     detectTapGestures(
-                        onTap = { onOpenRoom() },
+                        onTap = {
+                            onOpenRoom()
+                        },
+                        onDoubleTap = {
+                            onToggleOrbMenu()
+                        },
                         onLongPress = {
                             if (card.isOwnedByMe || card.isCollaborator) {
                                 card.photos.firstOrNull()?.let { showDeleteConfirm = it.id }
@@ -1439,7 +1458,7 @@ fun ActiveCardDetails(
             modifier = Modifier.fillMaxSize()
         ) {
             // ── Top content group ────────────────────────────────
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 // ── Owner Row (tags removed) ─────────────────────────
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1485,8 +1504,8 @@ fun ActiveCardDetails(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 4.dp)
-                        .heightIn(min = 40.dp, max = 72.dp),
+                        .padding(top = 2.dp)
+                        .heightIn(min = 20.dp, max = 42.dp),
                     contentAlignment = Alignment.TopStart
                 ) {
                     Text(
@@ -1494,7 +1513,7 @@ fun ActiveCardDetails(
                         color = if (hasDescription) colors.textPrimary.copy(alpha = 0.7f) else colors.textSecondary,
                         fontSize = 14.sp,
                         lineHeight = 18.sp,
-                        maxLines = 4,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -1504,8 +1523,7 @@ fun ActiveCardDetails(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(36.dp)
-                    .padding(top = 6.dp),
+                    .padding(top = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1515,9 +1533,9 @@ fun ActiveCardDetails(
                         .background(accentColor.copy(alpha = 0.18f), RoundedCornerShape(20.dp))
                         .border(1.dp, accentColor.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
                         .clickable { onSeeAllClick() }
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
-                    Text("See All", color = accentColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("See All", color = accentColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
 
                 // Right Side: Similar Rooms / Connection
@@ -1530,7 +1548,14 @@ fun ActiveCardDetails(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text("✨", fontSize = 12.sp)
-                        Text("Show Similar Rooms", color = Color(0xFF007AFF), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Show Similar Rooms",
+                            color = Color(0xFF007AFF),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
@@ -2060,3 +2085,69 @@ private fun parseThemeColor(hex: String?, fallback: Color = Color(0xFF007AFF)): 
     if (named != null) return named
     return try { Color(hex.toColorInt()) } catch (_: Exception) { fallback }
 }
+
+@Composable
+fun AestheticGlowingLoader(
+    color: Color = Color(0xFF007AFF),
+    size: androidx.compose.ui.unit.Dp = 56.dp
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "loader")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1100, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+    val pulse by infiniteTransition.animateFloat(
+        initialValue = 0.82f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+
+    Box(
+        modifier = Modifier.size(size),
+        contentAlignment = Alignment.Center
+    ) {
+        // Outer glowing halo
+        Box(
+            modifier = Modifier
+                .size(size)
+                .graphicsLayer {
+                    scaleX = pulse
+                    scaleY = pulse
+                    alpha = 0.35f
+                }
+                .blur(16.dp)
+                .background(color, CircleShape)
+        )
+
+        // Spinning gradient arc ring
+        Canvas(modifier = Modifier.size(size * 0.85f).graphicsLayer { rotationZ = rotation }) {
+            drawArc(
+                brush = Brush.sweepGradient(
+                    listOf(
+                        color.copy(alpha = 0.05f),
+                        color.copy(alpha = 0.55f),
+                        Color.White,
+                        color
+                    )
+                ),
+                startAngle = 0f,
+                sweepAngle = 280f,
+                useCenter = false,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = 3.5.dp.toPx(),
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round
+                )
+            )
+        }
+    }
+}
+

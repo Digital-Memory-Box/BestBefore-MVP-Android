@@ -36,6 +36,7 @@ object Routes {
     const val PROFILE = "profile"
     const val ROOM = "room/{roomId}/{roomName}"
     const val NOTIFICATIONS = "notifications"
+    const val GUEST_BROWSE = "guest_browse"
 }
 
 @Composable
@@ -97,7 +98,13 @@ fun AppNavigation() {
 
                 when {
                     firebaseUser == null -> {
-                        // No Firebase session — stay on opening screen
+                        if (!sessionManager.hasSeenTutorial()) {
+                            // First-time user: show guest browse with tutorial
+                            navController.navigate(Routes.GUEST_BROWSE) {
+                                popUpTo(Routes.OPENING) { inclusive = true }
+                            }
+                        }
+                        // else: returning user without session stays on opening screen (will tap to go to login)
                     }
                     !firebaseUser.isEmailVerified -> {
                         // Firebase account exists but email not verified — clear & go to login
@@ -126,6 +133,21 @@ fun AppNavigation() {
                 onNavigateToMain = {
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(Routes.OPENING) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable(Routes.GUEST_BROWSE) {
+            com.dmb.bestbefore.ui.screens.guest.GuestBrowseScreen(
+                onNavigateToLogin = {
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(Routes.GUEST_BROWSE) { inclusive = true }
+                    }
+                },
+                onNavigateToSignup = {
+                    navController.navigate(Routes.SIGNUP) {
+                        popUpTo(Routes.GUEST_BROWSE) { inclusive = true }
                     }
                 }
             )

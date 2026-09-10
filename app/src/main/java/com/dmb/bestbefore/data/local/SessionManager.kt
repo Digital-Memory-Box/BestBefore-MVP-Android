@@ -228,7 +228,9 @@ class SessionManager(context: Context) {
 
     fun clearSession() {
         try {
+            val seenTutorial = hasSeenTutorial()
             prefs.edit { clear() }
+            setHasSeenTutorial(seenTutorial)
         } catch (e: Throwable) {
             android.util.Log.e("SessionManager", "Error clearing preferences: ${e.message}")
         }
