@@ -32,7 +32,7 @@
     <string name="age_confirmation">I confirm I am at least 16 years old</string>
     <string name="terms_agreement_prefix">By signing up, you agree to our</string>
     <string name="terms_of_service">Terms of Service</string>
-    <string name="terms_and"> and </string>
+    <string name="terms_and">" and "</string>
     <string name="privacy_policy">Privacy Policy</string>
     <string name="sign_up_button">Sign Up</string>
     <string name="already_have_account">already have an account? login</string>
