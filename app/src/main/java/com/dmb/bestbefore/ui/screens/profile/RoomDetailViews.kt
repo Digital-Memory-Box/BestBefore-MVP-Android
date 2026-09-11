@@ -1747,7 +1747,8 @@ fun ProfileGalleryViewer(
         androidx.compose.foundation.pager.HorizontalPager(
             state = pagerState, 
             modifier = Modifier.fillMaxSize(),
-            userScrollEnabled = isPagerScrollEnabled
+            userScrollEnabled = isPagerScrollEnabled,
+            beyondViewportPageCount = 1
         ) { page ->
              var scale by remember { mutableStateOf(1f) }
              var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }

@@ -1049,13 +1049,17 @@ private fun HallwayContent(
                 }
             }
 
-            LaunchedEffect(themeColor, ThemeState.syncAccentWithRoom) {
-                ThemeState.syncAccent(themeColor)
+            LaunchedEffect(themeColor, ThemeState.syncAccentWithRoom, pagerState.isScrollInProgress) {
+                if (!pagerState.isScrollInProgress) {
+                    ThemeState.syncAccent(themeColor)
+                }
             }
 
             // Notify parent of current page for overlays
-            LaunchedEffect(pagerState.currentPage) {
-                onPagerPageChanged(pagerState.currentPage)
+            LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) {
+                if (!pagerState.isScrollInProgress) {
+                    onPagerPageChanged(pagerState.currentPage)
+                }
             }
 
             // Keep carousel perfectly centered on the X-axis
@@ -1080,7 +1084,8 @@ private fun HallwayContent(
                             .fillMaxWidth()
                             .height(cardHeight),
                         contentPadding = carouselPadding,
-                        pageSpacing = 8.dp
+                        pageSpacing = 8.dp,
+                        beyondViewportPageCount = 1
                     ) { page ->
                         val card = cards[page]
                         val parsedColor = parseThemeColor(card.themeColorHex)
@@ -1100,6 +1105,7 @@ private fun HallwayContent(
                                 },
                             contentAlignment = Alignment.Center
                         ) {
+                            val isActiveCard = (pagerState.currentPage == page)
                             HallwayActiveCard(
                                 card = card,
                                 glowAlpha = 1f, // Glow alpha is now applied by graphicsLayer above
@@ -1113,7 +1119,8 @@ private fun HallwayContent(
                                 isOrbMenuVisible = isOrbMenuVisible,
                                 onToggleOrbMenu = onToggleOrbMenu,
                                 cardHeight = cardHeight,
-                                widthFraction = cardWidthFraction
+                                widthFraction = cardWidthFraction,
+                                isActiveCard = isActiveCard
                             )
                         }
                     }
@@ -1159,7 +1166,8 @@ fun HallwayActiveCard(
     isOrbMenuVisible: Boolean = true,
     onToggleOrbMenu: () -> Unit = {},
     cardHeight: Dp = 350.dp,
-    widthFraction: Float = 0.9f
+    widthFraction: Float = 0.9f,
+    isActiveCard: Boolean = true
 ) {
     val colors = LocalBestBeforeColors.current
 
@@ -1169,7 +1177,12 @@ fun HallwayActiveCard(
     val pulseScaleState = remember { mutableFloatStateOf(1f) }
     val pulseAlphaState = remember { mutableFloatStateOf(0.95f) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(isActiveCard) {
+        if (!isActiveCard) {
+            pulseScaleState.floatValue = 1f
+            pulseAlphaState.floatValue = 1f
+            return@LaunchedEffect
+        }
         while (isActive) {
             androidx.compose.animation.core.withInfiniteAnimationFrameMillis { ms ->
                 // Scale: 0.96 → 1.06, period 2800 ms (1400 ms each way)
@@ -1215,15 +1228,14 @@ fun HallwayActiveCard(
                 .graphicsLayer {
                     val ps = pulseScaleState.floatValue
                     val pa = pulseAlphaState.floatValue
-                    scaleX = 1.2f * ps; scaleY = 1.2f * ps
-                    alpha = glowAlpha * pa * 0.34f
+                    scaleX = 1.15f * ps; scaleY = 1.15f * ps
+                    alpha = glowAlpha * pa * 0.45f
                 }
-                .blur(32.dp)
                 .background(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            themeColor.copy(alpha = 0.88f),
-                            themeColor.copy(alpha = 0.42f),
+                            themeColor.copy(alpha = 0.75f),
+                            themeColor.copy(alpha = 0.35f),
                             Color.Transparent
                         )
                     ),
@@ -1239,17 +1251,16 @@ fun HallwayActiveCard(
                 .graphicsLayer {
                     val ps = pulseScaleState.floatValue
                     val pa = pulseAlphaState.floatValue
-                    scaleX = 1.08f * ps
-                    scaleY = 1.08f * ps
-                    alpha = glowAlpha * pa * 0.7f
+                    scaleX = 1.06f * ps
+                    scaleY = 1.06f * ps
+                    alpha = glowAlpha * pa * 0.65f
                 }
-                .blur(16.dp)
                 .background(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = 0.8f),
-                            themeColor.copy(alpha = 0.95f),
-                            themeColor.copy(alpha = 0.5f),
+                            Color.White.copy(alpha = 0.6f),
+                            themeColor.copy(alpha = 0.85f),
+                            themeColor.copy(alpha = 0.4f),
                             Color.Transparent
                         )
                     ),
@@ -1369,6 +1380,34 @@ fun HallwayActiveCard(
                 )
             }
             
+            // Bottom room title overlay with dark gradient scrim
+            if (card.title.isNotBlank()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomStart)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.55f),
+                                    Color.Black.copy(alpha = 0.85f)
+                                )
+                            )
+                        )
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Text(
+                        text = card.title,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
             // Top sheen overlay
             Box(
                 modifier = Modifier
@@ -1446,6 +1485,18 @@ fun ActiveCardDetails(
         ) {
             // ── Top content group ────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // ── Room Title ───────────────────────────────────────
+                if (card.title.isNotBlank()) {
+                    Text(
+                        text = card.title,
+                        color = colors.textPrimary,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 22.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
                 // ── Owner Row (tags removed) ─────────────────────────
                 val creatorTargetId = card.ownerId?.takeIf { it.isNotBlank() } ?: card.ownerEmail
                 Row(

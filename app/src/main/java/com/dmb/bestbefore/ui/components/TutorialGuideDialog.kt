@@ -82,7 +82,8 @@ fun TutorialGuideDialog(
                         state = pagerState,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .wrapContentHeight()
+                            .wrapContentHeight(),
+                        beyondViewportPageCount = 1
                     ) { page ->
                         TutorialSlideContent(page = page)
                     }
