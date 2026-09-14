@@ -10,5 +10,6 @@ package com.dmb.bestbefore.data.models
  */
 data class MemoryItem(
     val id: String,
-    val authorId: String
+    val authorId: String,
+    val type: String = "unknown"
 )

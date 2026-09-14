@@ -55,6 +55,7 @@ private fun CreateRoomChrome(
     onNext: () -> Unit,
     nextLabel: String = "Next",
     nextEnabled: Boolean = true,
+    isLoading: Boolean = false,
     themeName: String,
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -130,7 +131,17 @@ private fun CreateRoomChrome(
                     disabledContentColor = Color(0xFF8E8E93)
                 )
             ) {
-                Text(nextLabel, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Creating...", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                } else {
+                    Text(nextLabel, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -162,7 +173,12 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
     var tagInput      by remember { mutableStateOf("") }
     var inviteInput   by remember { mutableStateOf("") }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -171,17 +187,21 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
         ) {
             // Header
             Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp, bottom = 24.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Edit Room", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 Box(
-                    modifier = Modifier.size(32.dp).background(Color(0xFF2C2C2E), CircleShape)
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(Color(0xFF2C2C2E), CircleShape)
                         .clickable { viewModel.goBack() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Close, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(20.dp))
                 }
             }
 
@@ -243,12 +263,12 @@ fun EditRoomScreen(viewModel: ProfileViewModel) {
                 Text("Duration", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
-                    modifier = Modifier.fillMaxWidth().background(CardDarkBg, RoundedCornerShape(14.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                    modifier = Modifier.fillMaxWidth().background(Color(0xFF151515), RoundedCornerShape(14.dp)).padding(horizontal = 16.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    DurationStepper("Days",  days,  { viewModel.updateCapsuleDays(days - 1)  }, { viewModel.updateCapsuleDays(days + 1)  })
-                    DurationStepper("Hours", hours, { viewModel.updateCapsuleHours(hours - 1) }, { viewModel.updateCapsuleHours(hours + 1) })
-                    DurationStepper("Mins",  mins,  { viewModel.updateCapsuleMins(mins - 1)  }, { viewModel.updateCapsuleMins(mins + 1)  })
+                    DurationStepper("Days",  days,  { viewModel.updateCapsuleDays(days - 1)  }, { viewModel.updateCapsuleDays(days + 1)  }, Modifier.weight(1f))
+                    DurationStepper("Hours", hours, { viewModel.updateCapsuleHours(hours - 1) }, { viewModel.updateCapsuleHours(hours + 1) }, Modifier.weight(1f))
+                    DurationStepper("Mins",  mins,  { viewModel.updateCapsuleMins(mins - 1)  }, { viewModel.updateCapsuleMins(mins + 1)  }, Modifier.weight(1f))
                 }
             }
 
@@ -1074,13 +1094,13 @@ fun CreateRoomStep2(viewModel: ProfileViewModel) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(CardDarkBg, RoundedCornerShape(14.dp))
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly
+                                .background(Color(0xFF151515), RoundedCornerShape(14.dp))
+                                .padding(horizontal = 16.dp, vertical = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            DurationStepper("Days",  days,  { viewModel.updateCapsuleDays(days - 1)  }, { viewModel.updateCapsuleDays(days + 1)  })
-                            DurationStepper("Hours", hours, { viewModel.updateCapsuleHours(hours - 1) }, { viewModel.updateCapsuleHours(hours + 1) })
-                            DurationStepper("Mins",  mins,  { viewModel.updateCapsuleMins(mins - 1)  }, { viewModel.updateCapsuleMins(mins + 1)  })
+                            DurationStepper("Days",  days,  { viewModel.updateCapsuleDays(days - 1)  }, { viewModel.updateCapsuleDays(days + 1)  }, Modifier.weight(1f))
+                            DurationStepper("Hours", hours, { viewModel.updateCapsuleHours(hours - 1) }, { viewModel.updateCapsuleHours(hours + 1) }, Modifier.weight(1f))
+                            DurationStepper("Mins",  mins,  { viewModel.updateCapsuleMins(mins - 1)  }, { viewModel.updateCapsuleMins(mins + 1)  }, Modifier.weight(1f))
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -1187,26 +1207,64 @@ fun DurationStepper(
     label: String,
     value: Int,
     onDecrement: () -> Unit,
-    onIncrement: () -> Unit
+    onIncrement: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(label, color = Color(0xFF8E8E93), fontSize = 12.sp)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(
+        modifier = modifier
+            .background(Color(0xFF1E1E20), RoundedCornerShape(16.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
+            .padding(vertical = 12.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = label.uppercase(),
+            color = Color(0xFF8E8E93),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 1.2.sp
+        )
+        Text(
+            text = String.format("%02d", value),
+            color = Color.White,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Box(
                 modifier = Modifier
-                    .size(30.dp)
-                    .background(Color(0xFF3A3A3C), CircleShape)
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF2C2C2E))
                     .clickable { onDecrement() },
                 contentAlignment = Alignment.Center
-            ) { Text("-", color = Color.White, fontSize = 18.sp, textAlign = TextAlign.Center) }
-            Text(value.toString(), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Remove,
+                    contentDescription = "Decrease $label",
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
             Box(
                 modifier = Modifier
-                    .size(30.dp)
-                    .background(Color(0xFF3A3A3C), CircleShape)
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF2C2C2E))
                     .clickable { onIncrement() },
                 contentAlignment = Alignment.Center
-            ) { Text("+", color = Color.White, fontSize = 18.sp, textAlign = TextAlign.Center) }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Increase $label",
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
     }
 }
@@ -1799,13 +1857,16 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
 
     val themeName by viewModel.roomAtmosphereTheme.collectAsState()
     val isPublic by viewModel.isPublic.collectAsState()
+    val isCreatingRoom by viewModel.isCreatingRoom.collectAsState()
 
     CreateRoomChrome(
         step = 5,
-        onDismiss = { viewModel.closeOverlay() },
-        onBack = { viewModel.goToStep(ProfileStep.ROOM_MEMORY_RULES) },
+        onDismiss = { if (!isCreatingRoom) viewModel.closeOverlay() },
+        onBack = { if (!isCreatingRoom) viewModel.goToStep(ProfileStep.ROOM_MEMORY_RULES) },
         onNext = { viewModel.finalizeRoom(context) },
         nextLabel = "Create Room",
+        nextEnabled = !isCreatingRoom,
+        isLoading = isCreatingRoom,
         themeName = themeName
     ) {
         Text("Invite Friends", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
@@ -2032,6 +2093,54 @@ fun CreateRoomStep5(viewModel: ProfileViewModel) {
                 }
             }
         }
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        Text("Choose your cover photo for the capsule", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        val coverUri by viewModel.roomCoverPhotoUri.collectAsState()
+        val photoPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.GetContent()
+        ) { uri ->
+            viewModel.updateRoomCoverPhoto(uri)
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(CardDarkBg)
+                .clickable { photoPicker.launch("image/*") },
+            contentAlignment = Alignment.Center
+        ) {
+            if (coverUri != null) {
+                coil.compose.AsyncImage(
+                    model = coverUri,
+                    contentDescription = "Cover Photo",
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(32.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                        .clickable { viewModel.updateRoomCoverPhoto(null) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Close, "Remove", tint = Color.White, modifier = Modifier.size(16.dp))
+                }
+            } else {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.Image, contentDescription = "Add Cover", tint = Color.Gray, modifier = Modifier.size(40.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Tap to select cover photo", color = Color.Gray, fontSize = 14.sp)
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 

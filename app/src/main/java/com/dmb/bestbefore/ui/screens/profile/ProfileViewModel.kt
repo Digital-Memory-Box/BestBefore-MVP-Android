@@ -347,6 +347,13 @@ class ProfileViewModel @JvmOverloads constructor(
     private val _roomTags = MutableStateFlow<List<String>>(emptyList())
     val roomTags: StateFlow<List<String>> = _roomTags.asStateFlow()
 
+    private val _roomCoverPhotoUri = MutableStateFlow<Uri?>(null)
+    val roomCoverPhotoUri: StateFlow<Uri?> = _roomCoverPhotoUri.asStateFlow()
+
+    fun updateRoomCoverPhoto(uri: Uri?) {
+        _roomCoverPhotoUri.value = uri
+    }
+
     private val _availableTags = MutableStateFlow<List<String>>(emptyList())
     val availableTags: StateFlow<List<String>> = _availableTags.asStateFlow()
 
@@ -433,6 +440,7 @@ class ProfileViewModel @JvmOverloads constructor(
     // Memory metadata map: roomId -> (uriString -> MemoryItem)
     // Populated from refreshRoomMemories. Allows ownership checks and deletion by URI.
     private val _roomMemoryItems = MutableStateFlow<Map<String, Map<String, MemoryItem>>>(emptyMap())
+    val roomMemoryItems = _roomMemoryItems.asStateFlow()
 
     // Gallery viewer state
     private val _isGalleryViewerOpen = MutableStateFlow(false)
@@ -880,6 +888,8 @@ class ProfileViewModel @JvmOverloads constructor(
     }
 
     fun finalizeRoom(context: Context? = null) {
+        if (_isCreatingRoom.value) return
+        
         // Request notification permission before creating room
         viewModelScope.launch { _permissionRequests.emit(PermissionRequest.Notification) }
 
@@ -910,43 +920,52 @@ class ProfileViewModel @JvmOverloads constructor(
         }
 
         viewModelScope.launch {
-            // --- 1. AI KORSAN SIZINTISI BAŞLIYOR ---
-            val name = _roomName.value
-            val tags = _roomTags.value
-            val isPrivateMode = !_isPublic.value
-            val isTimeCap = _isTimeCapsuleEnabled.value
-            var finalDescription = _roomDescription.value.trim()
-
             try {
-                // Şairane yapay zekayı gizlice çağırıyoruz
-                val aiResult = aiRepository.generateRoomDescription(
-                    roomName = name,
-                    tags = tags,
-                    isPrivate = isPrivateMode,
-                    isTimeCapsule = isTimeCap
-                )
+                _isCreatingRoom.value = true
+                
+                // --- 1. AI KORSAN SIZINTISI BAŞLIYOR ---
+                val name = _roomName.value
+                val tags = _roomTags.value
+                val isPrivateMode = !_isPublic.value
+                val isTimeCap = _isTimeCapsuleEnabled.value
+                var finalDescription = _roomDescription.value.trim()
 
-                aiResult.onSuccess { generatedText ->
-                    if (finalDescription.isBlank()) {
-                        finalDescription = generatedText
-                    } else {
-                        // Kullanıcı zaten bir şeyler yazmışsa, AI'ın metnini altına ekle
-                        finalDescription = "$finalDescription\n\n$generatedText"
+                try {
+                    // Şairane yapay zekayı gizlice çağırıyoruz (timeout ile)
+                    val aiResult = kotlinx.coroutines.withTimeoutOrNull(2500L) {
+                        aiRepository.generateRoomDescription(
+                            roomName = name,
+                            tags = tags,
+                            isPrivate = isPrivateMode,
+                            isTimeCapsule = isTimeCap
+                        )
                     }
-                    // UI state'i de güncelleyelim
-                    _roomDescription.value = finalDescription
-                    Log.d("ProfileViewModel", "AI Description başarıyla eklendi!")
-                }.onFailure {
-                    // Eğer AI sunucusunda bir anlık takılma olursa uygulama çökmesin, devam etsin
-                    Log.e("ProfileViewModel", "AI otomatik oluşturulamadı: ${it.message}")
-                }
-            } catch (e: Exception) {
-                Log.e("ProfileViewModel", "AI Call failed", e)
-            }
-            // --- AI KORSAN SIZINTISI BİTTİ ---
 
-            // 2. ODA OBJESİNİ OLUŞTUR (Artık zenginleştirilmiş finalDescription ile)
-            val newRoom = TimeCapsuleRoom(
+                    if (aiResult != null) {
+                        aiResult.onSuccess { generatedText ->
+                            if (finalDescription.isBlank()) {
+                                finalDescription = generatedText
+                            } else {
+                                // Kullanıcı zaten bir şeyler yazmışsa, AI'ın metnini altına ekle
+                                finalDescription = "$finalDescription\n\n$generatedText"
+                            }
+                            // UI state'i de güncelleyelim
+                            _roomDescription.value = finalDescription
+                            Log.d("ProfileViewModel", "AI Description başarıyla eklendi!")
+                        }.onFailure {
+                            // Eğer AI sunucusunda bir anlık takılma olursa uygulama çökmesin, devam etsin
+                            Log.e("ProfileViewModel", "AI otomatik oluşturulamadı: ${it.message}")
+                        }
+                    } else {
+                        Log.w("ProfileViewModel", "AI description generation timed out, proceeding without it.")
+                    }
+                } catch (e: Exception) {
+                    Log.e("ProfileViewModel", "AI Call failed", e)
+                }
+                // --- AI KORSAN SIZINTISI BİTTİ ---
+
+                // 2. ODA OBJESİNİ OLUŞTUR (Artık zenginleştirilmiş finalDescription ile)
+                val newRoom = TimeCapsuleRoom(
                 id = UUID.randomUUID().toString(),
                 roomName = _roomName.value,
                 capsuleDays = days,
@@ -1030,6 +1049,34 @@ class ProfileViewModel @JvmOverloads constructor(
                 isPrivate = !newRoom.isPublic,
                 capsuleDays = newRoom.capsuleDays
             )
+            
+            val coverUri = _roomCoverPhotoUri.value
+            if (realId != null && coverUri != null && context != null) {
+                try {
+                    val inputStream = context.contentResolver.openInputStream(coverUri)
+                    if (inputStream != null) {
+                        val bytes = inputStream.readBytes()
+                        inputStream.close()
+                        val base64 = com.dmb.bestbefore.utils.ImageProcessingHelper.downsampleAndEncodeImage(
+                            bytes = bytes,
+                            maxDimension = 1024,
+                            quality = 60
+                        )
+                        if (base64 != null) {
+                            val memoryData: Map<String, Any> = mapOf(
+                                "type" to "photo",
+                                "title" to "Cover Photo",
+                                "content" to base64,
+                                "metadata" to emptyMap<String, Any>()
+                            )
+                            roomRepository.addMemoryToRoom(realId, memoryData)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("ProfileViewModel", "Failed to upload cover photo", e)
+                }
+            }
+
             val finalRoom = if (realId != null) {
                 newRoom.copy(id = realId, isOwnedByMe = true, isCollaborator = false)
             } else {
@@ -1066,6 +1113,9 @@ class ProfileViewModel @JvmOverloads constructor(
                         relatedRoomName = finalRoom.roomName
                     )
                 )
+            }
+            } finally {
+                _isCreatingRoom.value = false
             }
         }
 
@@ -1460,17 +1510,20 @@ class ProfileViewModel @JvmOverloads constructor(
                         // Extract MongoDB _id and authorId (may come as { "$oid": "..." } or plain string)
                         val memoryId = extractMongoId(memory["_id"])
                         val authorId = extractMongoId(memory["authorId"])
+                        val url = memory["url"] as? String
 
-                        if (content != null) {
-                            val uriStr = when {
+                        val uriStr = if (url != null && url.isNotBlank()) {
+                            url
+                        } else if (type == "note" && content != null) {
+                            "NOTE:${title ?: ""}:$content"
+                        } else if (memoryId.isNotEmpty() && (type == "photo" || type == "video" || type == "audio")) {
+                            "${com.dmb.bestbefore.data.api.RetrofitClient.BASE_URL}memories/$memoryId/photo"
+                        } else if (content != null) {
+                            when {
                                 type == "audio" -> "data:${mimeType ?: "audio/mp4"};base64,$content"
                                 type == "video" -> "data:${mimeType ?: "video/mp4"};base64,$content"
-                                type == "note" -> "NOTE:${title ?: ""}:$content"
                                 content.startsWith("http") -> content
                                 content.startsWith("/") -> com.dmb.bestbefore.data.api.RetrofitClient.BASE_URL.removeSuffix("/") + content
-                                // For photo with a valid ID, stream directly via /memories/:id/photo so Coil streams and caches in parallel
-                                type == "photo" && memoryId.isNotEmpty() ->
-                                    "${com.dmb.bestbefore.data.api.RetrofitClient.BASE_URL}memories/$memoryId/photo"
                                 // Already a full data URI — normalise non-image types to image/jpeg
                                 // so AsyncBase64Image can decode them (e.g. data:application/octet-stream)
                                 content.startsWith("data:image") -> content
@@ -1479,13 +1532,14 @@ class ProfileViewModel @JvmOverloads constructor(
                                 // Explicit photo type OR long raw base64
                                 type == "photo" || content.length > 100 ->
                                     "data:image/${mimeType?.substringAfter("/") ?: "jpeg"};base64,$content"
-                                else -> null
+                                else -> content
                             }
-                            if (uriStr != null) {
-                                memoriesUrls.add(uriStr)
-                                if (memoryId.isNotEmpty() && authorId.isNotEmpty()) {
-                                    memoryItemMap[uriStr] = MemoryItem(id = memoryId, authorId = authorId)
-                                }
+                        } else null
+
+                        if (uriStr != null) {
+                            memoriesUrls.add(uriStr)
+                            if (memoryId.isNotEmpty() && authorId.isNotEmpty()) {
+                                memoryItemMap[uriStr] = MemoryItem(id = memoryId, authorId = authorId, type = type ?: "unknown")
                             }
                         }
                     }
@@ -1577,7 +1631,7 @@ class ProfileViewModel @JvmOverloads constructor(
                                 if (uriStr != null) {
                                     memoriesUrls.add(uriStr)
                                     if (memoryId.isNotEmpty() && authorId.isNotEmpty()) {
-                                        memoryItemMap[uriStr] = MemoryItem(id = memoryId, authorId = authorId)
+                                        memoryItemMap[uriStr] = MemoryItem(id = memoryId, authorId = authorId, type = type ?: "unknown")
                                     }
                                 }
                             }
@@ -1874,6 +1928,7 @@ class ProfileViewModel @JvmOverloads constructor(
         _roomName.value = ""
         _roomDescription.value = ""
         _roomTags.value = emptyList()
+        _roomCoverPhotoUri.value = null
         _aiGeneratedDescription.value = null
         _selectedRoom.value = null
         _isPublic.value = true
@@ -2088,6 +2143,9 @@ class ProfileViewModel @JvmOverloads constructor(
     // Live search state (UI-friendly model)
     private val _userSearchResults = MutableStateFlow<List<InvitedUser>>(emptyList())
     val userSearchResults: StateFlow<List<InvitedUser>> = _userSearchResults.asStateFlow()
+
+    private val _isCreatingRoom = MutableStateFlow(false)
+    val isCreatingRoom: StateFlow<Boolean> = _isCreatingRoom.asStateFlow()
 
     private var searchJob: kotlinx.coroutines.Job? = null
 

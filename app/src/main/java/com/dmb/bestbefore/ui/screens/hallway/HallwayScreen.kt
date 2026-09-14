@@ -1126,7 +1126,7 @@ private fun HallwayContent(
                     }
 
                     // ── Card Details — fills remaining space between card and nav ──
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                         ActiveCardDetails(
                             card = activeCard,
@@ -1220,22 +1220,20 @@ fun HallwayActiveCard(
             .fillMaxWidth(widthFraction)
             .height(cardHeight)
     ) {
-        // Layer 1: wide ambient halo — reads pulse state in graphicsLayer only
+        // Layer 1: wide ambient halo
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(2.dp)
                 .graphicsLayer {
                     val ps = pulseScaleState.floatValue
-                    val pa = pulseAlphaState.floatValue
                     scaleX = 1.15f * ps; scaleY = 1.15f * ps
-                    alpha = glowAlpha * pa * 0.45f
                 }
                 .background(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            themeColor.copy(alpha = 0.75f),
-                            themeColor.copy(alpha = 0.35f),
+                            themeColor.copy(alpha = 0.75f * glowAlpha * pulseAlphaState.floatValue * 0.45f),
+                            themeColor.copy(alpha = 0.35f * glowAlpha * pulseAlphaState.floatValue * 0.45f),
                             Color.Transparent
                         )
                     ),
@@ -1243,24 +1241,22 @@ fun HallwayActiveCard(
                 )
         )
 
-        // Layer 2: inner bloom with white core for a richer neon feel
+        // Layer 2: inner bloom with white core
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(6.dp)
                 .graphicsLayer {
                     val ps = pulseScaleState.floatValue
-                    val pa = pulseAlphaState.floatValue
                     scaleX = 1.06f * ps
                     scaleY = 1.06f * ps
-                    alpha = glowAlpha * pa * 0.65f
                 }
                 .background(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = 0.6f),
-                            themeColor.copy(alpha = 0.85f),
-                            themeColor.copy(alpha = 0.4f),
+                            Color.White.copy(alpha = 0.6f * glowAlpha * pulseAlphaState.floatValue * 0.65f),
+                            themeColor.copy(alpha = 0.85f * glowAlpha * pulseAlphaState.floatValue * 0.65f),
+                            themeColor.copy(alpha = 0.4f * glowAlpha * pulseAlphaState.floatValue * 0.65f),
                             Color.Transparent
                         )
                     ),
@@ -1268,29 +1264,25 @@ fun HallwayActiveCard(
                 )
         )
 
-        // Layer 3: soft rim light — uses room themeColor
+        // Layer 3: soft rim light
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(1.dp)
-                .graphicsLayer {
-                    val pa = pulseAlphaState.floatValue
-                    alpha = glowAlpha * pa * 0.82f
-                }
                 .border(
                     width = 1.8.dp,
                     brush = Brush.linearGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = 0.7f),
-                            themeColor.copy(alpha = 0.95f),
-                            Color.White.copy(alpha = 0.5f)
+                            Color.White.copy(alpha = 0.7f * glowAlpha * pulseAlphaState.floatValue * 0.82f),
+                            themeColor.copy(alpha = 0.95f * glowAlpha * pulseAlphaState.floatValue * 0.82f),
+                            Color.White.copy(alpha = 0.5f * glowAlpha * pulseAlphaState.floatValue * 0.82f)
                         )
                     ),
                     shape = RoundedCornerShape(32.dp)
                 )
         )
 
-        // Card body — semi-transparent so the AnimatedBackground orbs bleed through
+        // Card body
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -1484,19 +1476,7 @@ fun ActiveCardDetails(
             modifier = Modifier.fillMaxSize()
         ) {
             // ── Top content group ────────────────────────────────
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                // ── Room Title ───────────────────────────────────────
-                if (card.title.isNotBlank()) {
-                    Text(
-                        text = card.title,
-                        color = colors.textPrimary,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 22.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // ── Owner Row (tags removed) ─────────────────────────
                 val creatorTargetId = card.ownerId?.takeIf { it.isNotBlank() } ?: card.ownerEmail
                 Row(
@@ -1554,15 +1534,14 @@ fun ActiveCardDetails(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 2.dp)
-                        .heightIn(min = 20.dp, max = 42.dp),
+                        .padding(top = 2.dp),
                     contentAlignment = Alignment.TopStart
                 ) {
                     Text(
                         text = if (hasDescription) card.description else "No description provided.",
                         color = if (hasDescription) colors.textPrimary.copy(alpha = 0.7f) else colors.textSecondary,
-                        fontSize = 14.sp,
-                        lineHeight = 18.sp,
+                        fontSize = 13.sp,
+                        lineHeight = 17.sp,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )

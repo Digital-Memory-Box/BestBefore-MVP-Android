@@ -43,7 +43,7 @@ class QrScannerActivity : AppCompatActivity() {
         }
         rootLayout.addView(barcodeView)
 
-        // Top Status Header Pill: "Scan a BestBefore room QR code"
+        // Status Header Pill: "Scan a BestBefore room QR code"
         val topStatusText = TextView(this).apply {
             text = "Scan a BestBefore room QR code"
             setTextColor(Color.WHITE)
@@ -61,12 +61,17 @@ class QrScannerActivity : AppCompatActivity() {
                 setColor(Color.parseColor("#CC121212"))
             }
 
+            val density = resources.displayMetrics.density
+            val screenHeight = resources.displayMetrics.heightPixels
+            // Viewfinder is roughly 250dp centered. The bottom is at (screenHeight/2) + 125dp.
+            val topPos = (screenHeight / 2) + (145 * density).toInt()
+
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT
             ).apply {
                 gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                topMargin = (72 * resources.displayMetrics.density).toInt()
+                topMargin = topPos
             }
         }
         rootLayout.addView(topStatusText)

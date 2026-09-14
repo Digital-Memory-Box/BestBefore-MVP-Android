@@ -123,25 +123,28 @@ fun AsyncBase64Image(
     }
 }
 
-private fun isAudioMemoryUri(uri: Uri): Boolean {
+private fun isAudioMemoryUri(uri: Uri, viewModel: ProfileViewModel? = null, roomId: String? = null): Boolean {
     val value = uri.toString().lowercase()
-    return value.startsWith("data:audio") ||
-        value.endsWith(".mp3") ||
-        value.endsWith(".m4a") ||
-        value.endsWith(".wav") ||
-        value.endsWith(".aac") ||
-        value.endsWith(".ogg")
+    if (value.startsWith("data:audio") || value.endsWith(".mp3") || value.endsWith(".wav") || value.endsWith(".ogg") || value.endsWith(".m4a")) return true
+    if (viewModel != null && roomId != null) {
+        val items = viewModel.roomMemoryItems.value[roomId]
+        val type = items?.get(uri.toString())?.type
+        if (type == "audio") return true
+    }
+    return false
 }
 
 private fun isNoteMemoryUri(uri: Uri): Boolean = uri.toString().startsWith("NOTE:")
 
-private fun isVideoMemoryUri(uri: Uri): Boolean {
+private fun isVideoMemoryUri(uri: Uri, viewModel: ProfileViewModel? = null, roomId: String? = null): Boolean {
     val value = uri.toString().lowercase()
-    return value.startsWith("data:video") ||
-        value.endsWith(".mp4") ||
-        value.endsWith(".mov") ||
-        value.endsWith(".avi") ||
-        value.endsWith(".mkv")
+    if (value.startsWith("data:video") || value.endsWith(".mp4") || value.endsWith(".mov") || value.endsWith(".avi") || value.endsWith(".mkv")) return true
+    if (viewModel != null && roomId != null) {
+        val items = viewModel.roomMemoryItems.value[roomId]
+        val type = items?.get(uri.toString())?.type
+        if (type == "video") return true
+    }
+    return false
 }
 
 // --- ROOM DETAIL SCREEN ---
@@ -839,9 +842,9 @@ fun RoomDetailScreen(
                                         )
                                 ) {
                                     val itemStr = item1.toString()
-                                    val isAudio1 = isAudioMemoryUri(item1)
+                                    val isAudio1 = isAudioMemoryUri(item1, viewModel, room?.id)
                                     val isNote1 = isNoteMemoryUri(item1)
-                                    val isVideo1 = isVideoMemoryUri(item1)
+                                    val isVideo1 = isVideoMemoryUri(item1, viewModel, room?.id)
                                     if (isNote1) {
                                         val parts = itemStr.removePrefix("NOTE:").split(":", limit = 2)
                                         val noteTitle = parts.getOrElse(0) { "Note" }
@@ -901,9 +904,9 @@ fun RoomDetailScreen(
                                             )
                                     ) {
                                         val item2Str = item2.toString()
-                                        val isAudio2 = isAudioMemoryUri(item2)
+                                        val isAudio2 = isAudioMemoryUri(item2, viewModel, room?.id)
                                         val isNote2 = isNoteMemoryUri(item2)
-                                        val isVideo2 = isVideoMemoryUri(item2)
+                                        val isVideo2 = isVideoMemoryUri(item2, viewModel, room?.id)
                                         if (isNote2) {
                                             val parts = item2Str.removePrefix("NOTE:").split(":", limit = 2)
                                             val noteTitle2 = parts.getOrElse(0) { "Note" }
@@ -1072,11 +1075,11 @@ fun RoomDetailScreen(
                                 Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)).padding(4.dp), contentAlignment = Alignment.Center) {
                                     Icon(Icons.AutoMirrored.Filled.StickyNote2, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(32.dp))
                                 }
-                            } else if (isAudioMemoryUri(item)) {
+                            } else if (isAudioMemoryUri(item, viewModel, room?.id)) {
                                 Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)), contentAlignment = Alignment.Center) {
                                     Icon(Icons.Default.PlayCircle, null, tint = Color.White, modifier = Modifier.size(34.dp))
                                 }
-                            } else if (isVideoMemoryUri(item)) {
+                            } else if (isVideoMemoryUri(item, viewModel, room?.id)) {
                                 Box(modifier = Modifier.fillMaxSize().background(Color(0xFF2C2C2E)), contentAlignment = Alignment.Center) {
                                     Icon(Icons.Default.Videocam, null, tint = Color.White, modifier = Modifier.size(34.dp))
                                 }
@@ -1731,6 +1734,7 @@ fun ProfileGalleryViewer(
 ) {
     val media by viewModel.galleryViewerMedia.collectAsState()
     val startIndex by viewModel.galleryViewerIndex.collectAsState()
+    val room by viewModel.selectedRoom.collectAsState()
 
     if (media.isEmpty()) {
         LaunchedEffect(Unit) {
@@ -1780,9 +1784,9 @@ fun ProfileGalleryViewer(
                      },
                  contentAlignment = Alignment.Center
              ) {
-                 val isAudio = isAudioMemoryUri(currentItem)
+                 val isAudio = isAudioMemoryUri(currentItem, viewModel, room?.id)
                  val isNote = isNoteMemoryUri(currentItem)
-                 val isVideo = isVideoMemoryUri(currentItem)
+                 val isVideo = isVideoMemoryUri(currentItem, viewModel, room?.id)
                  if (isAudio) {
                       MusicPlayer(
                           audioUrl = currentItem.toString(),
