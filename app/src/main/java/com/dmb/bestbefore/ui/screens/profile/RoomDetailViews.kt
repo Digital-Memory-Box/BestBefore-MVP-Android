@@ -114,8 +114,13 @@ fun AsyncBase64Image(
             }
         }
     } else {
+        val model = if (modelStr.startsWith("/")) {
+            com.dmb.bestbefore.data.api.RetrofitClient.BASE_URL.removeSuffix("/") + modelStr
+        } else {
+            itemData
+        }
         coil.compose.AsyncImage(
-            model = itemData,
+            model = model,
             contentDescription = null,
             contentScale = contentScale,
             modifier = modifier

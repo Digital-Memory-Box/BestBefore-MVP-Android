@@ -253,17 +253,25 @@ fun DashboardTab(
                                           .background(Brush.linearGradient(listOf(Color(0xFF0038A8), Color(0xFF001F5C))), RoundedCornerShape(12.dp)),
                                       contentAlignment = Alignment.Center
                                   ) {
-                                      if (room.photos.isNotEmpty()) {
-                                          AsyncImage(
-                                              model = room.photos.first().url,
-                                              contentDescription = null,
-                                              modifier = Modifier.fillMaxSize(),
-                                              contentScale = ContentScale.Crop,
-                                              alpha = 0.5f
-                                          )
-                                      } else {
-                                          Icon(Icons.Default.Folder, null, tint = Color(0xFF007AFF), modifier = Modifier.size(32.dp))
-                                      }
+                                       val rawUrl = room.imageUrl?.takeIf { it.isNotBlank() }
+                                           ?: room.photos.firstOrNull()?.url?.takeIf { it.isNotBlank() }
+                                       val roomImage = if (rawUrl != null) {
+                                           if (rawUrl.startsWith("/")) {
+                                               com.dmb.bestbefore.data.api.RetrofitClient.BASE_URL.removeSuffix("/") + rawUrl
+                                           } else rawUrl
+                                       } else null
+
+                                       if (roomImage != null) {
+                                           AsyncImage(
+                                               model = roomImage,
+                                               contentDescription = null,
+                                               modifier = Modifier.fillMaxSize(),
+                                               contentScale = ContentScale.Crop,
+                                               alpha = 0.5f
+                                           )
+                                       } else {
+                                           Icon(Icons.Default.Folder, null, tint = Color(0xFF007AFF), modifier = Modifier.size(32.dp))
+                                       }
                                       
                                       // "..." menu button in top-right corner
                                       Box(

@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
@@ -685,6 +686,12 @@ class ProfileViewModel @JvmOverloads constructor(
                     _totalMemories.value = allRooms.sumOf { it.photos.size }
                     refreshRoomLists(allRooms)
 
+                    // Schedule local device notifications for all future-unlocked rooms
+                    val nowMs = System.currentTimeMillis()
+                    allRooms.filter { it.unlockTime > nowMs }.forEach { room ->
+                        NotificationScheduler.scheduleRoomUnlock(context, room.id, room.roomName, room.unlockTime)
+                    }
+
                     // AI: fetch personalised suggestions after rooms and user profile are loaded
                     val userForAi = _cachedUserDto
                     val allApiRooms = roomsResult.getOrNull() ?: emptyList()
@@ -732,9 +739,32 @@ class ProfileViewModel @JvmOverloads constructor(
             _selectedTheme.value = serverTheme
             ThemeState.selectTheme(context, serverTheme)
         }
-        if (!userDto.accentColor.isNullOrBlank()) {
+        val localAccentHex = SessionManager.getInstance(context).getAccentColor()
+        val serverAccentHex = userDto.accentColor
+        if (!serverAccentHex.isNullOrBlank() && serverAccentHex != "#007AFF") {
             runCatching {
-                val c = Color(android.graphics.Color.parseColor(userDto.accentColor))
+                val c = Color(android.graphics.Color.parseColor(serverAccentHex))
+                _accentColor.value = c
+                ThemeState.selectAccent(context, c)
+            }
+        } else if (!localAccentHex.isNullOrBlank() && localAccentHex != "#007AFF") {
+            // Preserve user's local accent color if server still has default, and sync to server
+            runCatching {
+                val c = Color(android.graphics.Color.parseColor(localAccentHex))
+                _accentColor.value = c
+                ThemeState.selectAccent(context, c)
+                viewModelScope.launch {
+                    try {
+                        val repo = authRepository ?: AuthRepository(context).also { authRepository = it }
+                        repo.updateMe(UpdateMeRequest(accentColor = localAccentHex))
+                    } catch (e: Exception) {
+                        Log.e("ProfileViewModel", "Failed to sync local accent color to server", e)
+                    }
+                }
+            }
+        } else if (!serverAccentHex.isNullOrBlank()) {
+            runCatching {
+                val c = Color(android.graphics.Color.parseColor(serverAccentHex))
                 _accentColor.value = c
                 ThemeState.selectAccent(context, c)
             }
@@ -800,6 +830,7 @@ class ProfileViewModel @JvmOverloads constructor(
                 notificationMinutes = dto.capsuleDurationMinutes,
                 isPublic = dto.isPublic ?: !dto.isPrivate,
                 isCollaboration = dto.isTimeCapsule,
+                imageUrl = dto.imageUrl ?: dto.photos?.firstOrNull()?.url,
                 photos = dto.photos ?: emptyList(),
                 unlockTime = if (dto.unlockDate != null) parseCreatedAt(dto.unlockDate) else unlock,
                 scheduledClosureTime = closureMs,
@@ -1485,7 +1516,11 @@ class ProfileViewModel @JvmOverloads constructor(
                 val currentRoom = _selectedRoom.value?.takeIf { it.id == currentRoomId }
                 if (currentRoom != null && currentRoom.photos.isNotEmpty() && _roomMedia.value[currentRoomId].isNullOrEmpty()) {
                     val previewUris = currentRoom.photos.mapNotNull { preview ->
-                        preview.url.takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
+                        val rawUrl = preview.url.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                        val normalized = if (rawUrl.startsWith("/")) {
+                            com.dmb.bestbefore.data.api.RetrofitClient.BASE_URL.removeSuffix("/") + rawUrl
+                        } else rawUrl
+                        Uri.parse(normalized)
                     }
                     if (previewUris.isNotEmpty()) {
                         _roomMedia.value = _roomMedia.value + (currentRoomId to previewUris)
@@ -1585,68 +1620,90 @@ class ProfileViewModel @JvmOverloads constructor(
         if (ids.isEmpty()) return
 
         viewModelScope.launch {
-            ids.forEach { roomId ->
-                try {
-                    val fallbackPhotos = _createdRooms.value.find { it.id == roomId }?.photos
-                        ?: getRoomByIdFromRemote(roomId)?.photos
-                        ?: emptyList()
-                    if (fallbackPhotos.isNotEmpty() && _roomMedia.value[roomId].isNullOrEmpty()) {
-                        val previewUris = fallbackPhotos.mapNotNull { preview ->
-                            preview.url.takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
-                        }
-                        if (previewUris.isNotEmpty()) {
-                            _roomMedia.value = _roomMedia.value + (roomId to previewUris)
-                        }
-                    }
+            kotlinx.coroutines.coroutineScope {
+                ids.map { roomId ->
+                    async {
+                        try {
+                            if (!_roomMedia.value[roomId].isNullOrEmpty()) return@async
 
-                    val memoriesUrls = mutableListOf<String>()
-                    val memoryItemMap = mutableMapOf<String, MemoryItem>()
-                    roomRepository.getMemoriesByRoom(roomId, limit = limit).onSuccess { memories ->
-                        memories.forEach { memory ->
-                            val memoryRoomId = extractMemoryRoomId(memory)
-                            if (memoryRoomId.isNotEmpty() && memoryRoomId != roomId) return@forEach
-
-                            val content = memory["content"] as? String
-                            val type = memory["type"] as? String
-                            val title = memory["title"] as? String
-                            @Suppress("UNCHECKED_CAST")
-                            val metadata = memory["metadata"] as? Map<String, Any?>
-                            val mimeType = metadata?.get("mimeType") as? String
-                            val memoryId = extractMongoId(memory["_id"])
-                            val authorId = extractMongoId(memory["authorId"])
-
-                            if (content != null) {
-                                val uriStr = when {
-                                    type == "audio" -> "data:${mimeType ?: "audio/mp4"};base64,$content"
-                                    type == "video" -> "data:${mimeType ?: "video/mp4"};base64,$content"
-                                    type == "note" -> "NOTE:${title ?: ""}:$content"
-                                    content.startsWith("http") -> content
-                                    content.startsWith("data:image") -> content
-                                    content.startsWith("data:") && content.contains("base64,") ->
-                                        "data:image/jpeg;base64," + content.substringAfter("base64,")
-                                    type == "photo" || content.length > 100 ->
-                                        "data:image/${mimeType?.substringAfter("/") ?: "jpeg"};base64,$content"
-                                    else -> null
+                            val fallbackPhotos = _createdRooms.value.find { it.id == roomId }?.photos
+                                ?: getRoomByIdFromRemote(roomId)?.photos
+                                ?: emptyList()
+                            if (fallbackPhotos.isNotEmpty() && _roomMedia.value[roomId].isNullOrEmpty()) {
+                                val previewUris = fallbackPhotos.mapNotNull { preview ->
+                                    val rawUrl = preview.url.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                                    val normalized = if (rawUrl.startsWith("/")) {
+                                        com.dmb.bestbefore.data.api.RetrofitClient.BASE_URL.removeSuffix("/") + rawUrl
+                                    } else rawUrl
+                                    Uri.parse(normalized)
                                 }
-                                if (uriStr != null) {
-                                    memoriesUrls.add(uriStr)
-                                    if (memoryId.isNotEmpty() && authorId.isNotEmpty()) {
-                                        memoryItemMap[uriStr] = MemoryItem(id = memoryId, authorId = authorId, type = type ?: "unknown")
-                                    }
+                                if (previewUris.isNotEmpty()) {
+                                    _roomMedia.value = _roomMedia.value + (roomId to previewUris)
                                 }
                             }
-                        }
 
-                        val fallbackUris = fallbackPhotos.mapNotNull { preview ->
-                            preview.url.takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
+                            val memoriesUrls = mutableListOf<String>()
+                            val memoryItemMap = mutableMapOf<String, MemoryItem>()
+                            roomRepository.getMemoriesByRoom(roomId, limit = limit).onSuccess { memories ->
+                                memories.forEach { memory ->
+                                    val memoryRoomId = extractMemoryRoomId(memory)
+                                    if (memoryRoomId.isNotEmpty() && memoryRoomId != roomId) return@forEach
+
+                                    val content = memory["content"] as? String
+                                    val type = memory["type"] as? String
+                                    val title = memory["title"] as? String
+                                    @Suppress("UNCHECKED_CAST")
+                                    val metadata = memory["metadata"] as? Map<String, Any?>
+                                    val mimeType = metadata?.get("mimeType") as? String
+                                    val memoryId = extractMongoId(memory["_id"])
+                                    val authorId = extractMongoId(memory["authorId"])
+                                    val url = memory["url"] as? String
+
+                                    val uriStr = if (url != null && url.isNotBlank()) {
+                                        url
+                                    } else if (type == "note" && content != null) {
+                                        "NOTE:${title ?: ""}:$content"
+                                    } else if (memoryId.isNotEmpty() && (type == "photo" || type == "video" || type == "audio")) {
+                                        "${com.dmb.bestbefore.data.api.RetrofitClient.BASE_URL}memories/$memoryId/photo"
+                                    } else if (content != null) {
+                                        when {
+                                            type == "audio" -> "data:${mimeType ?: "audio/mp4"};base64,$content"
+                                            type == "video" -> "data:${mimeType ?: "video/mp4"};base64,$content"
+                                            content.startsWith("http") -> content
+                                            content.startsWith("/") -> com.dmb.bestbefore.data.api.RetrofitClient.BASE_URL.removeSuffix("/") + content
+                                            content.startsWith("data:image") -> content
+                                            content.startsWith("data:") && content.contains("base64,") ->
+                                                "data:image/jpeg;base64," + content.substringAfter("base64,")
+                                            type == "photo" || content.length > 100 ->
+                                                "data:image/${mimeType?.substringAfter("/") ?: "jpeg"};base64,$content"
+                                            else -> null
+                                        }
+                                    } else null
+
+                                    if (uriStr != null) {
+                                        memoriesUrls.add(uriStr)
+                                        if (memoryId.isNotEmpty() && authorId.isNotEmpty()) {
+                                            memoryItemMap[uriStr] = MemoryItem(id = memoryId, authorId = authorId, type = type ?: "unknown")
+                                        }
+                                    }
+                                }
+
+                                val fallbackUris = fallbackPhotos.mapNotNull { preview ->
+                                    val rawUrl = preview.url.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                                    val normalized = if (rawUrl.startsWith("/")) {
+                                        com.dmb.bestbefore.data.api.RetrofitClient.BASE_URL.removeSuffix("/") + rawUrl
+                                    } else rawUrl
+                                    Uri.parse(normalized)
+                                }
+                                val loadedUris = memoriesUrls.map { Uri.parse(it) }
+                                _roomMedia.value = _roomMedia.value + (roomId to loadedUris.ifEmpty { fallbackUris })
+                                _roomMemoryItems.value = _roomMemoryItems.value + (roomId to memoryItemMap)
+                            }
+                        } catch (e: Exception) {
+                            Log.w("ProfileViewModel", "Failed to prefetch connected room memories for $roomId", e)
                         }
-                        val loadedUris = memoriesUrls.map { Uri.parse(it) }
-                        _roomMedia.value = _roomMedia.value + (roomId to loadedUris.ifEmpty { fallbackUris })
-                        _roomMemoryItems.value = _roomMemoryItems.value + (roomId to memoryItemMap)
                     }
-                } catch (e: Exception) {
-                    Log.w("ProfileViewModel", "Failed to prefetch connected room memories for $roomId", e)
-                }
+                }.awaitAll()
             }
         }
     }
@@ -1970,13 +2027,18 @@ class ProfileViewModel @JvmOverloads constructor(
         _selectedRoom.value = room
         _currentStep.value = ProfileStep.ROOM_DETAIL
 
-        // Fetch memories for the newly selected room without triggering the pull-to-refresh UI
-        refreshRoomMemories(showRefreshIndicator = false)
-        // Fire-and-forget VIEW signal for AI preference learning
-        trackViewForRoom(room)
-        // If no description exists, ask the AI service to generate one
-        if (room.description.isNullOrBlank()) {
-            generateAndSaveRoomDescription(room)
+        // Only fetch memories if not already cached in _roomMedia
+        val hasCachedMedia = !_roomMedia.value[room.id].isNullOrEmpty()
+        if (!hasCachedMedia) {
+            refreshRoomMemories(showRefreshIndicator = false)
+        }
+
+        // Fire-and-forget VIEW signal for AI preference learning in background
+        viewModelScope.launch(Dispatchers.IO) {
+            trackViewForRoom(room)
+            if (room.description.isNullOrBlank()) {
+                generateAndSaveRoomDescription(room)
+            }
         }
 
         // check for unlock
@@ -1994,6 +2056,7 @@ class ProfileViewModel @JvmOverloads constructor(
                 .orEmpty()
         }
         val room = existing?.copy(
+            imageUrl = existing.imageUrl ?: card.imageUrl,
             photos = existing.photos.ifEmpty { cardPhotos },
             description = card.description.ifBlank { existing.description },
             tags = card.tags.ifEmpty { existing.tags },
@@ -2011,6 +2074,7 @@ class ProfileViewModel @JvmOverloads constructor(
             notificationDays = 0,
             notificationHours = 0,
             isPublic = true,
+            imageUrl = card.imageUrl,
             description = card.description,
             photos = cardPhotos,
             theme = "Default",
@@ -2715,11 +2779,28 @@ class ProfileViewModel @JvmOverloads constructor(
     fun selectTheme(context: Context, theme: AppTheme) {
         ThemeState.selectTheme(context, theme)
         _selectedTheme.value = theme
+        viewModelScope.launch {
+            try {
+                val repo = authRepository ?: AuthRepository(context).also { authRepository = it }
+                repo.updateMe(UpdateMeRequest(theme = theme.name))
+            } catch (e: Exception) {
+                Log.e("ProfileViewModel", "Failed to update theme on server", e)
+            }
+        }
     }
     
     fun selectAccentColor(context: Context, color: Color) {
         ThemeState.selectAccent(context, color)
         _accentColor.value = color
+        val hex = colorToHex(color)
+        viewModelScope.launch {
+            try {
+                val repo = authRepository ?: AuthRepository(context).also { authRepository = it }
+                repo.updateMe(UpdateMeRequest(accentColor = hex))
+            } catch (e: Exception) {
+                Log.e("ProfileViewModel", "Failed to update accent color on server", e)
+            }
+        }
     }
     
     // ========== CREDENTIAL UPDATE FUNCTIONS ==========
