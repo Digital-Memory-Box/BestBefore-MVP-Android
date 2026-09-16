@@ -119,8 +119,22 @@ fun AsyncBase64Image(
         } else {
             itemData
         }
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val request = remember(model, targetSize) {
+            coil.request.ImageRequest.Builder(context)
+                .data(model)
+                .crossfade(true)
+                .apply {
+                    if (targetSize != null && targetSize > 0) {
+                        size(targetSize)
+                    }
+                }
+                .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                .build()
+        }
         coil.compose.AsyncImage(
-            model = model,
+            model = request,
             contentDescription = null,
             contentScale = contentScale,
             modifier = modifier
@@ -272,6 +286,28 @@ fun RoomDetailScreen(
     }
     val visibleRoomMedia = currentRoomMedia + connectedRoomIds.flatMap { roomId ->
         roomMedia[roomId].orEmpty()
+    }
+    
+    // Prefetch first 12 thumbnails into Coil cache for instant rendering
+    LaunchedEffect(visibleRoomMedia) {
+        if (visibleRoomMedia.isNotEmpty()) {
+            val imageLoader = coil.Coil.imageLoader(context)
+            visibleRoomMedia.take(12).forEach { uri ->
+                val uriStr = uri.toString()
+                if (uriStr.startsWith("http") || uriStr.startsWith("/")) {
+                    val fullUrl = if (uriStr.startsWith("/")) {
+                        com.dmb.bestbefore.data.api.RetrofitClient.BASE_URL.removeSuffix("/") + uriStr
+                    } else uriStr
+                    val request = coil.request.ImageRequest.Builder(context)
+                        .data(fullUrl)
+                        .size(200)
+                        .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                        .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                        .build()
+                    imageLoader.enqueue(request)
+                }
+            }
+        }
     }
     
     Box(modifier = Modifier.fillMaxSize()) {

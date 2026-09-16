@@ -96,6 +96,7 @@ class ProfileViewModel @JvmOverloads constructor(
     // RoomRepository — no token arg; fetches fresh Firebase token per request (matches iOS pattern)
     // Initialised in initDatabase(context) so we can persist preference updates from AI responses.
     private var authRepository: AuthRepository? = null
+    private var sessionManager: SessionManager? = null
 
     // ── AI Service integration ────────────────────────────────────────────────
 
@@ -592,12 +593,13 @@ class ProfileViewModel @JvmOverloads constructor(
     // Helper context for DB init (Simple MVP approach)
     fun initDatabase(context: Context) {
         if (authRepository == null) authRepository = AuthRepository(context)
-        val sessionManager = SessionManager.getInstance(context)
+        if (sessionManager == null) sessionManager = SessionManager.getInstance(context)
+        val sm = sessionManager!!
         val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
-        val savedName = sessionManager.getUserName()
-        val savedMusic = sessionManager.getProfileMusic()
-        val savedProfilePhotoUri = sessionManager.getProfilePhotoUri()
-        val savedProfileImageUrl = sessionManager.getProfileImageUrl()
+        val savedName = sm.getUserName()
+        val savedMusic = sm.getProfileMusic()
+        val savedProfilePhotoUri = sm.getProfilePhotoUri()
+        val savedProfileImageUrl = sm.getProfileImageUrl()
         _userName.value = if (!savedName.isNullOrEmpty()) savedName else "User"
         _profileMusic.value = if (!savedMusic.isNullOrEmpty()) savedMusic else "None"
         // Prefer the backend-persisted URL (survives app restarts); fall back to local file URI
@@ -606,9 +608,26 @@ class ProfileViewModel @JvmOverloads constructor(
             !savedProfilePhotoUri.isNullOrBlank() -> Uri.parse(savedProfilePhotoUri)
             else -> null
         }
-        _roomEmotions.value = sessionManager.getRoomEmotions(currentUserId)
-        val savedBio = sessionManager.getBio()
+        _roomEmotions.value = sm.getRoomEmotions(currentUserId)
+        val savedBio = sm.getBio()
         if (!savedBio.isNullOrEmpty()) _bio.value = savedBio
+
+        // Instant pre-population from local cache
+        val cachedUser = sm.getCachedUser()
+        if (cachedUser != null) {
+            applyUserDtoToState(cachedUser, context)
+        }
+        val cachedRooms = sm.getCachedRooms()
+        if (cachedRooms.isNotEmpty()) {
+            _createdRooms.value = cachedRooms
+            _totalRooms.value = cachedRooms.size
+            _totalMemories.value = cachedRooms.sumOf { it.photos.size }
+            refreshRoomLists(cachedRooms)
+        }
+        val cachedTags = sm.getCachedTags()
+        if (cachedTags.isNotEmpty()) {
+            _availableTags.value = cachedTags
+        }
 
         viewModelScope.launch {
             try {
@@ -630,6 +649,7 @@ class ProfileViewModel @JvmOverloads constructor(
                     if (meResult.isSuccess) {
                         val userDto: UserDto = meResult.getOrThrow()
                         applyUserDtoToState(userDto, context)
+                        sm.saveUser(userDto)
                     } else {
                         Log.w("ProfileViewModel", "getMe failed: ${meResult.exceptionOrNull()?.message}")
                     }
@@ -685,6 +705,9 @@ class ProfileViewModel @JvmOverloads constructor(
                     _totalRooms.value = allRooms.size
                     _totalMemories.value = allRooms.sumOf { it.photos.size }
                     refreshRoomLists(allRooms)
+                    if (allRooms.isNotEmpty()) {
+                        sm.saveCachedRooms(allRooms)
+                    }
 
                     // Schedule local device notifications for all future-unlocked rooms
                     val nowMs = System.currentTimeMillis()
@@ -782,13 +805,17 @@ class ProfileViewModel @JvmOverloads constructor(
         return try {
             val tagsResult = roomRepository.getTags()
             if (tagsResult.isSuccess) {
-                aiRepository.parseTagsJson(tagsResult.getOrNull())
+                val tags = aiRepository.parseTagsJson(tagsResult.getOrNull())
+                if (tags.isNotEmpty()) {
+                    SessionManager.getInstance(context).saveCachedTags(tags)
+                }
+                tags
             } else {
-                emptyList()
+                SessionManager.getInstance(context).getCachedTags()
             }
         } catch (e: Exception) {
             Log.e("ProfileViewModel", "Failed to fetch tags", e)
-            emptyList()
+            SessionManager.getInstance(context).getCachedTags()
         }
     }
 
@@ -1585,6 +1612,9 @@ class ProfileViewModel @JvmOverloads constructor(
                     val loadedUris = memoriesUrls.map { Uri.parse(it) }
                     _roomMedia.value = _roomMedia.value + (currentRoomId to loadedUris.ifEmpty { fallbackUris })
                     _roomMemoryItems.value = _roomMemoryItems.value + (currentRoomId to memoryItemMap)
+                    if (memoriesUrls.isNotEmpty()) {
+                        sessionManager?.saveRoomMediaCache(currentRoomId, memoriesUrls)
+                    }
                 }
 
                 // Update room cover with the most-recently-uploaded photo memory so
@@ -2027,11 +2057,27 @@ class ProfileViewModel @JvmOverloads constructor(
         _selectedRoom.value = room
         _currentStep.value = ProfileStep.ROOM_DETAIL
 
-        // Only fetch memories if not already cached in _roomMedia
-        val hasCachedMedia = !_roomMedia.value[room.id].isNullOrEmpty()
-        if (!hasCachedMedia) {
-            refreshRoomMemories(showRefreshIndicator = false)
+        // Load cached media immediately from SessionManager or room.photos if not yet in _roomMedia
+        if (_roomMedia.value[room.id].isNullOrEmpty()) {
+            val cachedUris = sessionManager?.getRoomMediaCache(room.id)
+            if (!cachedUris.isNullOrEmpty()) {
+                _roomMedia.value = _roomMedia.value + (room.id to cachedUris.map { Uri.parse(it) })
+            } else if (room.photos.isNotEmpty()) {
+                val previewUris = room.photos.mapNotNull { preview ->
+                    val rawUrl = preview.url.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    val normalized = if (rawUrl.startsWith("/")) {
+                        com.dmb.bestbefore.data.api.RetrofitClient.BASE_URL.removeSuffix("/") + rawUrl
+                    } else rawUrl
+                    Uri.parse(normalized)
+                }
+                if (previewUris.isNotEmpty()) {
+                    _roomMedia.value = _roomMedia.value + (room.id to previewUris)
+                }
+            }
         }
+
+        // Silent background sync
+        refreshRoomMemories(showRefreshIndicator = false)
 
         // Fire-and-forget VIEW signal for AI preference learning in background
         viewModelScope.launch(Dispatchers.IO) {

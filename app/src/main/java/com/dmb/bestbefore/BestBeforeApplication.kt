@@ -44,7 +44,7 @@ class BestBeforeApplication : Application() {
                     .diskCache {
                         DiskCache.Builder()
                             .directory(cacheDir.resolve("coil_image_cache"))
-                            .maxSizeBytes(150L * 1024 * 1024)
+                            .maxSizeBytes(250L * 1024 * 1024)
                             .build()
                     }
                     .crossfade(false)

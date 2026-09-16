@@ -5,9 +5,13 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.dmb.bestbefore.data.api.models.RoomDto
+import com.dmb.bestbefore.data.api.models.RoomDtoJsonDeserializer
 import com.dmb.bestbefore.data.api.models.UserDto
+import com.dmb.bestbefore.data.models.TimeCapsuleRoom
 import com.google.firebase.auth.FirebaseAuth
 import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
 
 class SessionManager(context: Context) {
@@ -30,6 +34,11 @@ class SessionManager(context: Context) {
         private const val KEY_PROFILE_IMAGE_URL = "profile_image_url" // from backend
         private const val KEY_CACHED_USER = "cached_user_dto"
         private const val KEY_CACHED_HALLWAY = "cached_hallway_cards"
+        private const val KEY_CACHED_DISCOVER_ROOMS = "cached_discover_rooms"
+        private const val KEY_CACHED_MY_ROOMS = "cached_my_rooms"
+        private const val KEY_CACHED_ROOMS = "cached_time_capsule_rooms"
+        private const val KEY_CACHED_TAGS = "cached_available_tags"
+        private const val KEY_ROOM_MEDIA_PREFIX = "room_media_cache_"
         private const val KEY_MANUAL_PROFILE_TAGS = "manual_profile_tags"
         private const val KEY_FCM_TOKEN = "fcm_token"
         private const val KEY_HAS_SEEN_TUTORIAL = "has_seen_tutorial"
@@ -45,7 +54,9 @@ class SessionManager(context: Context) {
     }
 
     private val prefs: SharedPreferences = initPreferences(context)
-    private val gson = Gson()
+    private val gson: Gson = GsonBuilder()
+        .registerTypeAdapter(RoomDto::class.java, RoomDtoJsonDeserializer())
+        .create()
 
     private fun initPreferences(context: Context): SharedPreferences {
         return try {
@@ -156,6 +167,92 @@ class SessionManager(context: Context) {
             gson.fromJson(json, type) ?: emptyList()
         } catch (_: Exception) {
             emptyList()
+        }
+    }
+
+    fun saveDiscoverRooms(rooms: List<RoomDto>) {
+        val sanitized = rooms.map { room ->
+            val safeImageUrl = if (room.imageUrl != null && room.imageUrl.startsWith("data:") && room.imageUrl.length > 2000) null else room.imageUrl
+            val safePhotos = room.photos?.filter { it.url.length <= 2000 }
+            room.copy(imageUrl = safeImageUrl, photos = safePhotos)
+        }
+        prefs.edit { putString(KEY_CACHED_DISCOVER_ROOMS, gson.toJson(sanitized)) }
+    }
+
+    fun getDiscoverRooms(): List<RoomDto> {
+        val json = prefs.getString(KEY_CACHED_DISCOVER_ROOMS, null) ?: return emptyList()
+        val type = object : TypeToken<List<RoomDto>>() {}.type
+        return try {
+            gson.fromJson(json, type) ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveMyRooms(rooms: List<RoomDto>) {
+        val sanitized = rooms.map { room ->
+            val safeImageUrl = if (room.imageUrl != null && room.imageUrl.startsWith("data:") && room.imageUrl.length > 2000) null else room.imageUrl
+            val safePhotos = room.photos?.filter { it.url.length <= 2000 }
+            room.copy(imageUrl = safeImageUrl, photos = safePhotos)
+        }
+        prefs.edit { putString(KEY_CACHED_MY_ROOMS, gson.toJson(sanitized)) }
+    }
+
+    fun getMyRooms(): List<RoomDto> {
+        val json = prefs.getString(KEY_CACHED_MY_ROOMS, null) ?: return emptyList()
+        val type = object : TypeToken<List<RoomDto>>() {}.type
+        return try {
+            gson.fromJson(json, type) ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveCachedRooms(rooms: List<TimeCapsuleRoom>) {
+        val sanitized = rooms.map { room ->
+            val safeImageUrl = if (room.imageUrl != null && room.imageUrl.startsWith("data:") && room.imageUrl.length > 2000) null else room.imageUrl
+            val safePhotos = room.photos.filter { it.url.length <= 2000 }
+            room.copy(imageUrl = safeImageUrl, photos = safePhotos)
+        }
+        prefs.edit { putString(KEY_CACHED_ROOMS, gson.toJson(sanitized)) }
+    }
+
+    fun getCachedRooms(): List<TimeCapsuleRoom> {
+        val json = prefs.getString(KEY_CACHED_ROOMS, null) ?: return emptyList()
+        val type = object : TypeToken<List<TimeCapsuleRoom>>() {}.type
+        return try {
+            gson.fromJson(json, type) ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveCachedTags(tags: List<String>) {
+        prefs.edit { putString(KEY_CACHED_TAGS, gson.toJson(tags)) }
+    }
+
+    fun getCachedTags(): List<String> {
+        val json = prefs.getString(KEY_CACHED_TAGS, null) ?: return emptyList()
+        val type = object : TypeToken<List<String>>() {}.type
+        return try {
+            gson.fromJson(json, type) ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveRoomMediaCache(roomId: String, uris: List<String>) {
+        val safeUris = uris.take(20).filter { !it.startsWith("data:") || it.length <= 2000 }
+        prefs.edit { putString(KEY_ROOM_MEDIA_PREFIX + roomId, gson.toJson(safeUris)) }
+    }
+
+    fun getRoomMediaCache(roomId: String): List<String>? {
+        val json = prefs.getString(KEY_ROOM_MEDIA_PREFIX + roomId, null) ?: return null
+        val type = object : TypeToken<List<String>>() {}.type
+        return try {
+            gson.fromJson(json, type)
+        } catch (_: Exception) {
+            null
         }
     }
 

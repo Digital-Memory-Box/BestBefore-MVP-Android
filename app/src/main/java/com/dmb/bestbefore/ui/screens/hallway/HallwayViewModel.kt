@@ -332,17 +332,33 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
 
     private fun loadCachedData() {
         val sessionManager = com.dmb.bestbefore.data.local.SessionManager.getInstance(getApplication())
+        val cachedMy = sessionManager.getMyRooms()
+        val cachedDiscover = sessionManager.getDiscoverRooms()
+        if (cachedMy.isNotEmpty() || cachedDiscover.isNotEmpty()) {
+            myRoomsList = cachedMy
+            discoverRoomsList = cachedDiscover
+        }
         val cachedCards = sessionManager.getHallwayCards()
         if (cachedCards.isNotEmpty()) {
             _cards.value = cachedCards
-            // We still show initial loading if the cache is empty
             _isInitialLoading.value = false
+        } else if (cachedMy.isNotEmpty() || cachedDiscover.isNotEmpty()) {
+            filterCards(_currentTab.value)
+            if (_cards.value.isNotEmpty()) {
+                _isInitialLoading.value = false
+            }
+        }
+        val cachedTags = sessionManager.getCachedTags()
+        if (cachedTags.isNotEmpty()) {
+            _availableTags.value = cachedTags
         }
     }
 
     private fun fetchRooms() {
         viewModelScope.launch {
-            _isInitialLoading.value = true
+            if (_cards.value.isEmpty()) {
+                _isInitialLoading.value = true
+            }
             val t0 = System.currentTimeMillis()
             fun ms() = System.currentTimeMillis() - t0
             Log.i(TAG_PERF, "━━━ fetchRooms START ━━━")
@@ -353,7 +369,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
             // the user the server is starting rather than showing a blank screen.
             val warmupJob = launch {
                 kotlinx.coroutines.delay(2_000)
-                if (_serverStatus.value == ServerStatus.CONNECTING) {
+                if (_serverStatus.value == ServerStatus.CONNECTING && _cards.value.isEmpty()) {
                     _serverStatus.value = ServerStatus.WARMING_UP
                     Log.i(TAG_PERF, "[${ms()}ms] server still cold — showing warm-up message")
                 }
@@ -376,11 +392,14 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 warmupJob.cancel()
                 _serverStatus.value = ServerStatus.READY
 
+                val sessionManager = com.dmb.bestbefore.data.local.SessionManager.getInstance(getApplication())
+
                 if (myResult.isSuccess) {
                     val rooms = myResult.getOrThrow()
                     val photoStats = rooms.photoStats()
                     Log.i(TAG_PERF, "[${ms()}ms] /rooms → ${rooms.size} rooms | $photoStats")
                     myRoomsList = rooms
+                    sessionManager.saveMyRooms(rooms)
                 } else {
                     Log.e(TAG_PERF, "[${ms()}ms] /rooms FAILED: ${myResult.exceptionOrNull()?.message}")
                 }
@@ -390,6 +409,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                     val photoStats = rooms.photoStats()
                     Log.i(TAG_PERF, "[${ms()}ms] /rooms/discover → ${rooms.size} rooms | $photoStats")
                     discoverRoomsList = rooms
+                    sessionManager.saveDiscoverRooms(rooms)
                 } else {
                     Log.e(TAG_PERF, "[${ms()}ms] /rooms/discover FAILED: ${discoverResult.exceptionOrNull()?.message}")
                 }
@@ -481,7 +501,6 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                 filterCards(_currentTab.value)
                 
                 // Persist the filtered cards to cache for the next app launch
-                val sessionManager = com.dmb.bestbefore.data.local.SessionManager.getInstance(getApplication())
                 sessionManager.saveHallwayCards(_cards.value)
                 
                 Log.i(TAG_PERF, "[${ms()}ms] filterCards done → ${_cards.value.size} cards visible")
@@ -534,6 +553,7 @@ class HallwayViewModel(application: Application) : AndroidViewModel(application)
                             }
                         }
                         _availableTags.value = parsedTags
+                        com.dmb.bestbefore.data.local.SessionManager.getInstance(getApplication()).saveCachedTags(parsedTags)
                         Log.i(TAG_PERF, "/tags → ${parsedTags.size} tags in ${System.currentTimeMillis() - tagsT0}ms")
                     }
             } catch (e: Exception) {
