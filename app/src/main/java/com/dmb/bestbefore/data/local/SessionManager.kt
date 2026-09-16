@@ -131,7 +131,15 @@ class SessionManager(context: Context) {
     fun getCachedUser(): UserDto? {
         val json = prefs.getString(KEY_CACHED_USER, null) ?: return null
         return try {
-            gson.fromJson(json, UserDto::class.java)
+            val user = gson.fromJson(json, UserDto::class.java)
+            val currentFirebaseUser = try { FirebaseAuth.getInstance().currentUser } catch (_: Exception) { null }
+            if (currentFirebaseUser != null && currentFirebaseUser.email != null &&
+                !user.email.equals(currentFirebaseUser.email, ignoreCase = true)
+            ) {
+                null
+            } else {
+                user
+            }
         } catch (_: Exception) {
             null
         }
@@ -199,6 +207,13 @@ class SessionManager(context: Context) {
     }
 
     fun getMyRooms(): List<RoomDto> {
+        val currentFirebaseUser = try { FirebaseAuth.getInstance().currentUser } catch (_: Exception) { null }
+        val cachedEmail = prefs.getString(KEY_USER_EMAIL, null)
+        if (currentFirebaseUser != null && currentFirebaseUser.email != null && cachedEmail != null &&
+            !cachedEmail.equals(currentFirebaseUser.email, ignoreCase = true)
+        ) {
+            return emptyList()
+        }
         val json = prefs.getString(KEY_CACHED_MY_ROOMS, null) ?: return emptyList()
         val type = object : TypeToken<List<RoomDto>>() {}.type
         return try {
@@ -218,6 +233,13 @@ class SessionManager(context: Context) {
     }
 
     fun getCachedRooms(): List<TimeCapsuleRoom> {
+        val currentFirebaseUser = try { FirebaseAuth.getInstance().currentUser } catch (_: Exception) { null }
+        val cachedEmail = prefs.getString(KEY_USER_EMAIL, null)
+        if (currentFirebaseUser != null && currentFirebaseUser.email != null && cachedEmail != null &&
+            !cachedEmail.equals(currentFirebaseUser.email, ignoreCase = true)
+        ) {
+            return emptyList()
+        }
         val json = prefs.getString(KEY_CACHED_ROOMS, null) ?: return emptyList()
         val type = object : TypeToken<List<TimeCapsuleRoom>>() {}.type
         return try {
@@ -256,9 +278,38 @@ class SessionManager(context: Context) {
         }
     }
 
-    fun getUserId(): String? = prefs.getString(KEY_USER_ID, null)
-    fun getUserName(): String? = prefs.getString(KEY_USER_NAME, null)
-    fun getUserEmail(): String? = prefs.getString(KEY_USER_EMAIL, null)
+    fun getUserId(): String? {
+        val currentFirebaseUser = try { FirebaseAuth.getInstance().currentUser } catch (_: Exception) { null }
+        if (currentFirebaseUser != null && currentFirebaseUser.email != null) {
+            val cachedEmail = prefs.getString(KEY_USER_EMAIL, null)
+            if (cachedEmail != null && !cachedEmail.equals(currentFirebaseUser.email, ignoreCase = true)) {
+                return null
+            }
+        }
+        return prefs.getString(KEY_USER_ID, null)
+    }
+
+    fun getUserName(): String? {
+        val currentFirebaseUser = try { FirebaseAuth.getInstance().currentUser } catch (_: Exception) { null }
+        if (currentFirebaseUser != null && currentFirebaseUser.email != null) {
+            val cachedEmail = prefs.getString(KEY_USER_EMAIL, null)
+            if (cachedEmail != null && !cachedEmail.equals(currentFirebaseUser.email, ignoreCase = true)) {
+                return null
+            }
+        }
+        return prefs.getString(KEY_USER_NAME, null)
+    }
+
+    fun getUserEmail(): String? {
+        val currentFirebaseUser = try { FirebaseAuth.getInstance().currentUser } catch (_: Exception) { null }
+        if (currentFirebaseUser != null && currentFirebaseUser.email != null) {
+            val cachedEmail = prefs.getString(KEY_USER_EMAIL, null)
+            if (cachedEmail != null && !cachedEmail.equals(currentFirebaseUser.email, ignoreCase = true)) {
+                return currentFirebaseUser.email
+            }
+        }
+        return prefs.getString(KEY_USER_EMAIL, null) ?: try { FirebaseAuth.getInstance().currentUser?.email } catch (_: Exception) { null }
+    }
     fun getProfileMusic(): String? = prefs.getString(KEY_PROFILE_MUSIC, null)
     fun getProfilePhotoUri(): String? = prefs.getString(KEY_PROFILE_PHOTO_URI, null)
     fun getProfileImageUrl(): String? = prefs.getString(KEY_PROFILE_IMAGE_URL, null)

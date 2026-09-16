@@ -91,6 +91,7 @@ class LoginViewModel @JvmOverloads constructor(
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
+            sessionManager.clearSession()
 
             val result = repository.login(_email.value, passwordParam)
 
@@ -132,6 +133,7 @@ class LoginViewModel @JvmOverloads constructor(
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
+            sessionManager.clearSession()
 
             val result = repository.loginWithGoogleIdToken(idToken)
             _isLoading.value = false

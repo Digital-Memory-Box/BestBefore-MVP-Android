@@ -40,6 +40,12 @@ open class AuthRepository(
             val firebaseUser = authResult.user
                 ?: return Result.failure(Exception("Firebase sign-in returned no user"))
 
+            // Verify email
+            if (!firebaseUser.isEmailVerified) {
+                try { firebaseAuth.signOut() } catch (_: Exception) {}
+                return Result.failure(Exception("Please verify your email address before logging in. Check your inbox for the verification link."))
+            }
+
             // 2. Get Firebase ID token
             val idToken = firebaseUser.getIdToken(false).await()?.token
                 ?: return Result.failure(Exception("Failed to retrieve Firebase ID token"))
@@ -48,6 +54,9 @@ open class AuthRepository(
             val result = syncWithBackend(idToken)
             if (result.isSuccess) {
                 com.dmb.bestbefore.analytics.AnalyticsManager.logLogin("email")
+            } else {
+                try { firebaseAuth.signOut() } catch (_: Exception) {}
+                sessionManager.clearSession()
             }
             result
         } catch (e: Exception) {
@@ -72,9 +81,35 @@ open class AuthRepository(
             val result = syncWithBackend(firebaseIdToken)
             if (result.isSuccess) {
                 com.dmb.bestbefore.analytics.AnalyticsManager.logLogin("google")
+            } else {
+                try { firebaseAuth.signOut() } catch (_: Exception) {}
+                sessionManager.clearSession()
             }
             result
         } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Verify email exists in DB, then send password reset link via Firebase.
+     */
+    open suspend fun sendPasswordReset(email: String): Result<Unit> {
+        return try {
+            val normalizedEmail = email.trim().lowercase()
+            val response = api.forgotPassword(mapOf("email" to normalizedEmail))
+            if (!response.isSuccessful) {
+                val msg = if (response.code() == 404) {
+                    "No account found with this email in our database."
+                } else {
+                    "Unable to verify account. Please try again."
+                }
+                return Result.failure(Exception(msg))
+            }
+            firebaseAuth.sendPasswordResetEmail(normalizedEmail).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Result.failure(e)
         }
     }

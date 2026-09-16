@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalContext
 object Routes {
     const val OPENING = "opening"
     const val LOGIN = "login"
+    const val FORGOT_PASSWORD = "forgot_password"
     const val SIGNUP = "signup"
     const val HALLWAY = "hallway"
     const val PROFILE = "profile"
@@ -43,6 +44,7 @@ object Routes {
 fun AppNavigation() {
     val navController = rememberNavController()
     val context = LocalContext.current
+    val sessionManager = remember { com.dmb.bestbefore.data.local.SessionManager.getInstance(context) }
 
     fun popBackOrFinish() {
         if (!navController.popBackStack()) {
@@ -158,11 +160,22 @@ fun AppNavigation() {
                 onNavigateToSignup = {
                     navController.navigate(Routes.SIGNUP)
                 },
+                onNavigateToForgotPassword = {
+                    navController.navigate(Routes.FORGOT_PASSWORD)
+                },
                 onLoginSuccess = {
                     // Navigate to PROFILE as the main screen (which contains Hallway)
                     navController.navigate(Routes.PROFILE) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
+                }
+            )
+        }
+
+        composable(Routes.FORGOT_PASSWORD) {
+            com.dmb.bestbefore.ui.screens.login.ForgotPasswordScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
                 }
             )
         }
@@ -206,6 +219,7 @@ fun AppNavigation() {
                     popBackOrFinish()
                 },
                 onLogout = {
+                    sessionManager.clearSession()
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }
                     }

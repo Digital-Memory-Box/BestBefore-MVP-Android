@@ -351,4 +351,9 @@ interface ApiService {
         @Header("Authorization") token: String,
         @Path("userId") userId: String
     ): Response<Unit>
+
+    @POST("auth/forgot-password")
+    suspend fun forgotPassword(
+        @Body body: Map<String, String>
+    ): Response<Map<String, @JvmSuppressWildcards Any>>
 }

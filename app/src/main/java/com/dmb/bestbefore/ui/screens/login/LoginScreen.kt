@@ -44,6 +44,7 @@ private enum class ArrowDirection {
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onNavigateToSignup: () -> Unit,
+    onNavigateToForgotPassword: () -> Unit = {},
     viewModel: LoginViewModel = viewModel()
 ) {
     var email by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
@@ -280,8 +281,10 @@ fun LoginScreen(
             // ── Bottom Links ────────────────────────────────────────────
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.padding(bottom = 36.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .navigationBarsPadding()
+                    .padding(bottom = 48.dp)
             ) {
                 // "forgot my password" centered
                 Text(
@@ -289,7 +292,7 @@ fun LoginScreen(
                     color = Color.White.copy(alpha = 0.85f),
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.clickable { /* Forgotten logic empty for now */ }
+                    modifier = Modifier.clickable { onNavigateToForgotPassword() }
                 )
 
                 // "create an [Artists] account" with animated word interpolation

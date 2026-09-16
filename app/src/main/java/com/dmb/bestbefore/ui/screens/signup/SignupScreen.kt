@@ -128,40 +128,65 @@ fun SignupScreen(
                     // ── Terms & Age Checkboxes ──────────────────────────────
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().clickable { ageConfirmed = !ageConfirmed }
+                        modifier = Modifier
+                            .wrapContentWidth()
+                            .clickable { ageConfirmed = !ageConfirmed }
                     ) {
                         Checkbox(
                             checked = ageConfirmed,
                             onCheckedChange = { ageConfirmed = it },
-                            colors = CheckboxDefaults.colors(checkedColor = Color.White, checkmarkColor = Color.Black, uncheckedColor = Color.White)
+                            modifier = Modifier.scale(0.82f),
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = Color.White,
+                                checkmarkColor = Color.Black,
+                                uncheckedColor = Color.White.copy(alpha = 0.7f)
+                            )
                         )
+                        Spacer(modifier = Modifier.width(2.dp))
                         Text(
                             text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.age_confirmation),
                             color = Color.White,
-                            fontSize = 14.sp
+                            fontSize = 11.sp,
+                            lineHeight = 14.sp
                         )
                     }
 
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().clickable { termsAccepted = !termsAccepted }
+                        verticalAlignment = Alignment.Top,
+                        modifier = Modifier.wrapContentWidth()
                     ) {
                         Checkbox(
                             checked = termsAccepted,
                             onCheckedChange = { termsAccepted = it },
-                            colors = CheckboxDefaults.colors(checkedColor = Color.White, checkmarkColor = Color.Black, uncheckedColor = Color.White)
+                            modifier = Modifier.scale(0.82f),
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = Color.White,
+                                checkmarkColor = Color.Black,
+                                uncheckedColor = Color.White.copy(alpha = 0.7f)
+                            )
                         )
-                        Column {
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Column(
+                            modifier = Modifier
+                                .wrapContentWidth()
+                                .padding(top = 8.dp)
+                        ) {
                             Text(
                                 text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.terms_agreement_prefix),
                                 color = Color.White,
-                                fontSize = 14.sp
+                                fontSize = 11.sp,
+                                lineHeight = 14.sp,
+                                modifier = Modifier.clickable { termsAccepted = !termsAccepted }
                             )
-                            Row {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
                                 Text(
                                     text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.terms_of_service),
                                     color = Color(0xFF00BFFF),
-                                    fontSize = 14.sp,
+                                    fontSize = 11.sp,
+                                    lineHeight = 14.sp,
                                     modifier = Modifier.clickable {
                                         val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("${com.dmb.bestbefore.BuildConfig.API_BASE_URL}terms"))
                                         context.startActivity(intent)
@@ -170,12 +195,14 @@ fun SignupScreen(
                                 Text(
                                     text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.terms_and),
                                     color = Color.White,
-                                    fontSize = 14.sp
+                                    fontSize = 11.sp,
+                                    lineHeight = 14.sp
                                 )
                                 Text(
                                     text = androidx.compose.ui.res.stringResource(com.dmb.bestbefore.R.string.privacy_policy),
                                     color = Color(0xFF00BFFF),
-                                    fontSize = 14.sp,
+                                    fontSize = 11.sp,
+                                    lineHeight = 14.sp,
                                     modifier = Modifier.clickable {
                                         val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("${com.dmb.bestbefore.BuildConfig.API_BASE_URL}privacy"))
                                         context.startActivity(intent)

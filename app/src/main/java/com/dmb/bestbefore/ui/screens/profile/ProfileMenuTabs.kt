@@ -1209,7 +1209,11 @@ fun SettingsTab(
                 .fillMaxWidth()
                 .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
                 .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
-                .clickable { onLogout() }
+                .clickable {
+                    viewModel.logout(context)
+                    com.dmb.bestbefore.data.local.SessionManager.getInstance(context).clearSession()
+                    onLogout()
+                }
                 .padding(vertical = 16.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -1260,6 +1264,7 @@ fun SettingsTab(
                             showDeleteAccountDialog = false
                             viewModel.deleteAccount(
                                 onSuccess = {
+                                    com.dmb.bestbefore.data.local.SessionManager.getInstance(context).clearSession()
                                     onLogout()
                                 },
                                 onError = { errorMsg ->
