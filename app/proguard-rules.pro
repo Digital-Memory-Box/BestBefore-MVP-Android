@@ -55,3 +55,13 @@
 # Keep only reflective BarcodeScanner entrypoints required by embedded activity
 -keep class com.journeyapps.barcodescanner.CaptureActivity { *; }
 -keep class com.journeyapps.barcodescanner.CompoundBarcodeView { *; }
+
+# ------------------------------------------------------------------------------
+# 6. Strip Debug Logs in Release Builds (R8 Optimization)
+# ------------------------------------------------------------------------------
+-assumenosideeffects class android.util.Log {
+    public static boolean isLoggable(java.lang.String, int);
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+}
