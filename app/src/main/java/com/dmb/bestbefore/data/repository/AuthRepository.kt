@@ -7,6 +7,7 @@ import com.dmb.bestbefore.data.api.models.UpdateMeRequest
 import com.dmb.bestbefore.data.api.models.UserDto
 import com.dmb.bestbefore.data.local.SessionManager
 import com.google.firebase.FirebaseNetworkException
+import com.google.firebase.auth.ActionCodeSettings
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.delay
@@ -106,7 +107,19 @@ open class AuthRepository(
                 }
                 return Result.failure(Exception(msg))
             }
-            firebaseAuth.sendPasswordResetEmail(normalizedEmail).await()
+            // Send reset email with custom continue URL pointing to our branded web UI,
+            // with resilient fallback to standard reset email if whitelist is pending.
+            try {
+                val actionCodeSettings = ActionCodeSettings.newBuilder()
+                    .setUrl("https://bestbefore.up.railway.app/reset-password")
+                    .setHandleCodeInApp(false)
+                    .build()
+                firebaseAuth.sendPasswordResetEmail(normalizedEmail, actionCodeSettings).await()
+            } catch (actionCodeException: Exception) {
+                if (actionCodeException is kotlinx.coroutines.CancellationException) throw actionCodeException
+                android.util.Log.w("AuthRepository", "Custom action code email failed, falling back to standard: ${actionCodeException.message}")
+                firebaseAuth.sendPasswordResetEmail(normalizedEmail).await()
+            }
             Result.success(Unit)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e

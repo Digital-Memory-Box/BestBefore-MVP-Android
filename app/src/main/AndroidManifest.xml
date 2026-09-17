@@ -67,6 +67,15 @@
                     android:scheme="bestbefore"
                     android:host="room" />
             </intent-filter>
+            <!-- Deep link: custom scheme for direct login return after password reset -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="bestbefore"
+                    android:host="login" />
+            </intent-filter>
             <!-- App Link: HTTPS room join — works from any browser/camera on iOS & Android -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
