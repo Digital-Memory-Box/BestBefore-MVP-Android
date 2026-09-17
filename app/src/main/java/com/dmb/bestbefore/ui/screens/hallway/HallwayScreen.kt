@@ -1840,17 +1840,19 @@ private fun ExpandedDescriptionOverlay(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp, vertical = 22.dp)
         ) {
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Header: Back Button + Title + CD action
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
+            // Header Navigation: Back Button + CD action
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 // Circular frosted back button on the left
                 Box(
                     modifier = Modifier
-                        .align(Alignment.CenterStart)
                         .size(42.dp)
                         .clip(CircleShape)
                         .background(Color.White.copy(alpha = 0.12f))
@@ -1866,23 +1868,9 @@ private fun ExpandedDescriptionOverlay(
                     )
                 }
 
-                Text(
-                    text = card.title,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.textPrimary,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 52.dp)
-                )
-
                 if (!card.backgroundMusic.isNullOrBlank()) {
                     Box(
                         modifier = Modifier
-                            .align(Alignment.CenterEnd)
                             .size(42.dp)
                             .clip(CircleShape)
                             .background(Color.Black.copy(alpha = 0.36f))
@@ -1892,8 +1880,32 @@ private fun ExpandedDescriptionOverlay(
                     ) {
                         CdGlyph(size = 24.dp)
                     }
+                } else {
+                    Spacer(modifier = Modifier.size(42.dp))
                 }
             }
+
+            // Room Title: Shows whole name of the room without collapsing or breaking spacing
+            Text(
+                text = card.title,
+                fontSize = when {
+                    card.title.length > 40 -> 20.sp
+                    card.title.length > 25 -> 22.sp
+                    else -> 25.sp
+                },
+                fontWeight = FontWeight.Bold,
+                color = colors.textPrimary,
+                textAlign = TextAlign.Center,
+                lineHeight = when {
+                    card.title.length > 40 -> 26.sp
+                    card.title.length > 25 -> 28.sp
+                    else -> 31.sp
+                },
+                softWrap = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
+            )
 
             Spacer(modifier = Modifier.height(20.dp))
 
